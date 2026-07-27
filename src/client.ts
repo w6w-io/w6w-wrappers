@@ -26,7 +26,8 @@ import { DocumentsApi } from "./documents.ts";
 import { ConfigError } from "./errors.ts";
 import { type HttpResponse, request, type RequestOptions } from "./http.ts";
 import { fetchMe } from "./me.ts";
-import type { Me } from "./types.ts";
+import { type RunInput, runUrn } from "./run.ts";
+import type { Me, RunEnvelope } from "./types.ts";
 import { VarsApi } from "./vars.ts";
 import { WorkflowsApi } from "./workflows.ts";
 
@@ -79,8 +80,9 @@ export class W6wClient {
   readonly connections: ConnectionsApi;
 
   /**
-   * Workflows: `list` here, `run` from T2.1.5. Project-scoped — `list` accepts
-   * an optional `project` that overrides this client's default.
+   * Workflows: `list` and `run`. `list` is project-scoped and accepts an
+   * optional `project` that overrides this client's default; `run` is addressed
+   * by `wf_…` id and takes `wait`, `variables` and `trigger`.
    */
   readonly workflows: WorkflowsApi;
 
@@ -134,6 +136,32 @@ export class W6wClient {
    */
   me(): Promise<Me> {
     return fetchMe(this);
+  }
+
+  /**
+   * Run whatever a URN addresses — a connection action, a function, an endpoint
+   * or a workflow — and get back the kind-tagged envelope.
+   *
+   * A method on the client rather than a namespace, because that is the symbol
+   * `endpoints.json` names (`client.run(input)`). It is the dispatching
+   * counterpart to `workflows.run`, which stays separate because `?wait=`,
+   * `variables` and `trigger` have no slot in this three-field shape (D4).
+   *
+   * Discriminate the result with `isActionRun` / `isFunctionRun` /
+   * `isWorkflowRun`; a `kind` this version has never heard of is handed back
+   * verbatim rather than raised.
+   *
+   * **`status: "planned"`** — `POST /api/run` lands with T4.1.2 (fenced by
+   * BLK-1). Against today's server the call is a `404`.
+   *
+   * @param input - The URN, an optional `action`, and the payload.
+   * @returns The `RunEnvelope`, exactly as it arrived.
+   * @throws {ConfigError} When no token is configured.
+   * @throws {ApiError} On any non-2xx, e.g. `404` for an unresolvable URN or
+   * `424` when the target app failed during execute.
+   */
+  run(input: RunInput): Promise<RunEnvelope> {
+    return runUrn(this, input);
   }
 
   /**

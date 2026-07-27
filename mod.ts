@@ -58,16 +58,42 @@ export type { MeHost } from "./src/me.ts";
 export { ConnectionsApi } from "./src/connections.ts";
 export type { ConnectionsHost } from "./src/connections.ts";
 export { WorkflowsApi } from "./src/workflows.ts";
-export type { WorkflowListOptions, WorkflowsHost } from "./src/workflows.ts";
+export type {
+  WorkflowListOptions,
+  WorkflowRunOptions,
+  WorkflowRunResult,
+  WorkflowsHost,
+} from "./src/workflows.ts";
+
+// Execution (T2.1.5): the URN-addressed `run`. `client.run(input)` is a method
+// on the client, so what is exported is its host interface, its input type and
+// the standalone function the client delegates to.
+export { runUrn } from "./src/run.ts";
+export type { RunHost, RunInput } from "./src/run.ts";
+
+// The `kind` discriminators. Exported deliberately and not as an afterthought:
+// `RunEnvelope`'s fourth arm is open (so an unknown `kind` can be handed back
+// rather than raised), and an open union means a bare `env.kind === "workflow"`
+// check does NOT narrow — `env.status` would come out `unknown`. These
+// predicates are how a caller, and the CLI, get typed access to an arm.
+export { isActionRun, isFunctionRun, isTerminalRunStatus, isWorkflowRun } from "./src/types.ts";
 
 export type {
+  ActionRunEnvelope,
   ConnectionState,
   ConnectionSummary,
   Doc,
   DocFormat,
+  FunctionRunEnvelope,
   Me,
+  RunEnvelope,
+  RunResult,
+  RunStatus,
+  StepError,
+  UnknownRunEnvelope,
   Var,
   VarType,
+  WorkflowRunEnvelope,
   WorkflowStatus,
   WorkflowSummary,
 } from "./src/types.ts";

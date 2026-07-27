@@ -198,6 +198,169 @@ export interface WorkflowSummary {
 }
 
 /**
+ * Lifecycle state of a run.
+ *
+ * `queued` and `running` are in-flight; `succeeded`, `failed` and `canceled`
+ * are terminal (see {@linkcode isTerminalRunStatus}). **`failed` is a status,
+ * not an error**: a run that failed comes back as a normal `200` carrying this
+ * value, and no operation in this package raises on it
+ * (`docs/implementation.md` §4).
+ */
+export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";
+
+/** One step's failure inside a run. `error` is opaque pass-through. */
+export interface StepError {
+  /** Id of the step that failed. */
+  stepId: string;
+  /** Whatever the step reported; shape belongs to the app, not to this client. */
+  error: unknown;
+}
+
+/**
+ * A workflow run: the handle, its state, and the result when it has one.
+ *
+ * A `202` body carries only `runId` + `status` — the run is queued or still
+ * going — while a `200` additionally carries `output`, `error` and `steps`.
+ * The optional fields are optional for exactly that reason.
+ *
+ * `output`, `error` and the values in `steps` are **opaque pass-through**
+ * (`unknown`): they come from user workflows and vendor apps, and a client that
+ * modelled their internals would be wrong for someone. `steps` is a map **keyed
+ * by step id**, not an array (`docs/implementation.md` §5).
+ */
+export interface RunResult {
+  /** Server-issued run handle, `run_…`. Present on every response, queued included. */
+  runId: string;
+  /** Where the run has got to. */
+  status: RunStatus;
+  /** The run's output when it finished; absent while it is still going. */
+  output?: unknown;
+  /** The run-level error when it failed; absent otherwise. Data, never a raised exception. */
+  error?: unknown;
+  /** Per-step state, keyed by step id. `{}` when the server sent none. */
+  steps: Record<string, unknown>;
+  /** Per-step failures, when the server reports them. */
+  stepErrors?: StepError[];
+}
+
+/** `run` resolved a `conn_…` URN and executed an app action. HTTP `200`. */
+export interface ActionRunEnvelope {
+  kind: "action";
+  /** The action's return value. Opaque pass-through. */
+  value: unknown;
+}
+
+/** `run` resolved a `fn_…` / `ep_…` URN and executed it. HTTP `200`. */
+export interface FunctionRunEnvelope {
+  kind: "function";
+  /** The function's output. Opaque pass-through. */
+  output: unknown;
+}
+
+/**
+ * `run` resolved a `wf_…` URN and enqueued a workflow run. HTTP `202`.
+ *
+ * `202` is **success**: the run is queued, and `runId` is how the caller follows
+ * it. There is no `?wait=` on this operation — use `workflows.run` for that (D4).
+ */
+export interface WorkflowRunEnvelope {
+  kind: "workflow";
+  /** Server-issued run handle. */
+  runId: string;
+  /** Where the run has got to; `"queued"` immediately after dispatch. */
+  status: RunStatus;
+}
+
+/**
+ * A `kind` this release has never heard of, handed back verbatim.
+ *
+ * The server may grow a fourth `kind` before the wrappers do — a purely
+ * additive change on the one operation whose entire job is dispatch. This arm
+ * is what keeps that additive change from becoming a hard breakage for every
+ * user of an installed version: the parsed body is returned as it arrived,
+ * `kind` and all sibling fields intact, and nothing raises
+ * (`docs/implementation.md` §5).
+ */
+export type UnknownRunEnvelope = { kind: string } & Record<string, unknown>;
+
+/**
+ * What `client.run()` returns: three known arms plus an open one.
+ *
+ * `value` (action) and `output` (function) are **deliberately different names**
+ * for the two synchronous arms and are never normalised into one field — the
+ * discrimination is the point (D3).
+ *
+ * **The union is open, and narrowing on `kind` alone does not work.** Because
+ * the fourth arm admits any `kind: string`, a bare `env.kind === "workflow"`
+ * check leaves `env.status` typed `unknown` under `--strict`, not `RunStatus`.
+ * That is a property of the open union, not a bug in it: closing the union would
+ * make an unknown `kind` unrepresentable and the pinned "return the raw
+ * envelope" behaviour un-typeable. Use the guards below, which narrow properly:
+ *
+ * @example
+ * ```ts
+ * const env = await client.run({ urn: "wf_01HQ" });
+ * if (isActionRun(env)) console.log(env.value);
+ * else if (isFunctionRun(env)) console.log(env.output);
+ * else if (isWorkflowRun(env)) console.log(env.runId, env.status);
+ * else console.log("a kind this SDK version does not know:", env.kind, env);
+ * ```
+ */
+export type RunEnvelope =
+  | ActionRunEnvelope
+  | FunctionRunEnvelope
+  | WorkflowRunEnvelope
+  | UnknownRunEnvelope;
+
+/**
+ * Is this the `action` arm? Narrows to {@linkcode ActionRunEnvelope}, so
+ * `env.value` is reachable and typed inside the branch.
+ *
+ * @param env - Any envelope `run` returned.
+ * @returns `true` when `kind` is `"action"`.
+ */
+export function isActionRun(env: RunEnvelope): env is ActionRunEnvelope {
+  return env.kind === "action";
+}
+
+/**
+ * Is this the `function` arm? Narrows to {@linkcode FunctionRunEnvelope}, so
+ * `env.output` is reachable and typed inside the branch.
+ *
+ * @param env - Any envelope `run` returned.
+ * @returns `true` when `kind` is `"function"`.
+ */
+export function isFunctionRun(env: RunEnvelope): env is FunctionRunEnvelope {
+  return env.kind === "function";
+}
+
+/**
+ * Is this the `workflow` arm? Narrows to {@linkcode WorkflowRunEnvelope}, so
+ * `env.runId` and `env.status` are reachable and typed inside the branch.
+ *
+ * @param env - Any envelope `run` returned.
+ * @returns `true` when `kind` is `"workflow"`.
+ */
+export function isWorkflowRun(env: RunEnvelope): env is WorkflowRunEnvelope {
+  return env.kind === "workflow";
+}
+
+/**
+ * Has a run reached a state it will not leave?
+ *
+ * Exported because it is the same question `workflows.run`'s `terminal` flag
+ * answers, and a caller polling a `202` handle on its own schedule needs it
+ * too. It reads the **run's** status rather than an HTTP code: a `202` can carry
+ * `queued` or `running`, and the answer is about the run, not the transport.
+ *
+ * @param status - A run status.
+ * @returns `true` for `succeeded`, `failed` and `canceled`.
+ */
+export function isTerminalRunStatus(status: RunStatus): boolean {
+  return status === "succeeded" || status === "failed" || status === "canceled";
+}
+
+/**
  * Read one payload out of the server's envelope, or fail loudly.
  *
  * The server wraps every asset body under a key — `{documents: […]}`,
