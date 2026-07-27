@@ -1,0 +1,375 @@
+{
+  "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
+  "contractVersion": "0.1.0",
+  "basePath": "/api",
+  "auth": "bearer",
+  "errorEnvelope": { "error": { "code": "string", "message": "string" } },
+  "operations": [
+    {
+      "name": "me",
+      "summary": "Caller identity plus w6w component versions.",
+      "method": "GET",
+      "path": "/me",
+      "status": "planned",
+      "serverImplemented": "partial",
+      "cliAlias": "w6w info",
+      "params": [],
+      "returns": "Me",
+      "naming": { "ts": "client.me()", "python": "client.me()", "cli": "w6w me" },
+      "notes": "PARTIAL server support. What exists: `GET /api/auth/me` already answers the identity half, returning `{tenant, subject, account, role}` (the server). What does NOT exist: the `/api/me` path itself, and the `versions` block. D15 — `/api/me` is mounted as an ALIAS of that same handler, so the response body is flat: `{tenant, subject, account, role, versions?}`, NOT a `{user:{…}}` envelope. The live consumer is the studio (the studio, typed `Me` at the studio); a nested envelope would need a second identity handler or would break the studio, so the flat shape is the contract. `versions` is optional and additive — a wrapper must tolerate it being absent entirely, and must tolerate unknown keys inside it. `versions.wrapper` is filled client-side from the wrapper's own package version. D8 — the operation name is `me`; `w6w info` is a CLI alias only (see `cliAlias`)."
+    },
+    {
+      "name": "connections.list",
+      "summary": "List the caller's connections (credentials redacted).",
+      "method": "GET",
+      "path": "/connections",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [],
+      "returns": "ConnectionSummary[]",
+      "naming": {
+        "ts": "client.connections.list()",
+        "python": "client.connections.list()",
+        "cli": "w6w connections list"
+      },
+      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 — kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_…` URN to pass to `run`. Verified live at the server"
+    },
+    {
+      "name": "workflows.list",
+      "summary": "List the caller's workflow definitions.",
+      "method": "GET",
+      "path": "/workflows",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        { "name": "project", "in": "query", "type": "string", "required": false }
+      ],
+      "returns": "WorkflowSummary[]",
+      "naming": {
+        "ts": "client.workflows.list(opts?)",
+        "python": "client.workflows.list(project=None)",
+        "cli": "w6w workflows list [--project <id>]"
+      },
+      "notes": "Unpaginated today. Return a container type that can grow a cursor without a breaking change. D4 — kept in v0.1.0: it is how a user discovers a `wf_…` URN to pass to `run`. Verified live at the server"
+    },
+    {
+      "name": "workflows.run",
+      "summary": "Enqueue a workflow run; optionally wait for a terminal state.",
+      "method": "POST",
+      "path": "/workflows/{id}/run",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        { "name": "id", "in": "path", "type": "string", "required": true },
+        { "name": "wait", "in": "query", "type": "boolean", "required": false },
+        { "name": "variables", "in": "body", "type": "object", "required": false },
+        { "name": "trigger", "in": "body", "type": "object", "required": false }
+      ],
+      "returns": "RunResult",
+      "successStatuses": [200, 202],
+      "naming": {
+        "ts": "client.workflows.run(id, opts?)",
+        "python": "client.workflows.run(id, **opts)",
+        "cli": "w6w workflows run <id> [--wait]"
+      },
+      "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. D4 — kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape. Verified live at the server"
+    },
+    {
+      "name": "documents.list",
+      "summary": "List the caller's documents in a project.",
+      "method": "GET",
+      "path": "/documents",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        { "name": "project", "in": "query", "type": "string", "required": false }
+      ],
+      "returns": "Doc[]",
+      "naming": {
+        "ts": "client.documents.list(opts?)",
+        "python": "client.documents.list(project=None)",
+        "cli": "w6w documents list [--project <id>]"
+      },
+      "notes": "Server wraps the body as `{ documents: Doc[] }`; the wrapper unwraps and returns the array. Documents ARE project-scoped: every `documents.*` route accepts an optional `?project=` and otherwise resolves the account's default project (the server). An unknown project id is `400 unknown_project`."
+    },
+    {
+      "name": "documents.get",
+      "summary": "Fetch one document by its `doc_…` id.",
+      "method": "GET",
+      "path": "/documents/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        { "name": "id", "in": "path", "type": "string", "required": true },
+        { "name": "project", "in": "query", "type": "string", "required": false }
+      ],
+      "returns": "Doc",
+      "naming": {
+        "ts": "client.documents.get(id, opts?)",
+        "python": "client.documents.get(id, project=None)",
+        "cli": "w6w documents get <id> [--project <id>]"
+      },
+      "notes": "Addressed by the server-issued `doc_…` id, not by `key` (D6 — wrappers mirror the server's addressing exactly). Server wraps the body as `{ document: Doc }`; the wrapper unwraps. Missing id is `404 unknown_document`."
+    },
+    {
+      "name": "documents.getByKey",
+      "summary": "Fetch one document by its human-chosen `key`.",
+      "method": "GET",
+      "path": "/documents/by-key/{key}",
+      "status": "planned",
+      "serverImplemented": false,
+      "params": [
+        { "name": "key", "in": "path", "type": "string", "required": true },
+        { "name": "project", "in": "query", "type": "string", "required": false }
+      ],
+      "returns": "Doc",
+      "naming": {
+        "ts": "client.documents.getByKey(key, opts?)",
+        "python": "client.documents.get_by_key(key, project=None)",
+        "cli": "w6w documents get-by-key <key> [--project <id>]"
+      },
+      "notes": "PLANNED — needs a small server route, fenced by BLK-1. `DocumentsRepo.getByKey` already exists and is already called by `POST /documents` for its conflict check; only the HTTP route is missing. D12 (amending D6) — a user who chose a key should be able to address by it, and the alternative leaks internal `doc_…` ids to users who never saw them. NO client-side list-then-filter: packages/wrappers/README.md 'What a wrapper is' forbids composing two calls to make an operation useful. If the fence never clears, wrappers ship id-addressed only and the limitation is documented. Same wrap/unwrap and `404 unknown_document` as `documents.get`."
+    },
+    {
+      "name": "documents.create",
+      "summary": "Create a document under a caller-chosen `key`.",
+      "method": "POST",
+      "path": "/documents",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        { "name": "key", "in": "body", "type": "string", "required": true },
+        { "name": "content", "in": "body", "type": "string", "required": true },
+        { "name": "format", "in": "body", "type": "string", "required": false },
+        { "name": "description", "in": "body", "type": "string", "required": false },
+        { "name": "project", "in": "query", "type": "string", "required": false }
+      ],
+      "returns": "Doc",
+      "successStatuses": [201],
+      "naming": {
+        "ts": "client.documents.create(input, opts?)",
+        "python": "client.documents.create(key, content, format=None, description=None, project=None)",
+        "cli": "w6w documents create <key> --content <text> [--format <f>] [--description <d>] [--project <id>]"
+      },
+      "notes": "Create is addressed by `key` (D6 — mirror the server: create by key, update/delete by id). `key` is a non-empty string of at most 128 characters, unique per scope+project. `content` is raw text and is never parsed. `format` is one of text|markdown|yaml|html|json and defaults to 'text'; it is a hint only and does not gate the content. Duplicate key is `409 document_exists` — wrappers must surface that code, not swallow it into a generic error."
+    },
+    {
+      "name": "documents.update",
+      "summary": "Patch a document's content, format or description.",
+      "method": "PATCH",
+      "path": "/documents/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        { "name": "id", "in": "path", "type": "string", "required": true },
+        { "name": "content", "in": "body", "type": "string", "required": false },
+        { "name": "format", "in": "body", "type": "string", "required": false },
+        { "name": "description", "in": "body", "type": "string", "required": false },
+        { "name": "project", "in": "query", "type": "string", "required": false }
+      ],
+      "returns": "Doc",
+      "naming": {
+        "ts": "client.documents.update(id, patch, opts?)",
+        "python": "client.documents.update(id, content=None, format=None, description=None, project=None)",
+        "cli": "w6w documents update <id> [--content <text>] [--format <f>] [--description <d>] [--project <id>]"
+      },
+      "notes": "Addressed by the `doc_…` id, NOT by `key` (D6). `key` itself is immutable — it is not in the patch body. Every field is optional; an omitted field is left alone. Missing id is `404 unknown_document`."
+    },
+    {
+      "name": "documents.delete",
+      "summary": "Delete a document.",
+      "method": "DELETE",
+      "path": "/documents/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        { "name": "id", "in": "path", "type": "string", "required": true },
+        { "name": "project", "in": "query", "type": "string", "required": false }
+      ],
+      "returns": "Ok",
+      "naming": {
+        "ts": "client.documents.delete(id, opts?)",
+        "python": "client.documents.delete(id, project=None)",
+        "cli": "w6w documents delete <id> [--project <id>]"
+      },
+      "notes": "Addressed by the `doc_…` id (D6). Server returns `{ ok: true }`. Deleting an unknown id is `404 unknown_document`, not a silent success — the delete is not idempotent and wrappers must not pretend otherwise."
+    },
+    {
+      "name": "vars.list",
+      "summary": "List the caller's typed variables.",
+      "method": "GET",
+      "path": "/vars",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [],
+      "returns": "Var[]",
+      "naming": {
+        "ts": "client.vars.list()",
+        "python": "client.vars.list()",
+        "cli": "w6w vars list"
+      },
+      "notes": "Vars are NOT project-scoped — unlike documents, no `vars.*` route accepts `?project=` (verified: the string `project` does not occur anywhere in the server). They are scoped by tenant/subject only. Do not add a `project` option to any `vars.*` signature; adding one later would be additive, faking one now would be a lie the server does not honour. Server wraps the body as `{ vars: Var[] }`; the wrapper unwraps."
+    },
+    {
+      "name": "vars.get",
+      "summary": "Fetch one variable by its `var_…` id.",
+      "method": "GET",
+      "path": "/vars/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        { "name": "id", "in": "path", "type": "string", "required": true }
+      ],
+      "returns": "Var",
+      "naming": {
+        "ts": "client.vars.get(id)",
+        "python": "client.vars.get(id)",
+        "cli": "w6w vars get <id>"
+      },
+      "notes": "Addressed by the server-issued `var_…` id, not by `name` (D6). Server wraps the body as `{ var: Var }`; the wrapper unwraps — note the singular key is `var`, which is a reserved word in TypeScript and must be read as a property, never destructured into a binding of that name. Missing id is `404 unknown_var`."
+    },
+    {
+      "name": "vars.getByName",
+      "summary": "Fetch one variable by its human-chosen `name`.",
+      "method": "GET",
+      "path": "/vars/by-name/{name}",
+      "status": "planned",
+      "serverImplemented": false,
+      "params": [
+        { "name": "name", "in": "path", "type": "string", "required": true }
+      ],
+      "returns": "Var",
+      "naming": {
+        "ts": "client.vars.getByName(name)",
+        "python": "client.vars.get_by_name(name)",
+        "cli": "w6w vars get-by-name <name>"
+      },
+      "notes": "PLANNED — needs a small server route, fenced by BLK-1. `VarsRepo.getByName` already exists and is already called by `POST /vars` for its conflict check; only the HTTP route is missing. D12 (amending D6) — key-addressed reads become server routes rather than client-side composition; packages/wrappers/README.md 'What a wrapper is' forbids a list-then-filter workaround. If the fence never clears, wrappers ship id-addressed only and the limitation is documented. Same `404 unknown_var` as `vars.get`."
+    },
+    {
+      "name": "vars.create",
+      "summary": "Create a typed variable under a caller-chosen `name`.",
+      "method": "POST",
+      "path": "/vars",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        { "name": "name", "in": "body", "type": "string", "required": true },
+        { "name": "type", "in": "body", "type": "string", "required": true },
+        { "name": "value", "in": "body", "type": "any", "required": true },
+        { "name": "description", "in": "body", "type": "string", "required": false }
+      ],
+      "returns": "Var",
+      "successStatuses": [201],
+      "naming": {
+        "ts": "client.vars.create(input)",
+        "python": "client.vars.create(name, type, value, description=None)",
+        "cli": "w6w vars create <name> --type <t> --value <v> [--description <d>]"
+      },
+      "notes": "Create is addressed by `name` (D6 — mirror the server: create by name, update/delete by id). `name` must match `^[a-z_][a-z0-9_]*$`; violations are `400 invalid_name`. `type` is one of string|number|boolean|json and `value` is validated against it server-side (`400 invalid_type` / `400 invalid_value`). Duplicate name is `409 var_exists` — wrappers must surface that code, not swallow it into a generic error. No `project` param: vars are not project-scoped."
+    },
+    {
+      "name": "vars.update",
+      "summary": "Patch a variable's type, value or description.",
+      "method": "PATCH",
+      "path": "/vars/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        { "name": "id", "in": "path", "type": "string", "required": true },
+        { "name": "type", "in": "body", "type": "string", "required": false },
+        { "name": "value", "in": "body", "type": "any", "required": false },
+        { "name": "description", "in": "body", "type": "string", "required": false }
+      ],
+      "returns": "Var",
+      "naming": {
+        "ts": "client.vars.update(id, patch)",
+        "python": "client.vars.update(id, type=None, value=None, description=None)",
+        "cli": "w6w vars update <id> [--type <t>] [--value <v>] [--description <d>]"
+      },
+      "notes": "Addressed by the `var_…` id, NOT by `name` (D6). `name` itself is immutable — it is not in the patch body. A `value` sent without a `type` is validated against the variable's EXISTING type. Missing id is `404 unknown_var`. No `project` param: vars are not project-scoped."
+    },
+    {
+      "name": "vars.delete",
+      "summary": "Delete a variable.",
+      "method": "DELETE",
+      "path": "/vars/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        { "name": "id", "in": "path", "type": "string", "required": true }
+      ],
+      "returns": "Ok",
+      "naming": {
+        "ts": "client.vars.delete(id)",
+        "python": "client.vars.delete(id)",
+        "cli": "w6w vars delete <id>"
+      },
+      "notes": "Addressed by the `var_…` id (D6). Server returns `{ ok: true }`. Deleting an unknown id is `404 unknown_var`, not a silent success. No `project` param: vars are not project-scoped."
+    },
+    {
+      "name": "run",
+      "summary": "Run anything addressable by URN — a connection action, a function, an endpoint or a workflow.",
+      "method": "POST",
+      "path": "/run",
+      "status": "planned",
+      "serverImplemented": false,
+      "params": [
+        { "name": "urn", "in": "body", "type": "string", "required": true },
+        { "name": "action", "in": "body", "type": "string", "required": false },
+        { "name": "payload", "in": "body", "type": "object", "required": false }
+      ],
+      "returns": "RunEnvelope",
+      "successStatuses": [200, 202],
+      "naming": {
+        "ts": "client.run(input)",
+        "python": "client.run(urn, action=None, payload=None)",
+        "cli": "w6w run <urn> [--action <a>] [--payload <json>]"
+      },
+      "notes": "PLANNED — needs the URN resolver and the `POST /api/run` route, both fenced by BLK-1. D3 — `RunEnvelope` is kind-discriminated with exactly three arms: `{kind:\"action\", value}` | `{kind:\"function\", output}` | `{kind:\"workflow\", runId, status}`. The action and function arms return 200; the workflow arm returns 202, and 202 is a NORMAL outcome, not an error — the run is queued, and `runId` is how the caller follows it. Wrappers must switch on `kind` and must tolerate an unknown future `kind` rather than crashing. `action` is optional because a workflow, function or endpoint URN has no action; it is required in practice for a `conn_…` URN. `urn` resolves over four runnable arms only — `conn_`, `wf_`, `fn_`, `ep_` (D16); `doc_` and `var_` are NOT URN arms in v0.1.0 and are addressed by the `documents.*` / `vars.*` operations above. This is deliberately narrower than `workflows.run`: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape (D4)."
+    }
+  ],
+  "cli": {
+    "$comment": "CLI-only surface. Not API operations — requirements the CLI wrapper must satisfy. See docs/cli.md.",
+    "binary": "w6w",
+    "help": {
+      "flags": ["--help", "-h"],
+      "alias": "w6w help <command>",
+      "levels": ["root", "group", "command"],
+      "requiresAuth": false,
+      "requiresNetwork": false,
+      "exitCode": 0,
+      "bareInvocationPrintsRootHelp": true,
+      "generatedFrom": "endpoints.json",
+      "notes": "--help must resolve with no token set and no server reachable. Unknown or incomplete commands print the relevant help to stderr and exit 1."
+    },
+    "globalFlags": [
+      { "name": "--base-url", "type": "string", "env": "W6W_BASE_URL" },
+      { "name": "--token", "type": "string", "env": "W6W_TOKEN" },
+      { "name": "--json", "type": "boolean" },
+      { "name": "--no-color", "type": "boolean" },
+      { "name": "--version", "alias": "-v", "type": "boolean", "source": "VERSION" },
+      { "name": "--help", "alias": "-h", "type": "boolean" }
+    ],
+    "exitCodes": {
+      "0": "success, including help and a queued/running workflow",
+      "1": "usage error",
+      "2": "API error (4xx/5xx, including auth failure)",
+      "3": "run failure (--wait returned status 'failed')"
+    }
+  },
+  "outOfScope": [
+    "apps",
+    "functions",
+    "endpoints",
+    "projects",
+    "vault",
+    "tokens",
+    "schedules",
+    "triggers",
+    "subscriptions",
+    "tenants",
+    "runs.get",
+    "all write operations on connections and workflows"
+  ]
+}
