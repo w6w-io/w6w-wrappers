@@ -81,10 +81,12 @@ intake keeps working at the command line.
 Every CLI command must also answer `--help` at group and command level, generated
 from `endpoints.json` — see [cli.md](./cli.md).
 
-**Status field.** Four of the seventeen operations carry `"status": "planned"`
-(`me`, `documents.getByKey`, `vars.getByName`, `run`): the server does not serve
-them yet. `status` records **server** readiness, not wrapper obligation — all
-seventeen are implemented and tested against a mocked transport in every wrapper
+**Status field.** One of the seventeen operations still carries
+`"status": "planned"` (`me` — the `versions` block only; identity itself is
+already live at `GET /auth/me`): `documents.getByKey`, `vars.getByName` and
+`run` were implemented server-side 2026-07-28. `status` records **server**
+readiness, not wrapper obligation — all seventeen are implemented and tested
+against a mocked transport in every wrapper
 (see [implementation.md §10](./implementation.md#10-conformance-runner)).
 
 ---
@@ -415,12 +417,17 @@ object.
 GET /api/documents/by-key/:key[?project=<id>]
 ```
 
-`status: planned` · `serverImplemented: false` — needs a small server route,
-fenced by BLK-1.
+`status: required` · `serverImplemented: true` — implemented 2026-07-28.
 
-The repository method already exists and is already called by `POST /documents`
-for its duplicate check — only the HTTP route is
-missing.
+The route trims the incoming key to match what `POST /documents` stores
+(`key.trim()`), so a caller who round-trips a key exactly as returned always
+finds it. Creation also rejects a key of exactly `.` or `..` — the one class no
+HTTP client can round-trip through a URL path segment: `.` is unreserved (so
+percent-encoding it is a no-op), and both collapse under RFC 3986 dot-segment
+removal before the request is even sent — one client's normalizer turns
+`by-key/..` into the **list** route, another sends it literally. Excluding the
+two values at creation means `by-key/:key` never has to disambiguate an
+unrepresentable key.
 
 D12 (amending D6): a user who chose a key should be able to address by it, and
 the alternative leaks internal `doc_…` ids to users who never saw them. **No
@@ -576,11 +583,11 @@ Addressed by the server-issued `var_…` id, not by `name` (D6).
 GET /api/vars/by-name/:name
 ```
 
-`status: planned` · `serverImplemented: false` — needs a small server route,
-fenced by BLK-1.
+`status: required` · `serverImplemented: true` — implemented 2026-07-28.
 
-The repository method already exists and is already called by `POST /vars` for its
-duplicate check — only the HTTP route is missing.
+Names are already regex-validated (`[a-z_][a-z0-9_]*`) at create time, which is
+URL-safe by construction — unlike documents' free-form `key`, no dot-segment
+hazard exists here and no extra normalization is needed.
 
 D12: key-addressed reads become server routes rather than client-side
 composition. No list-then-filter workaround. If the fence never clears, wrappers

@@ -177,8 +177,8 @@
       "summary": "Fetch one document by its human-chosen `key`.",
       "method": "GET",
       "path": "/documents/by-key/{key}",
-      "status": "planned",
-      "serverImplemented": false,
+      "status": "required",
+      "serverImplemented": true,
       "params": [
         {
           "name": "key",
@@ -199,7 +199,7 @@
         "python": "client.documents.get_by_key(key, project=None)",
         "cli": "w6w documents get-by-key <key> [--project <id>]"
       },
-      "notes": "PLANNED \u2014 needs a small server route, fenced by BLK-1. `DocumentsRepo.getByKey` already exists and is already called by `POST /documents` for its conflict check; only the HTTP route is missing. D12 (amending D6) \u2014 a user who chose a key should be able to address by it, and the alternative leaks internal `doc_\u2026` ids to users who never saw them. NO client-side list-then-filter: packages/wrappers/README.md 'What a wrapper is' forbids composing two calls to make an operation useful. If the fence never clears, wrappers ship id-addressed only and the limitation is documented. Same wrap/unwrap and `404 unknown_document` as `documents.get`."
+      "notes": "`DocumentsRepo.getByKey` already existed and was already called by `POST /documents` for its conflict check; only the HTTP route was missing. D12 (amending D6) \u2014 a user who chose a key should be able to address by it, and the alternative leaks internal `doc_\u2026` ids to users who never saw them. NO client-side list-then-filter: `packages/wrappers/README.md` \"What a wrapper is\" forbids composing two calls to make an operation useful. Same wrap/unwrap and `404 unknown_document` as `documents.get`. Server-implemented 2026-07-28: the route trims the incoming key to match what `POST /documents` stores, and creation rejects a key of exactly \".\" or \"..\" \u2014 the one class no HTTP client can round-trip through a URL path segment (percent-encoding is a no-op on `.`, and different clients disagree on dot-segment collapse)."
     },
     {
       "name": "documents.create",
@@ -371,8 +371,8 @@
       "summary": "Fetch one variable by its human-chosen `name`.",
       "method": "GET",
       "path": "/vars/by-name/{name}",
-      "status": "planned",
-      "serverImplemented": false,
+      "status": "required",
+      "serverImplemented": true,
       "params": [
         {
           "name": "name",
@@ -387,7 +387,7 @@
         "python": "client.vars.get_by_name(name)",
         "cli": "w6w vars get-by-name <name>"
       },
-      "notes": "PLANNED \u2014 needs a small server route, fenced by BLK-1. `VarsRepo.getByName` already exists and is already called by `POST /vars` for its conflict check; only the HTTP route is missing. D12 (amending D6) \u2014 key-addressed reads become server routes rather than client-side composition; packages/wrappers/README.md 'What a wrapper is' forbids a list-then-filter workaround. If the fence never clears, wrappers ship id-addressed only and the limitation is documented. Same `404 unknown_var` as `vars.get`."
+      "notes": "`VarsRepo.getByName` already existed and was already called by `POST /vars` for its conflict check; only the HTTP route was missing. D12 (amending D6) \u2014 key-addressed reads become server routes rather than client-side composition; `packages/wrappers/README.md` \"What a wrapper is\" forbids a list-then-filter workaround. Same `404 unknown_var` as `vars.get`. Server-implemented 2026-07-28: names are already regex-validated (`[a-z_][a-z0-9_]*`) at create time, which is URL-safe by construction \u2014 no extra hazard handling needed."
     },
     {
       "name": "vars.create",
