@@ -21,8 +21,10 @@ import {
   type ResolvedConfig,
   type W6wClientOptions,
 } from "./config.ts";
+import { DocumentsApi } from "./documents.ts";
 import { ConfigError } from "./errors.ts";
 import { type HttpResponse, request, type RequestOptions } from "./http.ts";
+import { VarsApi } from "./vars.ts";
 
 /**
  * A client for the w6w HTTP API.
@@ -50,6 +52,21 @@ export class W6wClient {
    */
   readonly config: ResolvedConfig;
 
+  /**
+   * The document store: `list`, `get`, `getByKey`, `create`, `update`,
+   * `delete`. Project-scoped — every call accepts an optional `project` that
+   * overrides this client's default.
+   */
+  readonly documents: DocumentsApi;
+
+  /**
+   * Typed variables: `list`, `get`, `getByName`, `create`, `update`, `delete`.
+   * **No `project` option anywhere** — variables are scoped by tenant/subject
+   * only, and the namespace is constructed without this client's configuration
+   * so it cannot reach a default scope to send (`docs/implementation.md` §7).
+   */
+  readonly vars: VarsApi;
+
   readonly #fetch: FetchLike;
 
   /**
@@ -72,6 +89,13 @@ export class W6wClient {
       // function reference rather than as a method of the global object.
       this.#fetch = global.bind(globalThis);
     }
+
+    // Namespaces are per-instance and hold this client, so they inherit its
+    // credential and base URL — never a module-level one. `vars` is handed the
+    // transport only; `documents` additionally sees the configuration, because
+    // it is the half of the asset surface that has a default project to apply.
+    this.documents = new DocumentsApi(this);
+    this.vars = new VarsApi(this);
   }
 
   /**

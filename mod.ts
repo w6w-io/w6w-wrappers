@@ -33,3 +33,18 @@ export type { HttpMethod, HttpResponse, QueryParams, RequestOptions } from "./sr
 // tag the operation modules use, or it will concatenate a caller value into a
 // path by hand — the one bug the encoding pin exists to prevent.
 export { path } from "./src/http.ts";
+
+// Asset operations (T2.1.3): documents and vars. The namespace classes are
+// exported alongside their input types because a host that types a helper
+// around `client.documents` needs to name them; they are reached through a
+// client, never constructed directly.
+export { DocumentsApi } from "./src/documents.ts";
+export type {
+  DocumentCreateInput,
+  DocumentOptions,
+  DocumentPatch,
+  DocumentsHost,
+} from "./src/documents.ts";
+export { VarsApi } from "./src/vars.ts";
+export type { VarCreateInput, VarPatch, VarsHost } from "./src/vars.ts";
+export type { Doc, DocFormat, Var, VarType } from "./src/types.ts";
