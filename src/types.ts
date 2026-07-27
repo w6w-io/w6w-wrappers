@@ -378,16 +378,27 @@ export function isTerminalRunStatus(status: RunStatus): boolean {
  * not schema validation: extra keys are ignored, and the payload itself is cast,
  * never checked.
  *
+ * A key present but carrying **`null`** counts as missing, for exactly the same
+ * reason: `{"document": null}` resolved `documents.get()` to `null` typed `Doc`
+ * (measured), which is precisely the deferred `TypeError` in the caller that the
+ * paragraph above says this function exists to prevent. The check is therefore
+ * `!= null`, not `!== undefined`. The python lane stops the same body one level
+ * further in (`unwrap_object`); what both lanes agree on is that it raises
+ * `bad_response` with the status still in hand, rather than reaching the caller.
+ *
  * @param res - The response returned by the transport.
  * @param key - The envelope key to read, e.g. `"document"`, `"vars"`.
  * @returns The unwrapped payload.
- * @throws {ApiError} `bad_response` when the body is not an object or lacks the key.
+ * @throws {ApiError} `bad_response` when the body is not an object, or lacks the
+ * key, or the key is `null`.
  */
 export function unwrap<T>(res: HttpResponse<unknown>, key: string): T {
   const body = res.body;
   if (typeof body === "object" && body !== null) {
     const value = (body as Record<string, unknown>)[key];
-    if (value !== undefined) return value as T;
+    // Both arms are load-bearing: absent AND null are "the server did not send
+    // what it promised", and only one of them used to be caught.
+    if (value !== undefined && value !== null) return value as T;
   }
   throw new ApiError(
     res.status,

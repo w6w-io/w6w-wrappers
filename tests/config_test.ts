@@ -9,7 +9,13 @@
  */
 
 import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
-import { BASE_PATH, joinBaseUrl, requireToken, resolveConfig } from "../src/config.ts";
+import {
+  BASE_PATH,
+  type FetchLike,
+  joinBaseUrl,
+  requireToken,
+  resolveConfig,
+} from "../src/config.ts";
 import { ConfigError } from "../src/errors.ts";
 import { W6wClient } from "../src/client.ts";
 
@@ -46,6 +52,113 @@ Deno.test("the base path is appended to a bare origin", () => {
   });
   assertEquals(joinBaseUrl("https://api.example.com"), "https://api.example.com/api");
   assertEquals(BASE_PATH, "/api");
+});
+
+Deno.test("joinBaseUrl and the client resolve to the same EXPECTED value", () => {
+  // Both sides are asserted against a written-out expectation, never merely
+  // against each other: once the helper and the resolver share one
+  // implementation — which is the point of this pin — an equality-only
+  // assertion between the two can never fail, whatever either of them does.
+  // (The python lane shipped exactly that vacuous test and then caught it.)
+  const cases: Array<[string, string]> = [
+    ["https://api.example.com", "https://api.example.com/api"],
+    ["https://api.example.com/", "https://api.example.com/api"],
+    ["https://api.example.com///", "https://api.example.com/api"],
+    ["https://api.example.com/api", "https://api.example.com/api"],
+    ["https://api.example.com/api/", "https://api.example.com/api"],
+    // The divergence this pin closes: the helper used to skip the whitespace
+    // trim the resolver did, so it answered "  https://api.example.com/  /api"
+    // for the value the client resolved correctly.
+    ["  https://api.example.com/  ", "https://api.example.com/api"],
+    ["\thttps://api.example.com\n", "https://api.example.com/api"],
+    // A look-alike suffix is NOT the base path and is not de-duplicated.
+    ["https://api.example.com/myapi", "https://api.example.com/myapi/api"],
+    ["http://localhost:8080", "http://localhost:8080/api"],
+  ];
+  withEnv(NO_ENV, () => {
+    for (const [origin, expected] of cases) {
+      assertEquals(joinBaseUrl(origin), expected, `joinBaseUrl(${JSON.stringify(origin)})`);
+      assertEquals(
+        resolveConfig({ baseUrl: origin }).baseUrl,
+        expected,
+        `resolveConfig(${JSON.stringify(origin)})`,
+      );
+    }
+  });
+});
+
+Deno.test("a relative or hostless base URL is a configuration error, not an outage", () => {
+  // The hole this closes: `resolveConfig({baseUrl: "/foo"})` used to SUCCEED,
+  // yielding the relative "/foo/api". The request then went nowhere useful and
+  // surfaced as `network_error` — "It may be down or unreachable" — which sends
+  // the user looking at the server instead of at their own configuration.
+  //
+  // `http:///foo` is in this list for a measured reason: the WHATWG parser does
+  // not reject it and does not leave the host empty — `new URL("http:///foo")`
+  // resolves to `http://foo/` — so a host-only check would accept it and then
+  // talk to a server nobody named.
+  const rejected = [
+    "",
+    "   ",
+    "/foo",
+    "http:///foo",
+    "example.com",
+    "//evil.com",
+    "ftp://api.example.com",
+    "file:///etc/passwd",
+    "localhost:8080",
+    // Shape is fine, but the parser refuses it: port out of range.
+    "http://api.example.com:99999",
+  ];
+  withEnv(NO_ENV, () => {
+    for (const origin of rejected) {
+      const fromHelper = assertThrows(
+        () => joinBaseUrl(origin),
+        ConfigError,
+        undefined,
+        `joinBaseUrl(${JSON.stringify(origin)}) should raise`,
+      );
+      const fromConfig = assertThrows(
+        () => resolveConfig({ baseUrl: origin }),
+        ConfigError,
+        undefined,
+        `resolveConfig(${JSON.stringify(origin)}) should raise`,
+      );
+      // The two paths raise the SAME diagnosis, because there is one path.
+      assertEquals(fromHelper.message, fromConfig.message);
+      // It names the variable an operator would have to fix…
+      assertStringIncludes(fromHelper.message, "W6W_BASE_URL");
+      // …and it never blames the network for a configuration mistake.
+      assertEquals(fromHelper.message.includes("may be down"), false);
+      assertEquals(fromHelper.message.includes("unreachable"), false);
+    }
+  });
+});
+
+Deno.test("a relative base URL from the environment is rejected too", () => {
+  // The empty-string env rule closes this hole from one side only: a blank
+  // W6W_BASE_URL is absent, but a *present* relative one walked straight past it.
+  withEnv({ W6W_BASE_URL: "/api", W6W_TOKEN: "tok_env" }, () => {
+    const err = assertThrows(() => resolveConfig(), ConfigError);
+    assertStringIncludes(err.message, "W6W_BASE_URL");
+  });
+});
+
+Deno.test("a client with a relative base URL never issues a request", () => {
+  // The behavioural half of the pin: the failure has to happen at construction,
+  // before any transport is reached, or the diagnosis arrives as a network error.
+  let calls = 0;
+  const spy: FetchLike = () => {
+    calls += 1;
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  };
+  withEnv(NO_ENV, () => {
+    assertThrows(
+      () => new W6wClient({ baseUrl: "/foo", token: "tok_1", fetch: spy }),
+      ConfigError,
+    );
+  });
+  assertEquals(calls, 0);
 });
 
 Deno.test("trailing slashes are stripped before the base path is appended", () => {

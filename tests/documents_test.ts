@@ -230,6 +230,51 @@ Deno.test("documents: a 409 document_exists surfaces its code, unswallowed", asy
   assertEquals(err.code, "document_exists");
 });
 
+Deno.test("documents: the id is percent-encoded into every id-addressed route", async () => {
+  // The encoding pin is contract-wide, but every id fixture in this suite is the
+  // tame `doc_1`, which encodes to itself — so dropping the `path` tag from the
+  // id call sites left all gates green. An id carrying a `/` is what makes the
+  // tag's absence visible: without it the request addresses a different route.
+  const c = client(() => json({ document: DOC, ok: true }));
+
+  await c.client.documents.get("doc/1");
+  await c.client.documents.update("doc/1", { content: "c" });
+  await c.client.documents.delete("doc/1");
+
+  assertEquals(c.calls[0].url, "https://api.example.com/api/documents/doc%2F1");
+  assertEquals(c.calls[1].url, "https://api.example.com/api/documents/doc%2F1");
+  assertEquals(c.calls[2].url, "https://api.example.com/api/documents/doc%2F1");
+});
+
+Deno.test("documents.delete does not swallow a 404 — it is not a silent success", async () => {
+  // "Not idempotent: a 404 is not a silent success" is documented behaviour with
+  // no test until now — a `try {} catch {}` around the delete request kept the
+  // whole suite green. It becomes user-visible in the CLI, whose exit code for
+  // `w6w documents delete` is read straight off this error.
+  const c = client(() => json({ error: { code: "unknown_document", message: "No such." } }, 404));
+
+  const err = await assertRejects(() => c.client.documents.delete("doc_missing"), ApiError);
+
+  assertEquals(err.status, 404);
+  assertEquals(err.code, "unknown_document");
+});
+
+Deno.test("documents: an envelope key present but null is bad_response, not null", async () => {
+  // `value !== undefined` let a JSON null through, so `documents.get()` resolved
+  // to `null` typed `Doc` (measured) — precisely the deferred TypeError in the
+  // caller that this whole envelope reader exists to prevent.
+  const single = client(() => json({ document: null }));
+  const errSingle = await assertRejects(() => single.client.documents.get("doc_1"), ApiError);
+  assertEquals(errSingle.code, "bad_response");
+  assertEquals(errSingle.status, 200);
+  assertStringIncludes(errSingle.message, '"document"');
+
+  const many = client(() => json({ documents: null }));
+  const errMany = await assertRejects(() => many.client.documents.list(), ApiError);
+  assertEquals(errMany.code, "bad_response");
+  assertStringIncludes(errMany.message, '"documents"');
+});
+
 Deno.test("documents: a 200 missing its envelope key is bad_response, not undefined", async () => {
   // A server regression must fail here, loudly, rather than returning undefined
   // and surfacing as a TypeError somewhere in the caller minutes later.

@@ -36,14 +36,18 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 export interface W6wClientOptions {
   /**
    * The **origin** of the w6w server, e.g. `https://api.example.com`. The base
-   * path (`/api`) is appended for you and is never doubled. Overrides
-   * `W6W_BASE_URL`.
+   * path (`/api`) is appended for you and is never doubled. It must be an
+   * absolute `http(s)` URL with a host: a relative value like `/api` is a
+   * browser same-origin assumption with no meaning in a library, and is
+   * rejected at construction rather than misreported as an outage later.
+   * Overrides `W6W_BASE_URL`.
    */
   baseUrl?: string;
   /** Bearer token, sent on every request. Overrides `W6W_TOKEN`. */
   token?: string;
   /**
-   * Default project id for the project-scoped operations (`documents.*`).
+   * Default project id for the project-scoped operations — `documents.*` and
+   * `workflows.list`, which read it too.
    * Omitted, the server resolves the account's default project. There is no
    * environment variable for this and no `project` on any `vars.*` operation —
    * vars are not project-scoped (`docs/implementation.md` §7).
@@ -61,7 +65,11 @@ export interface W6wClientOptions {
  * point at different servers with no interference (`docs/implementation.md` §2).
  */
 export interface ResolvedConfig {
-  /** Fully joined base, e.g. `https://api.example.com/api`. Never trailing-slashed. */
+  /**
+   * Fully joined base, e.g. `https://api.example.com/api`. Never
+   * trailing-slashed, and never relative — {@linkcode joinBaseUrl} rejects a
+   * value that is not an absolute `http(s)` URL with a host.
+   */
   readonly baseUrl: string;
   /** The bearer token, or `null` when none was configured. */
   readonly token: string | null;
@@ -70,16 +78,38 @@ export interface ResolvedConfig {
 }
 
 /**
- * Join a configured origin with the API base path.
+ * An absolute `http(s)` origin, spelled with a real authority.
  *
- * The rule is pinned by `docs/implementation.md` §2 and mirrors the house
+ * Deliberately checked *before* `new URL`, because the WHATWG parser silently
+ * repairs the one spelling this rule most needs to catch: `new URL("http:///foo")`
+ * does **not** fail and does **not** yield an empty host — it collapses the extra
+ * slash and resolves to `http://foo/`, so a host check alone would accept a
+ * hostless value and then request a different server than the one the user typed.
+ * Measured in the api container, not assumed. The pattern therefore requires the
+ * authority to start with a character that is not a slash, backslash, `?` or `#`.
+ */
+const ABSOLUTE_HTTP_ORIGIN = /^https?:\/\/[^/\\?#]/i;
+
+/**
+ * Validate a configured origin and join it with the API base path.
+ *
+ * **This is the one and only base-URL code path.** {@linkcode resolveConfig}
+ * calls this function and normalises nothing itself, so a caller who imports
+ * the helper gets exactly the answer their client will use — including the same
+ * errors. A helper that were merely *similar* to the client's path (skipping the
+ * whitespace trim, say) would answer differently for the same input, which is
+ * worse than having no helper at all. The python lane found and fixed the
+ * identical divergence in its own draft; this mirrors its resolution.
+ *
+ * The join rule is pinned by `docs/implementation.md` §2 and mirrors the house
  * helper that the operator console already uses against this same API, so all
  * clients agree on what `W6W_BASE_URL` means:
  *
- * 1. strip **all** trailing slashes;
- * 2. if the result already ends with the base path, use it as-is — **never
+ * 1. strip surrounding whitespace, then **all** trailing slashes;
+ * 2. reject anything that is not an absolute `http`/`https` URL with a host;
+ * 3. if the result already ends with the base path, use it as-is — **never
  *    double it**;
- * 3. otherwise append the base path.
+ * 4. otherwise append the base path.
  *
  * ```
  * https://api.example.com      → https://api.example.com/api
@@ -89,12 +119,57 @@ export interface ResolvedConfig {
  * https://api.example.com/api/ → https://api.example.com/api
  * ```
  *
- * @param origin - The configured origin. Trailing slashes are tolerated.
+ * Step 2 exists because a **relative** base URL has to fail *here*, as
+ * configuration, with a message about configuration. Blank-is-absent
+ * (`src/env.ts`) already stops `""` from joining to the relative `"/api"`; with
+ * no absoluteness check, `W6W_BASE_URL=/foo` walked straight past that guard to
+ * `"/foo/api"` and then failed on the first request as "the server may be down"
+ * — the same hole, reopened by another route, and misdiagnosed. Closing only one
+ * of the two leaves the other open.
+ *
+ * @param origin - The configured origin. Surrounding whitespace and trailing slashes are tolerated.
  * @returns The joined base URL.
+ * @throws {ConfigError} When the origin is blank, relative, hostless or not `http(s)`.
  */
 export function joinBaseUrl(origin: string): string {
-  const trimmed = origin.replace(/\/+$/, "");
+  // Surrounding whitespace is stripped before the emptiness test so a blank
+  // explicit argument fails the same way a blank environment variable does — an
+  // env file's stray "\n" must not become part of the origin.
+  const trimmed = origin.trim().replace(/\/+$/, "");
+  if (trimmed.length === 0) {
+    throw new ConfigError(
+      "No w6w base URL is configured. Pass one to the client " +
+        '(new W6wClient({ baseUrl: "https://api.example.com" })) or set the ' +
+        `${ENV_BASE_URL} environment variable. It holds the server's origin — the ` +
+        `${BASE_PATH} base path is appended for you.`,
+    );
+  }
+  if (!ABSOLUTE_HTTP_ORIGIN.test(trimmed) || !parses(trimmed)) {
+    throw new ConfigError(
+      `The w6w base URL "${trimmed}" is not an absolute http(s) URL. ` +
+        `${ENV_BASE_URL} holds an ORIGIN, e.g. "https://api.example.com" — scheme and host, ` +
+        `with the ${BASE_PATH} base path appended for you. A relative or hostless value ` +
+        "cannot be requested and would fail later as a connection problem rather than as " +
+        "the configuration mistake it is.",
+    );
+  }
   return trimmed.endsWith(BASE_PATH) ? trimmed : `${trimmed}${BASE_PATH}`;
+}
+
+/**
+ * Does the runtime's URL parser accept this origin at all?
+ *
+ * The pattern above settles *shape* (scheme, `//`, a real authority); this
+ * settles the rest — an out-of-range port, a malformed IPv6 literal, a host the
+ * parser rejects. Both have to hold, and neither subsumes the other.
+ */
+function parses(origin: string): boolean {
+  try {
+    new URL(origin);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -116,22 +191,11 @@ export function joinBaseUrl(origin: string): string {
  * @throws {ConfigError} When no usable base URL was supplied, naming `W6W_BASE_URL`.
  */
 export function resolveConfig(options: W6wClientOptions = {}): ResolvedConfig {
-  const rawBaseUrl = options.baseUrl ?? readEnv(ENV_BASE_URL) ?? "";
-  // Surrounding whitespace is stripped before the emptiness test so a blank
-  // explicit argument fails the same way a blank environment variable does — an
-  // env file's stray "\n" must not become part of the origin.
-  const trimmed = rawBaseUrl.trim().replace(/\/+$/, "");
-  if (trimmed.length === 0) {
-    throw new ConfigError(
-      "No w6w base URL is configured. Pass one to the client " +
-        '(new W6wClient({ baseUrl: "https://api.example.com" })) or set the ' +
-        `${ENV_BASE_URL} environment variable. It holds the server's origin — the ` +
-        `${BASE_PATH} base path is appended for you.`,
-    );
-  }
-
   return {
-    baseUrl: joinBaseUrl(trimmed),
+    // Every normalisation, the emptiness test and the absoluteness check live in
+    // `joinBaseUrl` — one code path, so the exported helper and the client can
+    // never answer differently for the same input.
+    baseUrl: joinBaseUrl(options.baseUrl ?? readEnv(ENV_BASE_URL) ?? ""),
     token: options.token ?? readEnv(ENV_TOKEN) ?? null,
     project: options.project ?? null,
   };

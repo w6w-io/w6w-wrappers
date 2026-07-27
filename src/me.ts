@@ -55,7 +55,9 @@ export interface MeHost {
  * @param host - The client this operation issues its request through.
  * @returns The caller's identity, with `versions.wrapper` filled in.
  * @throws {ApiError} On any non-2xx, e.g. `401` when the token is not accepted.
- * @throws {ApiError} `bad_response` when a 2xx body is not an object.
+ * @throws {ApiError} `bad_response` when a 2xx body is not a plain object — an
+ * array included, since `typeof [] === "object"` and a spread array yields
+ * character-indexed keys rather than identity fields.
  */
 export async function fetchMe(host: MeHost): Promise<Me> {
   const res = await host.request<Me>({ method: "GET", path: "/me" });
@@ -65,7 +67,13 @@ export async function fetchMe(host: MeHost): Promise<Me> {
   // keyed routes — so a proxy answering `200 "ok"` fails here instead of
   // returning a `Me` whose only populated field is the one this client just
   // added.
-  if (typeof body !== "object" || body === null) {
+  //
+  // `Array.isArray` is load-bearing, not belt-and-braces: `typeof [] === "object"`
+  // and `[] !== null`, so without it a `200 []` spread into exactly the degenerate
+  // value described above — measured, `{"versions":{"wrapper":"0.1.0"}}` — and
+  // `200 [{...}]` produced character-indexed keys. It also keeps this lane in step
+  // with python, whose natural `isinstance(body, dict)` excludes a list already.
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
     throw new ApiError(
       res.status,
       "bad_response",
@@ -73,10 +81,21 @@ export async function fetchMe(host: MeHost): Promise<Me> {
       body,
     );
   }
+  // Same reasoning one level down: `versions` is typed `Record<string, string>`,
+  // but the wire can carry anything, and spreading a string produces
+  // character-indexed junk (`"1.2.3"` → `{"0":"1","1":".",…}`) that satisfies the
+  // type and so is invisible to the compiler. A `versions` that is not a plain
+  // object is dropped in favour of the client's own fill rather than merged —
+  // this operation reports identity, and inventing keys out of a malformed block
+  // would be worse than reporting only what this client actually knows.
+  const versions = body.versions;
+  const merged = typeof versions === "object" && versions !== null && !Array.isArray(versions)
+    ? versions
+    : undefined;
   return {
     ...body,
     // Spread order is the policy: the wrapper's own version is the DEFAULT and
     // every key the server sent lands on top of it, `wrapper` included.
-    versions: { wrapper: VERSION, ...body.versions },
+    versions: { wrapper: VERSION, ...merged },
   };
 }

@@ -218,3 +218,68 @@ Deno.test("workflows.run: a success body that is not a run object is bad_respons
   assertEquals(err.status, 200);
   assertStringIncludes(err.message, "not a run object");
 });
+
+Deno.test("workflows.run: an object-shaped body with no run in it is bad_response", async () => {
+  // The guard used to check only `typeof body === "object"`, which every one of
+  // these passes — `typeof [] === "object"` included. Measured against that
+  // version, each returned a WorkflowRunResult whose `runId: string` and
+  // `status: RunStatus` were `undefined` AT RUNTIME: a lie the compiler cannot
+  // catch, surfacing as a TypeError somewhere in the caller minutes later.
+  //
+  // Its sibling `client.run()` already required a string `kind`; two operations
+  // in one package must not disagree about what a malformed success body is.
+  // Python's idiomatic `isinstance(body, dict)` rejects `[]` too, so this is
+  // also what keeps the lanes answering alike.
+  const bodies: unknown[] = [
+    {},
+    [],
+    [{ runId: "run_1", status: "queued" }],
+    { ok: true },
+    { runId: 42, status: 7 },
+    { runId: "run_1" },
+    { status: "queued" },
+    null,
+  ];
+  for (const body of bodies) {
+    const c = client(() => json(body));
+
+    const err = await assertRejects(
+      () => c.client.workflows.run("wf_01HQ"),
+      ApiError,
+      undefined,
+      `body ${JSON.stringify(body)} should be rejected`,
+    );
+
+    assertEquals(err.code, "bad_response");
+    assertStringIncludes(err.message, "not a run object");
+    // The body is kept on the error, so a caller can see what actually arrived.
+    assertEquals(err.raw, body);
+  }
+});
+
+Deno.test("workflows.run: a minimal well-formed 202 body is still accepted", async () => {
+  // The control for the case above: the guard must reject malformed bodies
+  // without becoming a schema validator. `runId` + `status` is everything a
+  // queued run carries, and it goes straight through.
+  const c = client(() => json({ runId: "run_1", status: "queued" }, 202));
+
+  const run = await c.client.workflows.run("wf_01HQ");
+
+  assertEquals(run.runId, "run_1");
+  assertEquals(run.status, "queued");
+  assertEquals(run.steps, {});
+  assertEquals(run.terminal, false);
+  assertEquals(run.httpStatus, 202);
+});
+
+Deno.test("workflows.run: an unknown trigger value is sent, never validated", async () => {
+  // `endpoints.json` declares `trigger` as an open string with `closedEnum:
+  // false` — the five known values are documentation. A wrapper that validated
+  // against them would reject a request the server accepts, so the value is
+  // passed through verbatim.
+  const c = client(() => json({ runId: "run_1", status: "queued" }, 202));
+
+  await c.client.workflows.run("wf_01HQ", { trigger: "a_future_server_value" });
+
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { trigger: "a_future_server_value" });
+});

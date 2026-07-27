@@ -165,6 +165,47 @@ Deno.test("me: a 401 unauthorized reaches the caller as an ApiError", async () =
   assertEquals(err.message, "Invalid token.");
 });
 
+Deno.test("me: a 200 whose body is an array is bad_response, not a degenerate Me", async () => {
+  // `typeof [] === "object"` and `[] !== null`, so the guard next door used to
+  // pass an array straight through to the spread. Measured against the shipped
+  // code before this fix:
+  //
+  //   me() on 200 []              -> {"versions":{"wrapper":"0.1.0"}}
+  //   me() on 200 [{"tenant":"x"}] -> {"0":{"tenant":"x"},"versions":{…}}
+  //
+  // i.e. exactly "a Me whose only populated field is the one this client just
+  // added" — the thing the guard's own docstring says it prevents. It also keeps
+  // this lane in step with python, whose `isinstance(body, dict)` raises here.
+  for (const body of [[], [{ tenant: "x" }], [1, 2, 3]]) {
+    const c = client(() => json(body));
+
+    const err = await assertRejects(() => c.client.me(), ApiError);
+
+    assertEquals(err.status, 200);
+    assertEquals(err.code, "bad_response");
+    assertStringIncludes(err.message, "not an identity object");
+  }
+});
+
+Deno.test("me: a versions block that is not an object is not spread into keys", async () => {
+  // A server answering `versions: "1.2.3"` used to yield
+  // {"versions":{"0":"1","1":".","2":"2",…}} — junk that satisfies
+  // Record<string, string> and is therefore invisible to the compiler. The
+  // client keeps its own fill and drops the malformed block.
+  for (const versions of ["1.2.3", 42, ["server@1a2b3c4"], true]) {
+    const c = client(() => json({ ...IDENTITY, versions }));
+
+    const me = await c.client.me();
+
+    assertEquals(me.versions, { wrapper: VERSION });
+    // The identity fields are untouched by the guard.
+    assertEquals(me.tenant, "default");
+  }
+  // `null` was always handled correctly ({...null} is {}), and still is.
+  const withNull = client(() => json({ ...IDENTITY, versions: null }));
+  assertEquals((await withNull.client.me()).versions, { wrapper: VERSION });
+});
+
 Deno.test("me: a 200 whose body is not an object is bad_response", async () => {
   // Guarded rather than spread: a proxy answering `200 "ok"` must fail as a
   // shape problem here, not return a Me whose only populated field is the

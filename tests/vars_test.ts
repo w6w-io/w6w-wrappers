@@ -238,6 +238,43 @@ Deno.test("vars: a 409 var_exists surfaces its code, unswallowed", async () => {
   assertEquals(err.code, "var_exists");
 });
 
+Deno.test("vars: the id is percent-encoded into every id-addressed route", async () => {
+  // Same gap as the documents suite: every id fixture here is `var_1`, which
+  // encodes to itself, so dropping the `path` tag from `vars.get` left all gates
+  // green. An id carrying a `/` makes the tag load-bearing.
+  const c = client(() => json({ var: VAR, ok: true }));
+
+  await c.client.vars.get("var/1");
+  await c.client.vars.update("var/1", { value: 1 });
+  await c.client.vars.delete("var/1");
+
+  assertEquals(c.calls[0].url, "https://api.example.com/api/vars/var%2F1");
+  assertEquals(c.calls[1].url, "https://api.example.com/api/vars/var%2F1");
+  assertEquals(c.calls[2].url, "https://api.example.com/api/vars/var%2F1");
+});
+
+Deno.test("vars.delete does not swallow a 404 — it is not a silent success", async () => {
+  const c = client(() => json({ error: { code: "unknown_var", message: "No such." } }, 404));
+
+  const err = await assertRejects(() => c.client.vars.delete("var_missing"), ApiError);
+
+  assertEquals(err.status, 404);
+  assertEquals(err.code, "unknown_var");
+});
+
+Deno.test("vars: an envelope key present but null is bad_response, not null", async () => {
+  // A JSON null used to resolve `vars.get()` to `null` typed `Var`.
+  const single = client(() => json({ var: null }));
+  const errSingle = await assertRejects(() => single.client.vars.get("var_1"), ApiError);
+  assertEquals(errSingle.code, "bad_response");
+  assertStringIncludes(errSingle.message, '"var"');
+
+  const many = client(() => json({ vars: null }));
+  const errMany = await assertRejects(() => many.client.vars.list(), ApiError);
+  assertEquals(errMany.code, "bad_response");
+  assertStringIncludes(errMany.message, '"vars"');
+});
+
 Deno.test("vars: a 200 missing its envelope key is bad_response, not undefined", async () => {
   const c = client(() => json({ unexpected: true }));
 

@@ -216,7 +216,24 @@ export class WorkflowsApi {
     });
 
     const body = res.body;
-    if (typeof body !== "object" || body === null) {
+    // The `runId` and `status` checks are the guard, not decoration. An
+    // object-only check let `{}`, `[]`, `[{…}]` and `{"ok":true}` through and
+    // returned a `WorkflowRunResult` whose `runId: string` and `status:
+    // RunStatus` were **`undefined` at runtime** (measured) — a lie the compiler
+    // cannot catch, which becomes a `TypeError` somewhere in the caller minutes
+    // later. That is the failure this package's own `unwrap` exists to prevent.
+    //
+    // Requiring the two fields also subsumes the array case (`[].runId` is
+    // `undefined`), and makes this guard exactly as strict as its sibling in
+    // `src/run.ts`, which requires a string `kind`: two operations in one
+    // package must not disagree about what a malformed success body is. It
+    // keeps the lanes in step too — python's idiomatic `isinstance(body, dict)`
+    // rejects `[]` where `typeof [] === "object"` accepts it.
+    if (
+      typeof body !== "object" || body === null ||
+      typeof (body as { runId?: unknown }).runId !== "string" ||
+      typeof (body as { status?: unknown }).status !== "string"
+    ) {
       throw new ApiError(
         res.status,
         "bad_response",
