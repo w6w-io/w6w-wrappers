@@ -158,7 +158,7 @@ def _query_pairs(query: Optional[Mapping[str, Any]]) -> List[Tuple[str, str]]:
 
 def build_url(
     config: ResolvedConfig,
-    path: str,
+    url_path: str,
     query: Optional[Mapping[str, Any]] = None,
 ) -> str:
     """Assemble the full request URL from a resolved base, a path and query params.
@@ -168,14 +168,21 @@ def build_url(
     and the query string is built with `urlencode`, which encodes both names and
     values.
 
+    The parameter is `url_path` rather than `path` **so it does not shadow the
+    encoder**: inside a function whose parameter is called `path`, the name
+    `path` is a plain string, and `path("/documents/{id}", id=id)` is a
+    `TypeError` at best and a silently unencoded URL at worst. One primitive
+    that every call site must reach is worth an unambiguous name.
+
     :param config: The resolved configuration.
-    :param path: Base-relative path with a leading slash, e.g. `/documents`.
+    :param url_path: Base-relative path with a leading slash, e.g. `/documents`.
+        Build it with :func:`path` whenever any part of it comes from the caller.
     :param query: Query parameters, if any.
     :returns: The absolute URL to request.
     """
     pairs = _query_pairs(query)
     suffix = "?" + urlencode(pairs) if pairs else ""
-    return config.base_url + path + suffix
+    return config.base_url + url_path + suffix
 
 
 def default_transport(request: Request) -> Any:
@@ -252,7 +259,7 @@ def _request(
     config: ResolvedConfig,
     transport: Transport,
     method: str,
-    path: str,
+    url_path: str,
     query: Optional[Mapping[str, Any]] = None,
     body: Optional[Any] = None,
 ) -> HttpResponse:
@@ -293,8 +300,9 @@ def _request(
     :param config: Resolved configuration (base URL and credential).
     :param transport: The transport to use; injected, never a module global.
     :param method: `GET`, `POST`, `PATCH` or `DELETE`.
-    :param path: Base-relative path — build it with :func:`path` whenever any
-        part of it comes from the caller.
+    :param url_path: Base-relative path — build it with :func:`path` whenever
+        any part of it comes from the caller. Named `url_path` so that the
+        encoder is never shadowed inside this function (see :func:`build_url`).
     :param query: Query parameters; `None` values are dropped.
     :param body: Request body. Serialised as JSON when not `None`; a bodiless
         request sends no `Content-Type`.
@@ -303,7 +311,7 @@ def _request(
         transport is touched.
     :raises ApiError: On any of the three failure modes above.
     """
-    url = build_url(config, path, query)
+    url = build_url(config, url_path, query)
     # Resolved per request rather than at construction: a client with no token
     # is constructible (so a CLI's --help works offline) and fails here instead.
     headers: Dict[str, str] = {"Authorization": "Bearer " + require_token(config)}

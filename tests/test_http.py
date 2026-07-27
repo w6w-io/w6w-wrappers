@@ -557,6 +557,16 @@ class TypingTest(unittest.TestCase):
             for label, candidate in candidates:
                 if not inspect.isfunction(candidate):
                     continue
+                # Only signatures THIS PACKAGE wrote. `typing.Protocol` injects
+                # its own `__init__` (`typing._no_init_or_replace_init`, spelled
+                # `(self, *args, **kwargs)` with no annotations) into every
+                # protocol class, so without this filter the gate reports a
+                # stdlib function as an unannotated public signature the moment
+                # a protocol is exported — a false positive it cannot act on,
+                # and one that would push someone into un-exporting a type to
+                # silence it.
+                if not getattr(candidate, "__module__", "").startswith("w6w"):
+                    continue
                 signature = inspect.signature(candidate)
                 for parameter in signature.parameters.values():
                     if parameter.name in ("self", "cls"):

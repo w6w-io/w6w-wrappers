@@ -18,6 +18,8 @@ from typing import Any, Mapping, Optional
 
 from ._config import ResolvedConfig, resolve_config
 from ._http import HttpResponse, Transport, _request, default_transport
+from ._vars import VarsApi
+from .documents import DocumentsApi
 
 
 class W6wClient:
@@ -41,6 +43,14 @@ class W6wClient:
         Exposed so a host can log *which* server it is talking to without
         re-deriving the join rule. Frozen.
     :ivar transport: The transport this client sends through.
+    :ivar documents: The document store — `list`, `get`, `get_by_key`,
+        `create`, `update`, `delete`. Project-scoped: every call accepts an
+        optional `project` that overrides this client's default.
+    :ivar vars: Typed variables — `list`, `get`, `get_by_name`, `create`,
+        `update`, `delete`. **No `project` argument anywhere**: variables are
+        scoped by tenant/subject only, and the namespace is constructed with
+        this client's `request` method and nothing else, so it cannot reach a
+        default scope to send (`docs/implementation.md` §7).
     """
 
     def __init__(
@@ -73,6 +83,15 @@ class W6wClient:
             project=project,
         )
         self.transport: Transport = default_transport if transport is None else transport
+
+        # Namespaces are per-instance and hold this client (or its bound
+        # transport), so they inherit its credential and base URL — never a
+        # module-level one. `documents` additionally sees the configuration,
+        # because it is the project-scoped half of the surface and has a default
+        # project to apply; `vars` is handed the transport alone, so that half
+        # has nothing to reach for even by accident.
+        self.documents: DocumentsApi = DocumentsApi(self)
+        self.vars: VarsApi = VarsApi(self.request)
 
     def request(
         self,
