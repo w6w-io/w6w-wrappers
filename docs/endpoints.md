@@ -677,8 +677,21 @@ TypeScript, `None` in Python, no stdout payload in the CLI beyond its exit code
 POST /api/run
 ```
 
-`status: planned` · `serverImplemented: false` — needs the URN resolver **and**
-the route, both fenced by BLK-1.
+`status: required` · `serverImplemented: true` — implemented 2026-07-28. Dispatch
+lives in a third sibling BLL service, `bll/resolve-run.ts`, mirroring
+`InvokeEndpointService`'s shape: every arm calls the same
+runner an existing dedicated route already uses (`invokeAction` for `conn_`,
+the Function choke point for `fn_`, `enqueueRun` for `wf_`, and
+`InvokeEndpointService` itself for `ep_`, delegated verbatim). No new execution
+path, and core's `Callable` is not widened — the connection/action arm is a
+server-only addition to this HTTP surface.
+
+Every arm resolves the URN with the caller's scope passed **explicitly**: two
+of the underlying repos (`FunctionsRepo.load`, `EndpointsRepo.load`) accept an
+optional scope and silently drop the tenant/subject predicate when it is
+omitted (an ergonomic that exists for the trusted scheduler path) — the
+resolver never omits it, and a URN belonging to another tenant resolves to
+"not found," never to the resource.
 
 Runs anything addressable by URN: a connection action, a workflow, a function, or
 an endpoint.
