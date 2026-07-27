@@ -525,8 +525,32 @@ Rules that apply to all of them:
 - **`versions` is optional and open.** It may be absent entirely, and may carry
   keys this version has never heard of. It is a string→string map. It carries
   `composition` (a build string, or `"dev"` when the build arg is absent) and
-  `wrapper` (filled client-side from the wrapper's own package version). It never
-  reports a literal `0.0.0` (D5).
+  `wrapper` (filled client-side from the wrapper's own package version — the
+  server cannot know it).
+- **Precedence on collision is server-wins.** The wrapper's own version is a
+  **default** that any key the server supplied **overrides**, `wrapper`
+  included. Concretely `{ wrapper: VERSION, ...body.versions }` in TypeScript,
+  `{"wrapper": VERSION, **(body.get("versions") or {})}` in Python; the shipped
+  node lane is the reference. The other order
+  (`{ ...body.versions, wrapper: VERSION }`) is **wrong** — it makes the
+  wrapper's own value win. Both readings satisfied the older wording, they
+  differ observably, and this is the one field a bug report is read off, so it
+  is pinned here rather than decided three times.
+- **A version is never *displayed* as a literal `0.0.0` or as an empty string —
+  it is displayed as `"dev"`** (D5). Hand-maintained component versions are
+  unreliable (`0.0.0`/`0.0.1` placeholders nobody bumps), and a banner that
+  looks authoritative while reporting `0.0.0` forever is worse than one that
+  honestly says `"dev"`. This is a **rendering** rule, applied where a version
+  is presented to a person — the CLI's `w6w info` banner is the live case. It
+  does **not** alter the data a caller receives: **a wrapper does not edit the
+  map it returns**, and `versions` reaches the caller exactly as merged above.
+- **The two rules above do not conflict**, because they act at different
+  layers. *Server-wins* governs the **value carried** in the returned object,
+  which stays a faithful transcription of the wire. *Never-display-`0.0.0`*
+  governs **what a banner prints**. So a server that sends
+  `versions.wrapper: "0.0.0"` is carried through unaltered in the data and
+  rendered to the user as `dev` — one precedence rule, one display rule, and no
+  lane inventing a third.
 - **`RunEnvelope` must be switched on `kind`, and an unknown `kind` RETURNS THE
   RAW ENVELOPE to the caller.** One behaviour, no alternatives: the wrapper does
   **not** raise, and it must not throw a `KeyError` / `TypeError` from a
