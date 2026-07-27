@@ -140,10 +140,26 @@ The four identity fields mirror the server's `Principal`.
   `"dev"` when that build arg is absent (D5).
 - `versions.wrapper` is filled in **client-side** by the wrapper from its own
   package version — the server cannot know it.
-- **`versions` never reports a literal `0.0.0`** (D5). Hand-maintained component
-  version numbers are unreliable (`0.0.0`/`0.0.1` placeholders nobody bumps), and
-  an endpoint that looks authoritative while reporting `0.0.0` forever is worse
-  than one that honestly says `"dev"`.
+- **Precedence on collision is server-wins.** The wrapper's own version is a
+  **default** that any key the server supplied **overrides**. Concretely
+  `{ wrapper: VERSION, ...body.versions }` in TypeScript,
+  `{"wrapper": VERSION, **(body.get("versions") or {})}` in Python. Do **not**
+  write the other order (`{**server, "wrapper": VERSION}`), which would make the
+  wrapper's own value win: both readings satisfied the older wording, they differ
+  observably, and this is the one field a bug report is read off — so it is
+  pinned here rather than decided three times.
+- **`versions` never *displays* a literal `0.0.0`** (D5). Hand-maintained
+  component version numbers are unreliable (`0.0.0`/`0.0.1` placeholders nobody
+  bumps), and a banner that looks authoritative while reporting `0.0.0` forever
+  is worse than one that honestly says `"dev"`. If a resolved value is `0.0.0`
+  or the empty string, the wrapper presents `"dev"` instead.
+- **The two rules above are independent and do not conflict**, because they act
+  at different layers. *Server-wins* governs the **value carried** in the
+  returned object, which stays a faithful transcription of the wire.
+  *Never-display-`0.0.0`* governs what a banner such as `w6w info` **prints**. So
+  a server that sends `versions.wrapper: "0.0.0"` is carried through unaltered in
+  the data and rendered to the user as `dev` — one precedence rule, one display
+  rule, and no lane inventing a third.
 
 ### Server work required
 
@@ -257,9 +273,22 @@ and the run queue executes it.
 ```json
 {
   "variables": { "email": "a@b.com" },
-  "trigger": { "type": "manual" }
+  "trigger": "manual"
 }
 ```
+
+| Field | Required | Notes |
+|---|---|---|
+| `variables` | no | Object of run inputs, passed through to the graph. |
+| `trigger` | no | A **string**, not an object. Defaults to `manual` server-side when omitted. |
+
+**`trigger` is a plain string.** The server reads it as `RunTrigger`, whose known values today are
+`manual`, `schedule`, `webhook`, `event` and `replay`. Those five are recorded in
+`endpoints.json` under `knownValues` (with `closedEnum: false`) as
+**documentation only**: every wrapper types the parameter as an open string
+(`trigger?: string`, `trigger: str | None`) and passes it through **unvalidated**.
+A wrapper that hard-codes the five would reject a request the server accepts the
+day a sixth value lands, and would need a release to catch up.
 
 **Response `202`** — queued (default, no `wait`)
 
@@ -471,7 +500,11 @@ DELETE /api/documents/:id[?project=<id>]
 Addressed by the `doc_…` id (D6).
 
 **Response `200`** — `{ "ok": true }`. The wrapper unwraps this to *nothing* — it
-returns no value; there is no payload to hand back.
+returns no value; there is no payload to hand back. The declared return in
+`endpoints.json` is therefore **`void`**, not an `Ok` object: `Promise<void>` in
+TypeScript, `None` in Python, no stdout payload in the CLI beyond its exit code.
+`Ok` is not a public wrapper type — see
+[implementation.md §5](./implementation.md#5-wire-types).
 
 **Response `404`** — `unknown_document`. Deleting an unknown id is an error, not a
 silent success — the delete is **not idempotent** and wrappers must not pretend
@@ -629,7 +662,11 @@ DELETE /api/vars/:id
 
 Addressed by the `var_…` id (D6).
 
-**Response `200`** — `{ "ok": true }`; the wrapper returns no value.
+**Response `200`** — `{ "ok": true }`; the wrapper returns no value. The declared
+return in `endpoints.json` is **`void`**, not an `Ok` object: `Promise<void>` in
+TypeScript, `None` in Python, no stdout payload in the CLI beyond its exit code
+(`Ok` is not a public wrapper type — see
+[implementation.md §5](./implementation.md#5-wire-types)).
 **Response `404`** — `unknown_var`. Not a silent success. No `project` param.
 
 ---

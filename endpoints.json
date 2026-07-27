@@ -16,7 +16,7 @@
       "params": [],
       "returns": "Me",
       "naming": { "ts": "client.me()", "python": "client.me()", "cli": "w6w me" },
-      "notes": "PARTIAL server support. What exists: `GET /api/auth/me` already answers the identity half, returning `{tenant, subject, account, role}` (the server). What does NOT exist: the `/api/me` path itself, and the `versions` block. D15 — `/api/me` is mounted as an ALIAS of that same handler, so the response body is flat: `{tenant, subject, account, role, versions?}`, NOT a `{user:{…}}` envelope. The live consumer is the studio (the studio, typed `Me` at the studio); a nested envelope would need a second identity handler or would break the studio, so the flat shape is the contract. `versions` is optional and additive — a wrapper must tolerate it being absent entirely, and must tolerate unknown keys inside it. `versions.wrapper` is filled client-side from the wrapper's own package version. D8 — the operation name is `me`; `w6w info` is a CLI alias only (see `cliAlias`)."
+      "notes": "PARTIAL server support. What exists: `GET /api/auth/me` already answers the identity half, returning `{tenant, subject, account, role}` (the server). What does NOT exist: the `/api/me` path itself, and the `versions` block. D15 — `/api/me` is mounted as an ALIAS of that same handler, so the response body is flat: `{tenant, subject, account, role, versions?}`, NOT a `{user:{…}}` envelope. The live consumer is the studio (the studio, typed `Me` at the studio); a nested envelope would need a second identity handler or would break the studio, so the flat shape is the contract. `versions` is optional and additive — a wrapper must tolerate it being absent entirely, and must tolerate unknown keys inside it. `versions.wrapper` is filled client-side from the wrapper's own package version. PRECEDENCE IS SERVER-WINS: the wrapper's own version is only a DEFAULT that any key the server supplied overrides — `{ wrapper: VERSION, ...body.versions }` in TS, `{\"wrapper\": VERSION, **(body.get(\"versions\") or {})}` in Python. Do NOT write the other order (`{**server, wrapper: VERSION}`), which would make the wrapper's value win; the two are observably different on the one field a bug report is read off. DISPLAY IS A SEPARATE RULE: a wrapper must never SHOW a version of `0.0.0` or empty — if the resolved value is `0.0.0` or empty string, it presents `\"dev\"` (D5). The two rules do not conflict, because they act at different layers: server-wins governs the VALUE carried in the returned object (which stays a faithful transcription of the wire), the display rule governs what a banner such as `w6w info` PRINTS. So a server sending `versions.wrapper: \"0.0.0\"` is carried through in the data and rendered as `dev` to the user. D8 — the operation name is `me`; `w6w info` is a CLI alias only (see `cliAlias`)."
     },
     {
       "name": "connections.list",
@@ -63,7 +63,15 @@
         { "name": "id", "in": "path", "type": "string", "required": true },
         { "name": "wait", "in": "query", "type": "boolean", "required": false },
         { "name": "variables", "in": "body", "type": "object", "required": false },
-        { "name": "trigger", "in": "body", "type": "object", "required": false }
+        {
+          "name": "trigger",
+          "in": "body",
+          "type": "string",
+          "required": false,
+          "knownValues": ["manual", "schedule", "webhook", "event", "replay"],
+          "closedEnum": false,
+          "$comment": "`knownValues` is DOCUMENTATION, not a constraint. `closedEnum: false` — wrappers type this as a plain string and must NOT validate against the list; the server may add a sixth value and a wrapper that hard-codes the enum would reject a request the server accepts."
+        }
       ],
       "returns": "RunResult",
       "successStatuses": [200, 202],
@@ -72,7 +80,7 @@
         "python": "client.workflows.run(id, **opts)",
         "cli": "w6w workflows run <id> [--wait]"
       },
-      "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. D4 — kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape. Verified live at the server"
+      "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. `trigger` is a STRING, not an object: the server reads it as `RunTrigger` (the server, the workflow engine — `\"manual\" | \"schedule\" | \"webhook\" | \"event\" | \"replay\"`), and it defaults to 'manual' server-side when omitted. The five values are recorded in `knownValues` as documentation only — every wrapper types the param as an open string (`trigger?: string` / `trigger: str | None`) and passes it through unvalidated, so a sixth server value needs no wrapper release. D4 — kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape. Verified live at the server"
     },
     {
       "name": "documents.list",
@@ -186,13 +194,13 @@
         { "name": "id", "in": "path", "type": "string", "required": true },
         { "name": "project", "in": "query", "type": "string", "required": false }
       ],
-      "returns": "Ok",
+      "returns": "void",
       "naming": {
         "ts": "client.documents.delete(id, opts?)",
         "python": "client.documents.delete(id, project=None)",
         "cli": "w6w documents delete <id> [--project <id>]"
       },
-      "notes": "Addressed by the `doc_…` id (D6). Server returns `{ ok: true }`. Deleting an unknown id is `404 unknown_document`, not a silent success — the delete is not idempotent and wrappers must not pretend otherwise."
+      "notes": "Addressed by the `doc_…` id (D6). The server returns `{ ok: true }`, but the wrapper unwraps it to NOTHING: the declared return is `void` (`Promise<void>` in TS, `None` in Python, no stdout payload in the CLI beyond an exit code). `Ok` is not a public wrapper type — see docs/implementation.md §5. Deleting an unknown id is `404 unknown_document`, not a silent success — the delete is not idempotent and wrappers must not pretend otherwise."
     },
     {
       "name": "vars.list",
@@ -299,13 +307,13 @@
       "params": [
         { "name": "id", "in": "path", "type": "string", "required": true }
       ],
-      "returns": "Ok",
+      "returns": "void",
       "naming": {
         "ts": "client.vars.delete(id)",
         "python": "client.vars.delete(id)",
         "cli": "w6w vars delete <id>"
       },
-      "notes": "Addressed by the `var_…` id (D6). Server returns `{ ok: true }`. Deleting an unknown id is `404 unknown_var`, not a silent success. No `project` param: vars are not project-scoped."
+      "notes": "Addressed by the `var_…` id (D6). The server returns `{ ok: true }`, but the wrapper unwraps it to NOTHING: the declared return is `void` (`Promise<void>` in TS, `None` in Python, no stdout payload in the CLI beyond an exit code). `Ok` is not a public wrapper type — see docs/implementation.md §5. Deleting an unknown id is `404 unknown_var`, not a silent success. No `project` param: vars are not project-scoped."
     },
     {
       "name": "run",
