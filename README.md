@@ -30,6 +30,82 @@ Both registries publish the **same version at the same time** — `@w6w/sdk`, `@
 Python `w6w` package share one version number and are released together. A given version means the
 same set of operations in every language.
 
+## Quick start
+
+```ts
+import { W6wClient, isActionRun, isFunctionRun, isWorkflowRun } from "@w6w/sdk";
+
+const client = new W6wClient(); // reads W6W_BASE_URL and W6W_TOKEN
+
+// Who am I, and what versions am I talking to?
+const me = await client.me();
+
+// What can I run? `run` is addressed by a `conn_…` / `fn_…` / `ep_…` / `wf_…`
+// id — these are how you discover one.
+const connections = await client.connections.list();
+const workflows = await client.workflows.list();
+```
+
+### Run a connection action
+
+A `conn_…` id resolves to an app action. `run` returns a `kind`-tagged envelope —
+narrow it with `isActionRun` / `isFunctionRun` / `isWorkflowRun` before reading a field, since the
+three arms use different field names on purpose (`value` vs `output` vs `runId`+`status`):
+
+```ts
+const env = await client.run({
+  urn: connections[0].id, // "conn_…"
+  action: "send_message", // which of the app's actions to invoke
+  payload: { channel: "#general", text: "Hello from @w6w/sdk" },
+});
+
+if (isActionRun(env)) console.log(env.value); // the action's return value
+```
+
+### Run a function or an endpoint
+
+`fn_…` and `ep_…` ids run the same way — no `action`, since a function or endpoint has exactly one
+operation:
+
+```ts
+const env = await client.run({ urn: "fn_normalize_address", payload: { address: "1 Infinite Loop" } });
+if (isFunctionRun(env)) console.log(env.output);
+```
+
+### Run a workflow
+
+Two ways to start a `wf_…` run. `client.run()` dispatches it like anything else and always answers
+`202` (queued) — use it when you're treating workflows the same as any other runnable URN:
+
+```ts
+const env = await client.run({ urn: workflows[0].id, payload: { customerId: "cus_1" } });
+if (isWorkflowRun(env)) console.log(env.runId, env.status); // "queued"
+```
+
+`workflows.run` is the typed path, and the only one that can wait for the result server-side:
+
+```ts
+const run = await client.workflows.run(workflows[0].id, {
+  wait: true,
+  variables: { customerId: "cus_1" },
+});
+
+// A failed run is data, not a thrown error — `run.terminal` tells you it's done.
+if (run.terminal && run.status === "failed") console.error(run.error);
+else if (run.terminal) console.log(run.output);
+```
+
+### Documents and vars
+
+```ts
+const doc = await client.documents.create({ key: "welcome", content: "# Hi" });
+await client.documents.update(doc.id, { content: "# Hello" });
+await client.documents.delete(doc.id);
+
+const v = await client.vars.create({ name: "sender_email", type: "string", value: "a@b.c" });
+await client.vars.update(v.id, { value: "c@d.e" });
+```
+
 ## Configuration
 
 Two environment variables, both read only at client construction:
