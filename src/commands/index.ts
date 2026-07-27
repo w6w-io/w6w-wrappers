@@ -19,12 +19,24 @@
 import type { CommandRegistry } from "../../mod.ts";
 import { DOCUMENT_COMMANDS } from "./documents.ts";
 import { VAR_COMMANDS } from "./vars.ts";
+import { ME_COMMANDS } from "./me.ts";
+import { CONNECTION_COMMANDS } from "./connections.ts";
+import { WORKFLOW_COMMANDS } from "./workflows.ts";
+import { RUN_COMMANDS } from "./run.ts";
 
 export { DOCUMENT_COMMANDS } from "./documents.ts";
 export { VAR_COMMANDS } from "./vars.ts";
+export { ME_COMMANDS } from "./me.ts";
+export { CONNECTION_COMMANDS } from "./connections.ts";
+export { WORKFLOW_COMMANDS } from "./workflows.ts";
+export { RUN_COMMANDS } from "./run.ts";
 
 /** Every wired command, keyed by canonical command path. */
 export const COMMANDS: CommandRegistry = {
   ...DOCUMENT_COMMANDS,
   ...VAR_COMMANDS,
+  ...ME_COMMANDS,
+  ...CONNECTION_COMMANDS,
+  ...WORKFLOW_COMMANDS,
+  ...RUN_COMMANDS,
 };
