@@ -1,0 +1,42 @@
+{
+  "name": "@w6w/cli",
+  "version": "0.1.0",
+  "description": "The w6w command-line client. Thin transport over the w6w HTTP API, with help generated from the shared wrapper contract.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/w6w-io/w6w-cli.git"
+  },
+  "homepage": "https://github.com/w6w-io/w6w-cli#readme",
+  "bugs": "https://github.com/w6w-io/w6w-cli/issues",
+  "keywords": ["w6w", "workflow", "cli", "client", "api"],
+  "type": "module",
+  "bin": {
+    "w6w": "./dist/bin/w6w.js"
+  },
+  "types": "./dist/mod.d.ts",
+  "main": "./dist/mod.js",
+  "exports": {
+    ".": {
+      "types": "./dist/mod.d.ts",
+      "import": "./dist/mod.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@w6w/sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
