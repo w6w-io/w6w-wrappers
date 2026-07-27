@@ -1,0 +1,13 @@
+# npm build output — CI-only, never committed (D7: src/*.ts is the single source).
+dist/
+
+# deno coverage profile, written by `deno task cov`.
+.coverage/
+
+# npm install output — the local gates are Deno tasks; nothing here needs it.
+node_modules/
+
+# Deno writes this on every task run. Left untracked for now so gate runs do not
+# show up as a diff; if CI (T2.1.6) wants a pinned resolution it can commit one
+# deliberately with `deno install --frozen`.
+deno.lock

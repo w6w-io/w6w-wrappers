@@ -1,0 +1,36 @@
+{
+  "name": "@w6w/sdk",
+  "version": "0.1.0",
+  "description": "Typed client for the w6w HTTP API. Thin transport, auth and error mapping — nothing else.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/w6w-io/w6w-node.git"
+  },
+  "homepage": "https://github.com/w6w-io/w6w-node#readme",
+  "bugs": "https://github.com/w6w-io/w6w-node/issues",
+  "keywords": ["w6w", "workflow", "sdk", "client", "api"],
+  "type": "module",
+  "types": "./dist/mod.d.ts",
+  "main": "./dist/mod.js",
+  "exports": {
+    ".": {
+      "types": "./dist/mod.d.ts",
+      "import": "./dist/mod.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
