@@ -21,10 +21,14 @@ import {
   type ResolvedConfig,
   type W6wClientOptions,
 } from "./config.ts";
+import { ConnectionsApi } from "./connections.ts";
 import { DocumentsApi } from "./documents.ts";
 import { ConfigError } from "./errors.ts";
 import { type HttpResponse, request, type RequestOptions } from "./http.ts";
+import { fetchMe } from "./me.ts";
+import type { Me } from "./types.ts";
 import { VarsApi } from "./vars.ts";
+import { WorkflowsApi } from "./workflows.ts";
 
 /**
  * A client for the w6w HTTP API.
@@ -67,6 +71,19 @@ export class W6wClient {
    */
   readonly vars: VarsApi;
 
+  /**
+   * Connections: `list` only in this version. Read-only on purpose — creating
+   * or testing a connection is an interactive, secret-handling flow that
+   * `endpoints.json` puts out of scope for v0.1.0.
+   */
+  readonly connections: ConnectionsApi;
+
+  /**
+   * Workflows: `list` here, `run` from T2.1.5. Project-scoped — `list` accepts
+   * an optional `project` that overrides this client's default.
+   */
+  readonly workflows: WorkflowsApi;
+
   readonly #fetch: FetchLike;
 
   /**
@@ -91,11 +108,32 @@ export class W6wClient {
     }
 
     // Namespaces are per-instance and hold this client, so they inherit its
-    // credential and base URL — never a module-level one. `vars` is handed the
-    // transport only; `documents` additionally sees the configuration, because
-    // it is the half of the asset surface that has a default project to apply.
+    // credential and base URL — never a module-level one. `vars` and
+    // `connections` are handed the transport only; `documents` and `workflows`
+    // additionally see the configuration, because they are the project-scoped
+    // half of the surface and have a default project to apply.
     this.documents = new DocumentsApi(this);
     this.vars = new VarsApi(this);
+    this.connections = new ConnectionsApi(this);
+    this.workflows = new WorkflowsApi(this);
+  }
+
+  /**
+   * Who this client's credential says you are, plus the versions of the
+   * components that answered.
+   *
+   * A method on the client rather than a namespace, because that is the symbol
+   * `endpoints.json` names (`client.me()`). The response body is flat and
+   * carries no envelope; the only thing added to it locally is
+   * `versions.wrapper`, this package's own version, which is filled in and
+   * never overwrites a key the server supplied.
+   *
+   * @returns The caller's identity.
+   * @throws {ConfigError} When no token is configured.
+   * @throws {ApiError} On any non-2xx, e.g. a `401` when the token is rejected.
+   */
+  me(): Promise<Me> {
+    return fetchMe(this);
   }
 
   /**

@@ -90,6 +90,114 @@ export interface Var {
 }
 
 /**
+ * Who the caller is, plus the versions of the components that answered.
+ *
+ * The body is **flat**: the identity fields sit at the top level, with no
+ * wrapping object around them. That is the contract, not an accident of this
+ * transcription — `/api/me` is an alias of the host's existing identity handler,
+ * whose live consumer is the studio, so a nested envelope would need a second
+ * handler or would break that consumer (`docs/endpoints.md` §1, D15). Nothing in
+ * this file unwraps a `me` response, because there is nothing to unwrap.
+ *
+ * The four identity fields mirror the server's principal.
+ */
+export interface Me {
+  /** Tenant the caller belongs to. */
+  tenant: string;
+  /** The authenticated subject (a user or a machine principal). */
+  subject: string;
+  /** Account the caller is acting in. */
+  account: string;
+  /** The caller's role within that account. */
+  role: string;
+  /**
+   * Component versions, e.g. `{composition: "server@1a2b3c4 …", wrapper: "0.1.0"}`.
+   *
+   * **Optional and open.** It may be absent entirely (an older server), and it
+   * may carry keys this release has never heard of — so it is typed as a string
+   * map and never as a closed record: adding a key server-side must not break an
+   * installed client. `wrapper` is filled in by this package from its own
+   * `VERSION` (`src/me.ts`); the server cannot know it.
+   */
+  versions?: Record<string, string>;
+}
+
+/**
+ * Lifecycle state of a connection.
+ *
+ * A closed union because it is the server's own enum and a caller switches on
+ * it; unknown *fields* are tolerated everywhere in this file, but a new state
+ * would be a server change that the wrapper version-bumps with.
+ */
+export type ConnectionState = "pending" | "connected" | "needs_refresh" | "broken" | "revoked";
+
+/**
+ * A connection, as the list route projects it.
+ *
+ * **Two fields the stored record has are deliberately absent here**: the secret
+ * material and its last-refresh timestamp are redacted server-side and never
+ * reach a client. Declaring them would promise a caller a field that can never
+ * arrive — and would invite exactly the code path (`if (c.…)`) that this
+ * omission makes impossible to write (`docs/endpoints.md` §2).
+ *
+ * Timestamps are ISO-8601 strings, exactly as they arrive; `lastTestOk` and
+ * `lastTestedAt` are `null` until the connection has been tested once.
+ */
+export interface ConnectionSummary {
+  /** Server-issued id, `conn_…`. This is the handle a URN addresses. */
+  id: string;
+  /** The app this connection authenticates against, e.g. `"sendgrid"`. */
+  appId: string;
+  /** Which of the app's auth methods this connection uses. */
+  authKey: string;
+  /** The subject that owns the connection. */
+  owner: string;
+  /** Human-chosen label. */
+  displayName: string;
+  /** Lifecycle state. */
+  state: ConnectionState;
+  /** Non-secret profile data the app captured at connect time; opaque pass-through. */
+  profile: Record<string, unknown>;
+  /** Result of the last connection test; `null` when it has never been tested. */
+  lastTestOk: boolean | null;
+  /** ISO-8601 timestamp of the last test, or `null`. */
+  lastTestedAt: string | null;
+  /** ISO-8601 timestamp. */
+  createdAt: string;
+  /** ISO-8601 timestamp. */
+  updatedAt: string;
+}
+
+/** Lifecycle state of a workflow: an editable draft, or a published live one. */
+export type WorkflowStatus = "draft" | "active";
+
+/**
+ * A workflow definition, as the list route projects it.
+ *
+ * `name` is the stable slug the workflow was registered under; `displayName` is
+ * the label a human reads. Both are present on the wire and neither is derived
+ * from the other, so both are kept.
+ */
+export interface WorkflowSummary {
+  /** Server-issued id, `wf_…`. This is the handle a URN addresses. */
+  id: string;
+  /** Stable slug, e.g. `"welcome-email"`. */
+  name: string;
+  /** Human-readable label. */
+  displayName: string;
+  /** Free-text description; `""` when unset. */
+  description: string;
+  /** Lifecycle state. */
+  status: WorkflowStatus;
+  /** Free-form labels. */
+  tags: string[];
+  /** Total number of runs this workflow has accumulated. */
+  runCount: number;
+  /** ISO-8601 timestamp. */
+  updatedAt: string;
+}
+
+/**
  * Read one payload out of the server's envelope, or fail loudly.
  *
  * The server wraps every asset body under a key — `{documents: […]}`,

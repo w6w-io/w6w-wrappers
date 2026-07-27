@@ -47,4 +47,27 @@ export type {
 } from "./src/documents.ts";
 export { VarsApi } from "./src/vars.ts";
 export type { VarCreateInput, VarPatch, VarsHost } from "./src/vars.ts";
-export type { Doc, DocFormat, Var, VarType } from "./src/types.ts";
+
+// Identity and discovery (T2.1.4): `me`, plus the two list operations that make
+// a `conn_…` / `wf_…` id discoverable in the first place (D4). `me` is a method
+// on the client, so what is exported here is its host interface and the
+// standalone function the client delegates to — a host wiring its own transport
+// can call it without constructing a client.
+export { fetchMe } from "./src/me.ts";
+export type { MeHost } from "./src/me.ts";
+export { ConnectionsApi } from "./src/connections.ts";
+export type { ConnectionsHost } from "./src/connections.ts";
+export { WorkflowsApi } from "./src/workflows.ts";
+export type { WorkflowListOptions, WorkflowsHost } from "./src/workflows.ts";
+
+export type {
+  ConnectionState,
+  ConnectionSummary,
+  Doc,
+  DocFormat,
+  Me,
+  Var,
+  VarType,
+  WorkflowStatus,
+  WorkflowSummary,
+} from "./src/types.ts";
