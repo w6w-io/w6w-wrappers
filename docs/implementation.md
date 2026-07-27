@@ -110,6 +110,17 @@ base URL nor `W6W_BASE_URL` raises a configuration error at construction time,
 naming the env var. (The studio's `?? "/api"` relative default is a browser same-origin assumption and
 has no meaning in a library.)
 
+**A blank value is not a base URL.** An environment variable that is present but
+**empty or whitespace-only is treated as absent** — `W6W_BASE_URL=`,
+`W6W_BASE_URL="   "` and an unset `W6W_BASE_URL` are the same thing, and all
+three end in that same configuration error. The rule is stated in full under
+Precedence below and pinned mechanically in `readEnv`; it is repeated here
+because *this* is the section it protects. Run the join rule above on `""` and
+step 3 appends the base path to nothing, yielding **`/api`** — a relative URL,
+which is exactly what the paragraph above forbids. It would not fail here, at
+construction, with a message naming the variable; it would fail later, inside
+some operation, with a message about a request.
+
 ### MECHANISM PIN — encoding caller-supplied values into the URL
 
 This is not a style choice and it is not defensive ceremony. Skip it and the
@@ -263,7 +274,32 @@ CLI flag (--base-url / --token)  >  constructor argument  >  environment variabl
 
 An explicitly passed empty string is an explicit value, not "unset" — do not fall
 through to the environment on it. Fall through only when the argument is
-absent/`undefined`/`None`.
+absent/`undefined`/`None`. (It still does not *produce* a usable base URL: an
+explicit `""` reaches the emptiness check and raises the same configuration
+error. What it does not do is quietly consult the environment behind the
+caller's back.)
+
+**An environment variable behaves the opposite way: present-but-empty is
+ABSENT.** A blank env var — `""` or whitespace-only — falls through the
+precedence chain exactly as if it were unset, to the next source and ultimately
+to the configuration error. This holds for every variable in this surface
+(`W6W_BASE_URL`, `W6W_TOKEN`) and in every language.
+
+The asymmetry is deliberate, and it is the difference between a value a *caller*
+chose and a value a *shell* produced. `SomeClient({baseUrl: ""})` is a
+programmer writing an empty string on purpose; `export W6W_BASE_URL=`,
+`ENV W6W_BASE_URL=` with no build arg, and a CI variable whose template did not
+interpolate all produce a set-but-empty variable that **nobody chose**. That is
+the common case, not the exotic one — and it is indistinguishable from unset in
+every log line, so a wrapper that treats it as a value diverges from the
+operator's mental model at the worst possible moment. This project has already
+paid for the same bug class once: `ENV W6W_COMPOSITION=` yields `""` rather than
+an unset variable, which is why the composition fallback is pinned as `||` and
+not `??`.
+
+Trimming applies to the **emptiness test**, not to the stored value: a variable
+that survives the test is used verbatim. Normalising the shape of a base URL is
+the join rule's job, not the env reader's.
 
 ### MECHANISM PIN — instance state, never globals
 
@@ -290,10 +326,33 @@ This is not a style choice.
   // src/config.ts — the ONLY place any of this appears.
   function readEnv(name: string): string | undefined {
     const g = globalThis as Record<string, any>;
-    if (g.Deno?.env?.get) return g.Deno.env.get(name) ?? undefined;
-    if (g.process?.env) return g.process.env[name] ?? undefined;
-    return undefined;
+    let value: string | undefined;
+    if (g.Deno?.env?.get) value = g.Deno.env.get(name);
+    else if (g.process?.env) value = g.process.env[name];
+    else return undefined;
+    // Deliberately a truthiness/trim check, and deliberately NOT a nullish
+    // coalesce (`??`): nullish-coalescing does not convert "", so an empty env
+    // var would survive as a value, reach the join rule, and resolve to the
+    // relative "/api" that §2 forbids. Blank is absent (see Precedence).
+    // Do not "tidy" this back to `??`.
+    if (value === undefined || value.trim().length === 0) return undefined;
+    return value;   // verbatim — trimming the emptiness test, not the value
   }
+  ```
+
+  The Python equivalent is the same shape, and `os.environ.get(name)` needs it
+  for the same reason — it too returns `""` for a set-but-empty variable:
+
+  ```python
+  # w6w/_config.py — the ONLY place any of this appears.
+  def read_env(name: str) -> str | None:
+      # os.environ.get returns "" for a set-but-empty variable, never None.
+      # So the guard is a truthiness/strip check, not a bare `is None` test —
+      # `is None` is the Python spelling of the same nullish-coalesce mistake.
+      value = os.environ.get(name)
+      if value is None or not value.strip():
+          return None
+      return value
   ```
 
 ---
@@ -443,7 +502,7 @@ every error message and every doc example wrong.
 | `Doc` | `id: string`, `key: string`, `content: string`, `format: DocFormat`, `description: string`, `createdAt: string`, `updatedAt: string` |
 | `VarType` | `"string" \| "number" \| "boolean" \| "json"` |
 | `Var` | `id: string`, `name: string`, `type: VarType`, `value: unknown`, `description: string`, `createdAt: string`, `updatedAt: string` |
-| `RunEnvelope` | `{kind: "action", value: unknown}` \| `{kind: "function", output: unknown}` \| `{kind: "workflow", runId: string, status: RunStatus}` |
+| `RunEnvelope` | `{kind: "action", value: unknown}` \| `{kind: "function", output: unknown}` \| `{kind: "workflow", runId: string, status: RunStatus}` \| `{kind: string} & Record<string, unknown>` — the union is **open**; see the unknown-`kind` rule below |
 
 Rules that apply to all of them:
 
@@ -468,10 +527,29 @@ Rules that apply to all of them:
   `composition` (a build string, or `"dev"` when the build arg is absent) and
   `wrapper` (filled client-side from the wrapper's own package version). It never
   reports a literal `0.0.0` (D5).
-- **`RunEnvelope` must be switched on `kind`, and an unknown `kind` must not
-  crash** — a fourth arm is additive and an older wrapper has to survive it. Raise
-  a clear `ApiError`-shaped error or return the raw envelope; do not throw a
-  `KeyError` / `TypeError` from a destructure.
+- **`RunEnvelope` must be switched on `kind`, and an unknown `kind` RETURNS THE
+  RAW ENVELOPE to the caller.** One behaviour, no alternatives: the wrapper does
+  **not** raise, and it must not throw a `KeyError` / `TypeError` from a
+  destructure either. The default arm of the switch hands back the parsed body
+  exactly as it arrived.
+
+  The reason, written down so it is not later "tidied" into a raise: `run`
+  dispatches on whatever a URN resolves to, and **the server may grow a new
+  `kind` before the wrappers do** — a fourth arm is a purely additive server
+  change. A wrapper that raises on an unknown `kind` converts that additive
+  change into a hard client breakage for every user of the installed version, on
+  the one operation whose entire job is dispatch; the caller is left with an
+  exception and no access to a payload the wrapper had already parsed and held.
+  Returning the envelope lets a caller handle a kind the wrapper has not learned
+  yet, and lets them upgrade on their own schedule. This is the same principle
+  as "unknown fields are tolerated, never rejected" two bullets up, applied at
+  the variant level instead of the field level: an older client keeps working.
+
+  In typed languages the return type is therefore the union **plus** an open
+  fallback arm (`{kind: string} & Record<string, unknown>` / a plain `dict`) —
+  not a closed union that makes the fourth kind unrepresentable. Narrowing on
+  `kind` is what gives a caller the known arms; the fallback is what keeps the
+  unknown one reachable.
 - **`Ok`** is the server's `{ "ok": true }` for deletes. It is **not** a public
   type: the wrapper unwraps it to *nothing* (`void` / `None`). See §6.
 
@@ -638,6 +716,16 @@ Plus these cross-cutting tests, once each per wrapper:
    already ending in `/api` is not doubled; an explicit constructor argument
    overrides the env var; a missing base URL raises a configuration error naming
    `W6W_BASE_URL`.
+
+   **Blank-is-absent, as three separate cases with identical behaviour**: the
+   env var set to `""`, set to `"   "`, and **unset** must each produce the
+   *same* configuration error naming `W6W_BASE_URL`. Write them as three cases
+   (a table-driven test over the three inputs is fine, one case each is fine —
+   what is not fine is testing only the unset one, which is the gap this closes).
+   Assert additionally that **no request is ever made with a relative URL**: a
+   test that lets a blank value through would otherwise pass while the wrapper
+   silently resolved to `/api`. The same three cases apply to a blank `W6W_TOKEN`
+   under item 4.
 4. **`W6W_TOKEN`** is sent as `Authorization: Bearer <token>`, and an explicit
    constructor token overrides the env var.
 5. **The three failure modes of §3**, one test each: transport failure →
@@ -645,7 +733,15 @@ Plus these cross-cutting tests, once each per wrapper:
    `bad_response` with a snippet; an envelope error → code, message and `raw`
    preserved.
 6. **`202` and `status: "failed"` do not raise** (§4), and `RunEnvelope` dispatches
-   on `kind` — including an **unknown `kind`**, which must not crash.
+   on `kind` — one case per known arm, plus an **unknown `kind`**.
+
+   The unknown-`kind` case must **discriminate**, not merely survive: feed the
+   mock a body such as `{"kind": "batch", "jobId": "job_1"}` and assert that the
+   call **returns that object** — same `kind`, and the unknown sibling field
+   (`jobId`) still present and reachable. "Does not crash" is not an assertion a
+   raising implementation fails, so it is not the requirement; an implementation
+   that raises here must **fail this test**. Assert no exception is raised, and
+   assert on the returned value.
 7. **Caller-supplied values are percent-encoded at every interpolation** (§2's
    encoding pin). At minimum: a document key containing `/` produces `%2F` and
    **not** a second path segment; one containing a space produces `%20`; one
@@ -671,8 +767,8 @@ Coverage is **measured and reported** in every wrapper's CI, and the gate is
 coverage". Taken literally across three languages that costs more than the
 wrappers themselves — a thin HTTP client's last few percent are defensive
 branches that only exist to fail loudly (unreachable envelope guards,
-platform-probe fallbacks in `readEnv`, unknown-`kind` arms) and driving them to
-100 % produces tests written for the counter rather than for the behaviour. The
+platform-probe fallbacks in `readEnv`) and driving them to 100 % produces tests
+written for the counter rather than for the behaviour. The
 substantive requirement — **every operation exercised, every error path covered,
 env resolution proven** — is the numbered list above, and it is stricter than a
 percentage. 90 % is the floor that catches a whole operation going untested. If
