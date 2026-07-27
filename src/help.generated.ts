@@ -152,7 +152,7 @@ export const HELP_TREE: HelpTree = {
         "run anything addressable by URN — a connection action, a function, an endpoint or a workflow",
       "usage": "w6w run <urn> [options]",
       "naming": "w6w run <urn> [--action <a>] [--payload <json>]",
-      "status": "planned",
+      "status": "required",
       "params": [
         {
           "name": "urn",
@@ -190,7 +190,6 @@ export const HELP_TREE: HelpTree = {
       ],
       "notes": [
         'The result is tagged by kind. A connection action and a function return their value directly; a workflow returns a run id and status "queued" and is not waited on — use "w6w workflows run <id> --wait" when you need to wait, set variables, or pass a trigger. Documents and variables are not URNs: address them with "w6w documents" and "w6w vars".',
-        'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
       ],
     },
   ],
