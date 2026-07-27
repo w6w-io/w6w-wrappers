@@ -193,7 +193,16 @@ function commandFlagSpecs(command: HelpCommand): FlagSpec[] {
  * argument vector. So `w6w documents list --project p_1` fails that pass on an
  * unknown flag — and the failure still carries the command the user was aiming
  * at, which is exactly what is needed to re-parse with that command's flags
- * added. A second failure is reported as it stands.
+ * added.
+ *
+ * **When the second pass fails too, its message is the one reported**, not the
+ * first pass's. The second pass ran with strictly more flags known, so it got
+ * further and its complaint is about the flag that is actually wrong; the first
+ * pass's complaint is about the first flag it had not been told about yet, which
+ * by then is usually a perfectly valid one. Reporting the first message names
+ * the wrong flag: `w6w vars create g --type string --value hello --project p`
+ * would answer `unknown flag: --type` — a flag that command declares and
+ * requires — sending the user to fix the one thing that was right.
  */
 function parseInvocation(argv: string[]) {
   const first = parse(argv);
@@ -202,8 +211,7 @@ function parseInvocation(argv: string[]) {
   if (resolution.kind !== "command") return first;
   const specs = commandFlagSpecs(resolution.command);
   if (specs.length === 0) return first;
-  const second = parse(argv, { flags: specs });
-  return second.ok ? second : first;
+  return parse(argv, { flags: specs });
 }
 
 /**

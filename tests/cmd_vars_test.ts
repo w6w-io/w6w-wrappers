@@ -257,12 +257,23 @@ Deno.test("--project is refused by every vars command, and never reaches the ser
       ["vars", "list", "--project", "prj_1"],
       ["vars", "get", "var_01HQ8N", "--project", "prj_1"],
       ["vars", "delete", "var_01HQ8N", "--project=prj_1"],
+      // The case that used to name the WRONG flag: a command with declared flags
+      // of its own needs two parse passes, and reporting the first pass's message
+      // answered `unknown flag: --type` — a flag `vars create` both declares and
+      // requires. The second pass ran knowing more, so its complaint is the one
+      // the user can act on (`mod.ts:parseInvocation`).
+      ["vars", "create", "greeting", "--type", "string", "--value", "hello", "--project", "prj_1"],
+      ["vars", "update", "var_01HQ8N", "--value", "hello", "--project", "prj_1"],
     ]
   ) {
     const result = await w6w(argv);
     assertEquals(result.code, 1, `\`${argv.join(" ")}\` exited ${result.code}`);
     assertEquals(result.calls.length, 0, "a refused flag must not reach the server");
-    assertStringIncludes(result.stderr, "--project");
+    assertStringIncludes(result.stderr, "unknown flag: --project");
+    assert(
+      !result.stderr.includes("unknown flag: --type"),
+      `\`${argv.join(" ")}\` blamed a valid flag: ${result.stderr}`,
+    );
   }
 
   // And where the flag survives parsing — escaped past `--`, or if it were ever

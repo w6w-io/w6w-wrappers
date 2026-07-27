@@ -24,7 +24,7 @@
 
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import type { FetchLike } from "@w6w/sdk";
-import { HELP_TREE, main } from "../mod.ts";
+import { createOutput, HELP_TREE, main } from "../mod.ts";
 import { COMMANDS, DOCUMENT_COMMANDS } from "../src/commands/index.ts";
 import type { EnvReader } from "../mod.ts";
 
@@ -338,6 +338,50 @@ Deno.test("a bad invocation is a usage error, exits 1, and makes no request", as
     assertEquals(result.calls.length, 0, "a usage error must not reach the server");
     assertEquals(result.stdout, "");
   }
+});
+
+Deno.test("a bad flag is named accurately, even beside the command's own valid flags", async () => {
+  // Two parse passes are needed — a command's own flags are unknown until its
+  // path has been read out of the same argv — and the failure reported must be
+  // the SECOND pass's: it ran knowing more flags, so it got further and its
+  // complaint is about the flag that is actually wrong. Reporting the first
+  // pass's message named `--content` here: a flag this command declares and
+  // requires, sending the user to fix the one thing that was right.
+  const result = await w6w(["documents", "create", "k", "--content", "c", "--bogus"]);
+  assertEquals(result.code, 1);
+  assertStringIncludes(result.stderr, "unknown flag: --bogus");
+  assert(!result.stderr.includes("unknown flag: --content"), result.stderr);
+  assertEquals(result.calls.length, 0);
+});
+
+Deno.test("a void result can never put the literal `undefined` on stdout under --json", async () => {
+  // The two `delete` commands are the first operations in this CLI that return
+  // nothing, which arms a latent hazard in the renderer: `JSON.stringify(
+  // undefined)` is `undefined` — the six-character word, not JSON — and a
+  // consumer piping `--json` into `jq` would get a parse error instead of a
+  // value. Two independent guards keep it unreachable, and both are asserted.
+
+  // (a) A delete does not emit at all. The server's `{ok:true}` unwraps to
+  //     nothing, so a delete's whole machine-readable answer is its exit code.
+  const deleted = await w6w(
+    ["documents", "delete", "doc_01HQ8N", "--json"],
+    () => json(200, { ok: true }),
+  );
+  assertEquals(deleted.code, 0, deleted.stderr);
+  assertEquals(deleted.stdout, "");
+  assert(!deleted.stdout.includes("undefined"), "a void payload reached stdout");
+
+  // (b) And if any command ever did emit a void payload, the renderer coerces it
+  //     to `null` (`payload ?? null`, src/output.ts) so the output still parses.
+  //     Asserted through the real renderer rather than by reading the source: a
+  //     guard that is only visible in a diff is one a refactor can drop.
+  const lines: string[] = [];
+  const out = createOutput({ stdout: (text) => lines.push(text), stderr: () => {} }, {
+    json: true,
+  });
+  out.emit(undefined, () => "the human rendering, which --json suppresses");
+  assertEquals(lines, ["null"]);
+  assertEquals(JSON.parse(lines[0]), null);
 });
 
 // ---------------------------------------------------------------------------
