@@ -16,3 +16,20 @@
  */
 
 export { VERSION } from "./src/version.ts";
+
+// Transport core (T2.1.2): the client, its configuration and the error model.
+export { W6wClient } from "./src/client.ts";
+export { ApiError, ConfigError } from "./src/errors.ts";
+export {
+  BASE_PATH,
+  type FetchLike,
+  joinBaseUrl,
+  type ResolvedConfig,
+  type W6wClientOptions,
+} from "./src/config.ts";
+export type { HttpMethod, HttpResponse, QueryParams, RequestOptions } from "./src/http.ts";
+// Exported because `W6wClient.request` is public: a host reaching an endpoint
+// this version does not model yet must have the same encoding-at-interpolation
+// tag the operation modules use, or it will concatenate a caller value into a
+// path by hand — the one bug the encoding pin exists to prevent.
+export { path } from "./src/http.ts";

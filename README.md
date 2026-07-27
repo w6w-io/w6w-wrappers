@@ -44,6 +44,57 @@ state**: two clients in one process can hold different tokens and point at diffe
 interference. There is no default base URL — a client built without one and without `W6W_BASE_URL`
 raises a configuration error naming the variable.
 
+```ts
+import { W6wClient } from "@w6w/sdk";
+
+// Everything from the environment.
+const client = new W6wClient();
+
+// Explicit arguments override W6W_BASE_URL and W6W_TOKEN.
+const other = new W6wClient({ baseUrl: "https://api.example.com", token: "…" });
+```
+
+### `W6W_BASE_URL` is an origin
+
+The client appends the API's base path (`/api`) itself, and never doubles it — so a value that
+already carries the prefix is left alone, and trailing slashes never matter:
+
+| `W6W_BASE_URL`                | Requests go to                  |
+| ----------------------------- | ------------------------------- |
+| `https://api.example.com`     | `https://api.example.com/api/…` |
+| `https://api.example.com/`    | `https://api.example.com/api/…` |
+| `https://api.example.com///`  | `https://api.example.com/api/…` |
+| `https://api.example.com/api` | `https://api.example.com/api/…` |
+
+A variable that is **set but empty** — or whitespace-only — counts as **unset**, in both variables.
+`W6W_BASE_URL=` is how a shell or a Dockerfile spells "I meant to set this and did not", so it
+raises the same configuration error as an absent one rather than quietly producing a relative URL.
+An empty string passed _explicitly_ to the constructor is likewise an error, and does not fall back
+to the environment.
+
+### `W6W_TOKEN`
+
+Sent as `Authorization: Bearer <token>` on **every** request — there are no anonymous operations on
+this API. A client with no token can still be constructed (so tools that only print help or a
+version work offline); the configuration error naming `W6W_TOKEN` surfaces on the first request.
+
+## Errors
+
+Two error types, and the difference between them is diagnostic:
+
+- **`ConfigError`** — the client never got as far as a request: no base URL, or no token.
+- **`ApiError`** — carries `status`, `code`, `message` and `raw` (the parsed response body, kept
+  because an error body carries fields the message drops). It covers exactly three cases: a
+  transport failure (`status: 0`, code `network_error`), a non-JSON body on a failing status (code
+  `bad_response`, with a snippet of what actually came back — usually a proxy's HTML error page),
+  and the server's own error envelope (its `code` and `message`, verbatim).
+
+Classify by `status`, and by a **prefix** of `code` (`unknown_*`, `invalid_*`, `*_exists`) — never
+by an exhaustive list of codes, which the server extends freely. Note that a `424` means the target
+app or its upstream vendor failed, not that w6w did; it is passed through untouched.
+
+Nothing is retried, no token is refreshed, and a `401` has no side effect beyond the raised error.
+
 ## The surface
 
 What operations exist is not decided in this repo. It is defined by the shared machine-readable
