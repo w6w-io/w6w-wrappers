@@ -27,6 +27,26 @@ at one version.
 
 from __future__ import annotations
 
+from ._config import BASE_PATH, ResolvedConfig, join_base_url
+from ._http import HttpResponse, Transport, path
 from ._version import __version__
+from .client import W6wClient
+from .errors import ApiError, ConfigError
 
-__all__ = ["__version__"]
+__all__ = [
+    "ApiError",
+    "BASE_PATH",
+    "ConfigError",
+    "HttpResponse",
+    "ResolvedConfig",
+    "Transport",
+    "W6wClient",
+    "__version__",
+    "join_base_url",
+    # Exported because `W6wClient.request` is public: a host reaching an
+    # endpoint this version does not model yet must have the same
+    # encoding-at-interpolation primitive the operation modules use, or it will
+    # concatenate a caller value into a path by hand — the one bug the encoding
+    # pin exists to prevent.
+    "path",
+]
