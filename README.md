@@ -8,11 +8,17 @@ Open-source client libraries that wrap the w6w HTTP API.
 | `cli`    | `w6w-io/w6w-cli`    | `@w6w/cli` (npm), binary `w6w` | TypeScript |
 | `python` | `w6w-io/w6w-python` | `w6w` (PyPI)      | Python |
 
-Each wrapper is its **own git repo**, open source, and attached here as a
-**submodule**. This directory itself is tracked by the monorepo — it holds the
-shared contract (`endpoints.json`, `VERSION`, these docs) plus the submodule
-pointers. The release workflows live in the monorepo too, at
-`.github/workflows/`, not in the wrapper repos.
+Each wrapper is its **own git repo**, open source. This directory itself is
+tracked by the monorepo — it holds the shared contract (`endpoints.json`,
+`VERSION`, these docs) plus the wrappers. The release workflows live in the
+monorepo too, at `.github/workflows/`, not in the wrapper repos.
+
+> **Today `node/`, `cli/` and `python/` are plain local git repos**, not
+> submodules: the `w6w-io` repos in the table above do not exist yet, so there is
+> nothing to point a submodule at (HITL-1). Each has its own `.git` and its own
+> history, so the switch is mechanical — create the GitHub repo, add it as a
+> remote, push, then `git submodule add` — and nothing in the code or the contract
+> changes when it happens.
 
 ## The two rules
 
@@ -35,14 +41,22 @@ packages/wrappers/
 ├── VERSION            # the single version all three publish under
 ├── endpoints.json     # machine-readable surface contract (drives conformance tests)
 ├── docs/
-│   ├── endpoints.md   # the endpoint catalog — wire shapes + per-language signatures
-│   ├── cli.md         # the CLI help surface (--help), exit codes
-│   ├── parity.md      # lockstep rules, conformance test, CI gate
-│   └── release.md     # how a release actually runs (monorepo-driven)
-├── node/              # submodule → w6w-io/w6w-node
-├── cli/               # submodule → w6w-io/w6w-cli
-└── python/            # submodule → w6w-io/w6w-python
+│   ├── endpoints.md      # the endpoint catalog — wire shapes + per-language signatures
+│   ├── implementation.md # the cross-language spec — types, errors, env, toolchains, tests
+│   ├── cli.md            # the CLI help surface (--help), exit codes
+│   ├── parity.md         # lockstep rules, conformance test, CI gate
+│   └── release.md        # how a release actually runs
+├── node/              # local git repo today → w6w-io/w6w-node (submodule once it exists)
+├── cli/               # local git repo today → w6w-io/w6w-cli (submodule once it exists)
+└── python/            # local git repo today → w6w-io/w6w-python (submodule once it exists)
 ```
+
+`endpoints.json` says *which* operations exist and `docs/endpoints.md` says *what
+the API returns*; [`docs/implementation.md`](./docs/implementation.md) pins
+everything else — types, error model, environment handling, toolchains, tests and
+the conformance runner — so that three people implementing in three languages
+produce the same client. Where it says "pinned", it is not a starting point for
+discussion.
 
 ## What a wrapper is
 

@@ -26,16 +26,27 @@ Below `1.0.0`, breaking changes may land in a minor bump. That grace ends at
 ## Conformance
 
 Each wrapper repo carries a conformance test that reads `endpoints.json` and
-asserts the client exposes every operation with `status: "required"`, under the
-name in that operation's `naming` entry for its language.
+asserts the client exposes **every** operation in `operations[]` — **regardless of
+its `status`** — under the name in that operation's `naming` entry for its
+language. The mechanics of resolving a `naming` string to a symbol or a CLI
+command are pinned in
+[implementation.md §10](./implementation.md#10-conformance-runner); this section
+and that one must agree, and that one is the newer, pinned spec.
 
 The test asserts **existence and signature**, not behavior — it is a drift alarm,
 not a substitute for the wrapper's own unit tests. What it catches is the actual
 failure mode: an operation added to two wrappers and forgotten in the third.
 
-Operations with `"status": "planned"` are exempt until the server implements them
-and the status flips to `"required"` — that flip is what turns the endpoint from
-a design note into a release blocker for all three.
+**`status` records *server readiness*, not wrapper obligation, so the runner
+exempts nothing.** An operation is `"planned"` when its route is not live yet — a
+statement about the server, aimed at a *user* deciding whether a call will
+reach anything today. It tells an *implementer* nothing: this project implements
+all of the operations ahead of the server, some of them `planned` only because the
+server work is fenced. A wrapper that skipped an operation "because it is planned"
+would ship a surface that silently differs from its two siblings, and the drift
+would surface only when the fence clears — exactly the failure the lockstep bet
+exists to prevent. Implement all of them, unit-test all of them against a mocked
+transport, and assert all of them in conformance.
 
 Since `endpoints.json` lives in the monorepo and the wrappers are submodules, each
 wrapper repo gets it via the submodule checkout in CI. A wrapper repo's own CI
@@ -67,7 +78,8 @@ wrapper at all, because they will reasonably assume it is current.
 
 The bar for a new wrapper joining the lockstep:
 
-- All `required` operations implemented, conformance test green.
+- **Every** operation in `endpoints.json` implemented — `required` and `planned`
+  alike, per §Conformance — and the conformance test green.
 - Publishing automated from the monorepo, same as the others.
 - Its manifest version written from `VERSION`.
 
