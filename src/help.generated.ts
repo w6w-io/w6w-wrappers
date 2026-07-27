@@ -441,7 +441,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "fetch one document by its human-chosen `key`",
           "usage": "w6w documents get-by-key <key> [options]",
           "naming": "w6w documents get-by-key <key> [--project <id>]",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "key",
@@ -468,9 +468,7 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w documents get-by-key onboarding-email",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
         {
           "operation": "documents.create",
@@ -739,7 +737,7 @@ export const HELP_TREE: HelpTree = {
           "headline": "fetch one variable by its human-chosen `name`",
           "usage": "w6w vars get-by-name <name> [options]",
           "naming": "w6w vars get-by-name <name>",
-          "status": "planned",
+          "status": "required",
           "params": [
             {
               "name": "name",
@@ -759,9 +757,7 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w vars get-by-name greeting",
           ],
-          "notes": [
-            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-          ],
+          "notes": [],
         },
         {
           "operation": "vars.create",
