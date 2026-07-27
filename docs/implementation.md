@@ -101,14 +101,149 @@ https://api.example.com/api/   → https://api.example.com/api
 ```
 
 Operation paths from `endpoints.json` (`/documents`, `/vars/{id}`, …) are appended
-to that resolved base verbatim. Path parameters are **percent-encoded** when
-substituted — a document `key` may contain `/` or spaces, and
-`documents.getByKey` would otherwise build a wrong URL.
+to that resolved base verbatim. Their **parameters are not** — every
+caller-supplied value substituted into a path segment or a query string is
+percent-encoded, by the mechanism pinned immediately below.
 
 There is **no default base URL**. A client constructed with neither an explicit
 base URL nor `W6W_BASE_URL` raises a configuration error at construction time,
 naming the env var. (The studio's `?? "/api"` relative default is a browser same-origin assumption and
 has no meaning in a library.)
+
+### MECHANISM PIN — encoding caller-supplied values into the URL
+
+This is not a style choice and it is not defensive ceremony. Skip it and the
+wrapper sends a well-formed request **to a different route than the caller asked
+for**, with no error anywhere to show for it.
+
+**The rule.** Every value that originates with the caller and is interpolated into
+a URL — path segment or query-string value — is percent-encoded **at the point of
+interpolation**. A raw caller value is never string-concatenated into a URL.
+
+| Language | Path segment | Query string |
+|---|---|---|
+| node / cli | `encodeURIComponent(value)` | `new URLSearchParams({…}).toString()`, or `encodeURIComponent` on each name and value |
+| python | `urllib.parse.quote(value, safe="")` | `urllib.parse.urlencode({…})`, or `quote(value, safe="")` per value |
+
+Two query parameters exist in this surface: `?project=` (every `documents.*`
+operation and `workflows.list` — §7) and `?wait=` (`workflows.run` — §4). A
+project id is server-minted and `wait` is a wrapper-generated boolean, so both are
+safe by construction — and both are encoded anyway, for the reason given under
+"every interpolation" below.
+
+**`safe=""` is load-bearing.** `urllib.parse.quote` defaults to `safe="/"`: it
+deliberately leaves `/` untouched, because its usual job is encoding a whole path
+rather than one segment. Measured on this host's `python3`:
+
+```
+quote("a/b")            → 'a/b'     ← still two path segments: WRONG
+quote("a/b", safe="")   → 'a%2Fb'   ← one segment: correct
+```
+
+A Python wrapper calling `quote(key)` without `safe=""` therefore *looks* encoded
+and still has the `a/b` bug. That near-miss is precisely how three independent
+implementations end up disagreeing, so the argument is pinned here rather than
+left to each author's judgement.
+
+#### The worked reproduction — `documents.getByKey`
+
+`documents.getByKey` is `GET /documents/by-key/{key}`, and `key` is chosen by the
+**user**. The server's `validateKey` trims, rejects empty, and caps
+at 128 characters — **and restricts nothing else**. So `"."`, `".."`, `"../.."`,
+`"a/b"`, `"a?x=1"`, `"a#f"` and `"a b"` are all keys a user can legitimately
+create today.
+
+Naive concatenation — `` `${base}/documents/by-key/${key}` `` — produces:
+
+| key | naive URL | what it actually resolves to |
+|---|---|---|
+| `"."` | `…/api/documents/by-key/.` | `…/api/documents/by-key/` |
+| `".."` | `…/api/documents/by-key/..` | `…/api/documents/` — **the LIST route** |
+| `"../.."` | `…/api/documents/by-key/../..` | `…/api/` — the API root |
+| `"a/b"` | `…/api/documents/by-key/a/b` | a two-segment path — a different route entirely |
+| `"a?x=1"` | `…/api/documents/by-key/a?x=1` | path `…/by-key/a` **+ query `x=1`** — truncated, and a parameter smuggled in |
+| `"a#f"` | `…/api/documents/by-key/a#f` | path `…/by-key/a` — truncated at the fragment |
+| `"a b"` | `…/api/documents/by-key/a b` | a malformed URL |
+
+The second row is the one to hold on to: a caller asking for the single document
+whose key is `".."` receives **the entire collection** — a `200` with every
+document in the project — instead of the `404 unknown_document` it asked for.
+Nothing throws. The wrapper cannot tell, and neither can the caller.
+
+#### What encoding fixes — and the one case it does not
+
+Encoding closes every row above **except** the dot-only keys, and that exception
+is better known than rediscovered:
+
+```
+encodeURIComponent("a/b")    → "a%2Fb"      ✓
+encodeURIComponent("a?x=1")  → "a%3Fx%3D1"  ✓
+encodeURIComponent("..")     → ".."         ✗ unchanged
+quote("..", safe="")         → ".."         ✗ unchanged
+```
+
+`.` is an *unreserved* character in RFC 3986, so no percent-encoder touches it —
+and hand-encoding it does not help either, because the URL Standard treats
+`%2E%2E`, `%2e%2e` and `.%2e` as double-dot segments as well. A literal `..` path
+segment is simply **not representable** in a WHATWG-parsed URL. Measured under
+`deno 2.8.2`: `new URL("documents/by-key/%2E%2E", base)` collapses to
+`…/api/documents/` exactly as the raw form does.
+
+This is the one place the two toolchains genuinely behave differently, so it is
+pinned rather than left to be found three times:
+
+- **node / cli** — `fetch` parses the URL with the WHATWG parser, which removes
+  dot segments. The keys `"."` and `".."` cannot be addressed through this route.
+- **python** — `urllib.request` does **not** normalise the path. Measured:
+  `Request(".../by-key/..").selector` is `'/api/documents/by-key/..'`, verbatim.
+  The key reaches the server, which (or an intervening proxy, which) may still
+  normalise it.
+
+**Pinned behaviour in all three languages: encode it and send it.** Do not
+special-case a dot key, do not raise a client-side error on one, do not silently
+route it somewhere else. Whether `"."` and `".."` are addressable by key at all is
+a property of the **route shape** `by-key/{key}` and belongs to the node that
+builds that route (T4.4.1, fenced by BLK-1) — not to the wrappers. A wrapper has
+no way to know what the server will decide the key means, and guessing is the
+failure mode below.
+
+#### This rule is encoding — never validation
+
+A wrapper **must not** reject, pre-normalise, canonicalise, strip or otherwise
+rewrite a key the server accepts. `README.md` "What a wrapper is" (lines 47-56)
+governs: a wrapper owns transport, auth and error mapping, and is **not a place
+for business logic**. A character policy for document keys is business logic, and
+it lives in exactly one place — `validateKey`, in the server.
+
+The concrete cost of getting this backwards: a wrapper that refuses `"../.."`
+locally makes a document that is **legitimately creatable through the same API**
+permanently unreadable through that wrapper. The user creates it (the server says
+yes) and can never read it back (the wrapper says no) — a bug with no server-side
+trace, reproducible only through that one client. The wrapper would have invented
+a validation rule the server does not have, and the two would drift further apart
+on the server's next release. Encode the key, send it, and let the server decide
+what it means.
+
+#### It applies to *every* interpolation, not only the unsafe one
+
+Encode every caller-supplied path segment on **every** operation — explicitly
+including `vars.getByName` (`GET /vars/by-name/{name}`), whose name the server
+validates against `NAME_RE = /^[a-z_][a-z0-9_]*$/` and which is therefore URL-safe by
+construction **today**. Documents are the unsafe surface; vars are not. Encode
+both.
+
+Encoding a value that the validator admits costs one function call and changes
+nothing. *Not* encoding it makes the wrapper's correctness depend on a regex in a
+different repo that no wrapper test covers: the day that validator relaxes — to
+admit a `.`, a `-`, or a namespace separator — a wrapper that encoded "only where
+it currently had to" becomes wrong silently, in the field, in a release it was not
+part of. "Encode at every interpolation" is a rule a reviewer checks by looking at
+the call site. "Encode wherever the server currently permits unsafe characters" is
+a rule that requires re-auditing another repo on every release, and nobody will.
+
+The same reasoning covers the `{id}` parameters (`/documents/{id}`, `/vars/{id}`):
+server-minted `doc_…` / `var_…` ids are safe by construction, and they are encoded
+anyway.
 
 ### `W6W_TOKEN` — the bearer credential
 
@@ -511,8 +646,13 @@ Plus these cross-cutting tests, once each per wrapper:
    preserved.
 6. **`202` and `status: "failed"` do not raise** (§4), and `RunEnvelope` dispatches
    on `kind` — including an **unknown `kind`**, which must not crash.
-7. **Path parameters are percent-encoded** — a document key containing `/` or a
-   space produces a correctly encoded URL.
+7. **Caller-supplied values are percent-encoded at every interpolation** (§2's
+   encoding pin). At minimum: a document key containing `/` produces `%2F` and
+   **not** a second path segment; one containing a space produces `%20`; one
+   containing `?` produces `%3F` and does not become a query parameter;
+   `vars.getByName` encodes its name too. Plus one negative test that pins the
+   encoding-not-validation rule: the key `"../.."` is **encoded and sent**, and
+   the wrapper raises no client-side error on it.
 8. **Two clients in one process hold different credentials and base URLs** (§2's
    mechanism pin — this test is what actually prevents the module-global
    regression).
