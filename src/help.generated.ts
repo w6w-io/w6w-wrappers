@@ -120,7 +120,7 @@ export const HELP_TREE: HelpTree = {
       "headline": "caller identity plus w6w component versions",
       "usage": "w6w me [options]",
       "naming": "w6w me",
-      "status": "planned",
+      "status": "required",
       "params": [
         {
           "name": "json",
@@ -134,9 +134,7 @@ export const HELP_TREE: HelpTree = {
         "w6w me",
         "w6w info",
       ],
-      "notes": [
-        'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
-      ],
+      "notes": [],
     },
     {
       "operation": "run",

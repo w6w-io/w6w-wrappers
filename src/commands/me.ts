@@ -2,11 +2,10 @@
  * `w6w me` (alias `w6w info`, D8) — the caller's identity plus w6w component
  * versions.
  *
- * One command, one SDK call. `me` is `status: "planned"` — `GET /api/me`
- * answers the identity half live (`GET /api/auth/me`, aliased), but the
- * `versions` block does not exist server-side yet, so it is absent or
- * partial against a live server today. That is the correct, documented gap
- * and is not worked around here.
+ * One command, one SDK call — `client.me()`, which calls `GET /auth/me`, the
+ * server's real identity route (verified live 2026-07-28). The `versions`
+ * block does not exist server-side yet, so it is absent or partial against a
+ * live server today; every wrapper tolerates that.
  *
  * **Display is a separate rule from what the data carries (D5).** The
  * `--json` payload is a faithful transcription of the wire: precedence is

@@ -88,18 +88,18 @@ async function w6w(argv: string[], reply: Reply = () => json(200, {})): Promise<
 
 const IDENTITY = { tenant: "t_acme", subject: "alice", account: "acct_1", role: "member" };
 
-Deno.test("me: one GET to /me, and info reaches the same handler", async () => {
+Deno.test("me: one GET to /auth/me, and info reaches the same handler", async () => {
   const result = await w6w(["me"], () => json(200, IDENTITY));
   assertEquals(result.code, 0, result.stderr);
   assertEquals(result.calls.length, 1);
   assertEquals(result.calls[0].method, "GET");
-  assertEquals(result.calls[0].url, `${BASE}/api/me`);
+  assertEquals(result.calls[0].url, `${BASE}/api/auth/me`);
   assertStringIncludes(result.stdout, "t_acme");
   assertStringIncludes(result.stdout, "alice");
 
   const alias = await w6w(["info"], () => json(200, IDENTITY));
   assertEquals(alias.code, 0, alias.stderr);
-  assertEquals(alias.calls[0].url, `${BASE}/api/me`, "info must hit the same route as me");
+  assertEquals(alias.calls[0].url, `${BASE}/api/auth/me`, "info must hit the same route as me");
 });
 
 Deno.test("me: D5 — 0.0.0 and empty versions render as `dev`, but --json carries them verbatim", async () => {
