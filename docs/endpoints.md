@@ -81,11 +81,14 @@ intake keeps working at the command line.
 Every CLI command must also answer `--help` at group and command level, generated
 from `endpoints.json` — see [cli.md](./cli.md).
 
-**Status field.** One of the seventeen operations still carries
-`"status": "planned"` (`me` — the `versions` block only; identity itself is
-already live at `GET /auth/me`): `documents.getByKey`, `vars.getByName` and
-`run` were implemented server-side 2026-07-28. `status` records **server**
-readiness, not wrapper obligation — all seventeen are implemented and tested
+**Status field.** All seventeen operations now carry `"status": "required"`.
+`documents.getByKey`, `vars.getByName` and `run` were implemented server-side
+2026-07-28; `me` was fixed the same day to call the server's real `/auth/me`
+route directly rather than wait on a never-built `/api/me` alias.
+`me`'s `serverImplemented` stays `"partial"` — identity is fully live, but the
+optional `versions` block does not exist server-side yet, and every wrapper
+tolerates its absence. `status` records **server** readiness, not wrapper
+obligation — all seventeen are implemented and tested
 against a mocked transport in every wrapper
 (see [implementation.md §10](./implementation.md#10-conformance-runner)).
 
@@ -94,19 +97,20 @@ against a mocked transport in every wrapper
 ## 1. `me` — caller identity and versions
 
 ```
-GET /api/me
+GET /api/auth/me
 ```
 
-`status: planned` · `serverImplemented: partial`
+`status: required` · `serverImplemented: partial`
 
-**What already exists.** `GET /api/auth/me` serves the entire identity half
-today, returning `{tenant, subject, account, role}` for any authenticated
-principal. Its live
-consumer is the studio's Session modal.
+**Fixed 2026-07-28.** Every wrapper calls `/auth/me` directly — the server's
+real, already-live identity route (verified live: `200`,
+`{tenant, subject, account, role}`) — rather than waiting on the never-built
+`/api/me` alias D15 originally specced. Its live consumer is the studio's
+Session modal.
 
-**What is missing** is exactly two things: the `/api/me` **path**, and the
-`versions` block. `/api/me` is mounted as an **alias of that same handler** — one
-body, two paths — so the two can never diverge (D15).
+**Still missing:** the `versions` block. The server does not send one today;
+every wrapper tolerates its absence and fills in `versions.wrapper` itself
+(below).
 
 Returns who the caller is, plus the versions of the w6w components involved in
 answering the call. The version block is the reason this operation earns its
