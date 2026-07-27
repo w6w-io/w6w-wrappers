@@ -7,7 +7,7 @@ auth, output formatting and exit codes. No business logic, no client-side pollin
 retries. Everything it can do, the HTTP API can do — the CLI just makes it typeable.
 
 - **License:** MIT (see [LICENSE](./LICENSE)).
-- **Version:** `0.1.0`.
+- **Version:** `0.1.1`.
 
 ## Install
 
@@ -39,6 +39,32 @@ w6w workflows list
 
 `--help` and `--version` deliberately need neither. They resolve with no token configured and no
 server reachable, which is exactly when people need them most.
+
+## Usage
+
+```bash
+w6w me                        # who am I, and which component versions am I talking to?
+
+# Discover what you can run — a `conn_…`, `wf_…`, `fn_…` or `ep_…` id.
+w6w connections list
+w6w workflows list
+
+# Run a connection action: a `conn_…` id needs --action.
+w6w run conn_01H… --action send_email --payload '{"to":"a@b.com"}'
+
+# A function or an endpoint runs the same way, with no --action.
+w6w run fn_normalize_address --payload '{"address":"1 Infinite Loop"}'
+
+# `w6w run wf_…` dispatches a workflow like anything else and always queues it.
+# `w6w workflows run` is the typed path, and the only one that can wait:
+w6w workflows run wf_01H… --wait
+
+# Documents and vars are plain CRUD; the key/name is positional, the rest are flags.
+w6w documents create welcome --content "# Hi"
+w6w vars create greeting --type string --value hello
+```
+
+Add `--json` to any command for raw JSON instead of a table — the shape to script against.
 
 ## Help
 
