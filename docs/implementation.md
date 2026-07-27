@@ -829,10 +829,14 @@ conformance: operation `documents.getByKey` is not reachable — expected
 The runner asserts **existence and reachability**, not behaviour. Behaviour is
 §9's job.
 
-### This is deliberately stricter than `docs/parity.md`
+### The runner exempts nothing — and `docs/parity.md` says the same
 
-`parity.md` says operations with `"status": "planned"` are exempt until the server
-implements them. **This runner exempts nothing.**
+**This runner exempts nothing**: every operation in `operations[]` is asserted,
+`required` and `planned` alike. `docs/parity.md` §Conformance states the same
+rule in the same words — "asserts the client exposes **every** operation in
+`operations[]` — **regardless of its `status`**" — and defers to this section for
+the mechanics. The two documents agree; if they ever drift, **this one is the
+pinned spec** and `parity.md` follows it.
 
 The reason is that this project implements all seventeen operations **ahead of the
 server**: four are `planned` because the server is fenced (BLK-1), not
