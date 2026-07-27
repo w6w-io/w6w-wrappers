@@ -1,0 +1,19 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Packaging output
+build/
+dist/
+*.egg-info/
+
+# Coverage (produced by the CI job only — see README "Tests")
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Local virtual environments
+.venv/
+venv/
