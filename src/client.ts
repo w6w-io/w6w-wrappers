@@ -151,8 +151,7 @@ export class W6wClient {
    * `isWorkflowRun`; a `kind` this version has never heard of is handed back
    * verbatim rather than raised.
    *
-   * **`status: "planned"`** — `POST /api/run` lands with T4.1.2 (fenced by
-   * BLK-1). Against today's server the call is a `404`.
+   * `POST /api/run` (verified live 2026-07-28).
    *
    * @param input - The URN, an optional `action`, and the payload.
    * @returns The `RunEnvelope`, exactly as it arrived.

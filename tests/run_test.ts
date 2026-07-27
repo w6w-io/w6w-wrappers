@@ -1,10 +1,9 @@
 /**
  * `client.run({urn, action, payload})`, against an injected fake `fetch`.
  *
- * `POST /api/run` is `status: "planned"` — it does not exist on the server yet
- * (T4.1.2, fenced by BLK-1) — so every case here runs against the contract in
- * `endpoints.json` and a mocked transport, which is what
- * `docs/implementation.md` §9 asks for anyway.
+ * `POST /api/run` is live (verified 2026-07-28); every case here still runs
+ * against a mocked transport, which is what `docs/implementation.md` §9 asks
+ * for regardless of server status.
  *
  * Two things are load-bearing and are asserted rather than assumed:
  *

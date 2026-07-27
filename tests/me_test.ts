@@ -1,10 +1,9 @@
 /**
  * `client.me()`, against an injected fake `fetch`.
  *
- * No case here needs a live server (`docs/implementation.md` §9) — which
- * matters more for this operation than for any other, because `/api/me` is
- * `status: "planned"`: no server serves that path yet, so a test that reached
- * for one would be testing the 404.
+ * No case here needs a live server (`docs/implementation.md` §9) — this suite
+ * pins the wire shape and the client-side merge, not the server's behavior.
+ * `me()` calls `/auth/me`, the server's real identity route (verified live).
  *
  * What this file pins that no other suite can: the response body is **flat**.
  * `me` is the one read operation with no envelope key, so every case below
@@ -89,7 +88,7 @@ Deno.test("me: a flat body with no versions parses cleanly", async () => {
 
   assertEquals(c.calls.length, 1);
   assertEquals(c.calls[0].method, "GET");
-  assertEquals(c.calls[0].url, "https://api.example.com/api/me");
+  assertEquals(c.calls[0].url, "https://api.example.com/api/auth/me");
   assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
   // A bodiless GET: no body, and therefore no content-type either.
   assertEquals(c.calls[0].body, null);

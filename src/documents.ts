@@ -10,10 +10,8 @@
  * wrapper that has to compose two calls is describing an operation that belongs
  * in the API.
  *
- * `getByKey` therefore targets a real route — `GET /documents/by-key/{key}` —
- * which is `status: "planned"` in `endpoints.json` and lands with T4.4.1
- * (fenced by BLK-1). Against a server that does not serve it yet it raises a
- * `404`; that is the correct failure, and it is not worked around here.
+ * `getByKey` therefore targets a real route — `GET /documents/by-key/{key}`
+ * (verified live 2026-07-28).
  *
  * Documents are **project-scoped**: every route below accepts an optional
  * `?project=`, resolved per call, then from the client's default, and otherwise
@@ -160,9 +158,6 @@ export class DocumentsApi {
    * (encoded). This method does not reject, trim or canonicalise a key —
    * refusing one locally would make a document that exists permanently
    * unreadable through this client.
-   *
-   * **`status: "planned"`** — the route lands with T4.4.1; until then a live
-   * server answers `404`.
    *
    * @param key - The document key, sent encoded and otherwise untouched.
    * @param options - Optional per-call project scope.

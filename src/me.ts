@@ -1,23 +1,18 @@
 /**
  * `client.me()` — who the caller is, and what answered.
  *
- * One GET, no envelope. The response body is **flat** — `{tenant, subject,
- * account, role, versions?}` — because `/api/me` is an alias of the host's
- * existing identity handler rather than a second one (`docs/endpoints.md` §1,
- * D15). There is therefore nothing for `unwrap` to do here, and this is the one
- * read operation in the package that does not call it.
- *
- * **`status: "planned"`** in `endpoints.json`: the identity half is served today
- * at a different path, and `/api/me` itself lands with T4.2.1 (fenced by BLK-1).
- * The wrapper targets the contracted path now; against a server that has not
- * mounted it yet the call is a `404`, which is the correct failure and is not
- * worked around here.
+ * One GET to `/auth/me` — the server's real identity route (verified live).
+ * The response body is **flat** — `{tenant, subject, account, role,
+ * versions?}` — so there is nothing for `unwrap` to do here, and this is the
+ * one read operation in the package that does not call it.
  *
  * The one thing this module adds to the body is `versions.wrapper`, which the
  * server cannot know — it is this package's own published version. It is a
  * **fill, never an overwrite**: a key the server supplied wins, including
  * `wrapper` itself, so a future host that has a better answer is not silently
- * overruled by the client.
+ * overruled by the client. The server does not send a `versions` block today,
+ * so every call currently returns just `{wrapper: VERSION}` — expected, not
+ * an error.
  *
  * It is deliberately not a namespace class. `endpoints.json` names this
  * operation `client.me()`, a method on the client itself, so the module exports
@@ -60,7 +55,7 @@ export interface MeHost {
  * character-indexed keys rather than identity fields.
  */
 export async function fetchMe(host: MeHost): Promise<Me> {
-  const res = await host.request<Me>({ method: "GET", path: "/me" });
+  const res = await host.request<Me>({ method: "GET", path: "/auth/me" });
   const body = res.body;
   // A body that is not an object cannot be identity data. Raise rather than
   // spread it — the same `bad_response` class the envelope reader uses for the

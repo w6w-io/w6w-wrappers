@@ -27,12 +27,8 @@
  * `isFunctionRun` and `isWorkflowRun` (`src/types.ts`), which narrow properly —
  * a bare `env.kind === "action"` check does not, because the union is open.
  *
- * ── The fence ──
- * **`status: "planned"`.** `POST /api/run` does not exist on the server yet: it
- * needs the URN resolver, and both are fenced by BLK-1. This module is built
- * against the contract in `endpoints.json` and tested against a mocked
- * transport; against today's server the call is a `404`, which is the correct
- * failure and is not worked around here. Live conformance is a later step.
+ * `POST /api/run` (verified live 2026-07-28): the URN resolver dispatches to
+ * the same runner each dedicated route already uses — no new execution path.
  *
  * ── Why this is not folded into `workflows.run` ──
  * D4: `?wait=`, `variables` and `trigger` have no slot in the three-field

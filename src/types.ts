@@ -94,10 +94,10 @@ export interface Var {
  *
  * The body is **flat**: the identity fields sit at the top level, with no
  * wrapping object around them. That is the contract, not an accident of this
- * transcription — `/api/me` is an alias of the host's existing identity handler,
- * whose live consumer is the studio, so a nested envelope would need a second
- * handler or would break that consumer (`docs/endpoints.md` §1, D15). Nothing in
- * this file unwraps a `me` response, because there is nothing to unwrap.
+ * transcription — `client.me()` calls `/auth/me`, the server's real identity
+ * handler, whose live consumer is the studio, so a nested envelope would break
+ * that consumer (`docs/endpoints.md` §1, D15). Nothing in this file unwraps a
+ * `me` response, because there is nothing to unwrap.
  *
  * The four identity fields mirror the server's principal.
  */
