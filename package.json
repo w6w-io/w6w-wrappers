@@ -28,7 +28,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json && node scripts/fix-shebang.mjs"
   },
   "dependencies": {
     "@w6w/sdk": "^0.1.0"
