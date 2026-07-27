@@ -21,17 +21,19 @@
 
 import { main } from "../mod.ts";
 import type { CommandRegistry } from "../mod.ts";
+import { COMMANDS } from "../src/commands/index.ts";
 import { systemRuntime } from "../src/runtime.ts";
 
 /**
  * The commands this build can run.
  *
- * Empty here on purpose: the entry point owns the wiring, and each command group
- * registers itself into this map as it is implemented. A command in the help tree
- * with no entry here answers with a usage error saying so, which is a better
- * answer than a silent success.
+ * The registry is assembled in `src/commands/index.ts`, one group at a time, and
+ * this file only hands it over: the entry point owns the wiring and nothing
+ * else. A command in the help tree with no entry in that registry answers with a
+ * usage error saying it is not available in this build, which is a better answer
+ * than a silent success.
  */
-const commands: CommandRegistry = {};
+const commands: CommandRegistry = COMMANDS;
 
 /**
  * Whether stdout is a terminal — the third of the three ways colour turns itself
