@@ -17,14 +17,23 @@ cannot invent one.** Variables are scoped by tenant/subject only: the server's
 every document route does — so the two asset surfaces are deliberately
 asymmetric (`docs/implementation.md` §7; `documents.py` is the other half).
 
-The asymmetry is enforced **structurally rather than by discipline**, and this
-lane goes one step further than the `node` lane does. There, the namespace's host
-interface omits the client's configuration, which a type checker enforces; here
-:class:`VarsApi` is handed the client's bound `request` method and *nothing
-else*, so at runtime there is no object in this namespace's reach that carries a
-default scope to send — not by accident, and not by a later edit that looked
-harmless. Adding the parameter once the server honours it is purely additive;
-adding it now would be an argument the server ignores — a lie that typechecks.
+The asymmetry is enforced **by the narrow host type and by the tests, rather
+than by discipline**. :class:`VarsApi` is handed the client's bound `request`
+method and *nothing else*: it **holds** no configuration, and :class:`VarsRequest`
+is a bare callable, so a type checker rejects the day someone widens this
+namespace to take a client in order to read a default from it.
+
+**It is not a capability barrier, and this file used to claim it was**
+(overstated in T2.3.3; corrected 2026-07-27 under T2.3.4). A bound method carries
+its instance, so `self._request.__self__` *is* the client and `config` is one hop
+away — measured, not assumed. What actually holds the line is the pair above plus
+`tests/test_vars.py`, which asserts on the **wire**: every one of the six
+operations is called with a default project configured and no query string may
+appear on any of them. A later edit that walked the hop would fail there,
+whatever route it took to the value.
+
+Adding the parameter once the server honours it is purely additive; adding it now
+would be an argument the server ignores — a lie that typechecks.
 """
 
 from __future__ import annotations

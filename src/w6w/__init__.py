@@ -32,14 +32,37 @@ from ._http import HttpResponse, Transport, path
 from ._vars import VarsApi, VarsRequest
 from ._version import __version__
 from .client import W6wClient
+from .connections import ConnectionsApi, ConnectionsRequest
 from .documents import DocumentsApi, DocumentsHost
 from .errors import ApiError, ConfigError
-from .types import UNSET, Doc, DocFormat, PatchableStr, Unset, Var, VarType
+from .me import MeRequest, fetch_me
+from .types import (
+    UNSET,
+    ConnectionState,
+    ConnectionSummary,
+    Doc,
+    DocFormat,
+    Me,
+    PatchableStr,
+    Unset,
+    Var,
+    VarType,
+    WorkflowStatus,
+    WorkflowSummary,
+)
+from .workflows import WorkflowsApi, WorkflowsHost
 
 __all__ = [
     "ApiError",
     "BASE_PATH",
     "ConfigError",
+    # Identity and discovery (T2.3.4). `connections.list` and `workflows.list`
+    # are how a caller finds a URN to hand to `run` (D4); `me` is what makes a
+    # bug report actionable.
+    "ConnectionState",
+    "ConnectionSummary",
+    "ConnectionsApi",
+    "ConnectionsRequest",
     # Asset operations (T2.3.3). The namespace classes are exported alongside
     # their wire types and host protocols because a host that types a helper
     # around `client.documents` needs to name them; they are reached through a
@@ -49,6 +72,8 @@ __all__ = [
     "DocumentsApi",
     "DocumentsHost",
     "HttpResponse",
+    "Me",
+    "MeRequest",
     "PatchableStr",
     "ResolvedConfig",
     "Transport",
@@ -62,7 +87,14 @@ __all__ = [
     "VarsApi",
     "VarsRequest",
     "W6wClient",
+    "WorkflowStatus",
+    "WorkflowSummary",
+    "WorkflowsApi",
+    "WorkflowsHost",
     "__version__",
+    # `client.me()` is a method rather than a namespace, so the function it
+    # delegates to is the exported symbol — same layering as the namespaces.
+    "fetch_me",
     "join_base_url",
     # Exported because `W6wClient.request` is public: a host reaching an
     # endpoint this version does not model yet must have the same

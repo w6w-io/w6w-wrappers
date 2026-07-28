@@ -10,11 +10,14 @@ makes every error message, every server log line and every documentation example
 wrong for the person reading them side by side.
 
 Three things live here beyond the dataclasses, and each is here because it must
-have exactly one implementation shared by both operation modules:
+have exactly one implementation shared by every operation module:
 
 - :func:`unwrap` (with :func:`unwrap_object` / :func:`unwrap_list`) — the one
   place an operation reads the server's envelope, and the one place a
   `bad_response` is raised for a `2xx` that does not carry what it promised.
+  :func:`require_object` is its counterpart for the two routes that have **no**
+  envelope (`me`, `workflows.run`): same failure class, same code, one
+  implementation.
 - :data:`UNSET` — the sentinel that lets a patch express "leave this field
   alone" **separately** from "set this field to null". `None` cannot express
   both, and conflating them silently nulls data.
@@ -34,7 +37,7 @@ which returns the parsed body untouched.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Mapping, Optional, Union
 
 from ._http import HttpResponse
@@ -227,6 +230,44 @@ def unwrap_list(response: HttpResponse, key: str) -> List[Any]:
     return payload
 
 
+def require_object(response: HttpResponse, what: str) -> Dict[str, Any]:
+    """Read a **flat**, envelope-less `2xx` body, or fail the same way.
+
+    Two routes have no envelope key at all — `me` and (from T2.3.5)
+    `workflows.run` — so :func:`unwrap` has nothing to unwrap for them. What they
+    still need is the *other* half of what `unwrap` does: the assertion that a
+    `2xx` body is the kind of thing it promised to be, reported as
+    `bad_response` while the status is still in hand.
+
+    A body that is not an object cannot be identity or run data, and the
+    degenerate alternative is not hypothetical — it is **measured**. In the
+    `node` lane a `200 []` spread into an object produced a `Me` whose only
+    populated field was the one the client had just added, and `200 [{…}]`
+    produced character-indexed keys (`evals/T2.1.4.eval.md`). Python's
+    `isinstance(body, dict)` excludes a list for free; this function is where
+    that check is spent once rather than at each call site, so all three lanes
+    raise on the same input.
+
+    :param response: The response the transport returned.
+    :param what: What the body was expected to be, for the message — e.g.
+        `"an identity object"`.
+    :returns: The body, as a mapping.
+    :raises ApiError: `bad_response` when the body is not a JSON object.
+    """
+    body = response.body
+    if isinstance(body, dict):
+        return body
+    raise ApiError(
+        response.status,
+        "bad_response",
+        "Server returned a {status} whose body is not {what}.".format(
+            status=response.status,
+            what=what,
+        ),
+        body,
+    )
+
+
 def _text(body: Any, key: str) -> str:
     """Read a string field off a wire object, tolerating absence and wrong types.
 
@@ -242,6 +283,84 @@ def _text(body: Any, key: str) -> str:
     """
     value = body.get(key) if isinstance(body, dict) else None
     return value if isinstance(value, str) else ""
+
+
+def _nullable_text(body: Any, key: str) -> Optional[str]:
+    """Read a **nullable** string field, keeping `null` distinct from `""`.
+
+    The counterpart to :func:`_text`, and the difference is the whole point: a
+    field the wire declares as `string | null` carries meaning in its `null`.
+    `lastTestedAt: null` means *never tested*, which is not the same statement
+    as "tested, and the timestamp was empty" — so it stays `None` here rather
+    than being flattened to `""` the way a non-nullable field is.
+
+    :param body: The wire object, or anything else.
+    :param key: The field to read.
+    :returns: The string value, or `None`.
+    """
+    value = body.get(key) if isinstance(body, dict) else None
+    return value if isinstance(value, str) else None
+
+
+def _nullable_flag(body: Any, key: str) -> Optional[bool]:
+    """Read a `boolean | null` field, keeping all three states apart.
+
+    `True`, `False` and `None` are three different answers to "did the last test
+    pass?", and the third one (*never tested*) must not collapse into the second.
+
+    :param body: The wire object, or anything else.
+    :param key: The field to read.
+    :returns: The boolean value, or `None` for absent/null/not-a-boolean.
+    """
+    value = body.get(key) if isinstance(body, dict) else None
+    return value if isinstance(value, bool) else None
+
+
+def _count(body: Any, key: str) -> int:
+    """Read an integer counter, defaulting to `0`.
+
+    `isinstance(value, bool)` is excluded deliberately: `bool` is a subclass of
+    `int` in Python, so a wire `true` would otherwise arrive as the count `1`.
+
+    :param body: The wire object, or anything else.
+    :param key: The field to read.
+    :returns: The integer value, or `0`.
+    """
+    value = body.get(key) if isinstance(body, dict) else None
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _text_list(body: Any, key: str) -> List[str]:
+    """Read a list-of-strings field, defaulting to `[]`.
+
+    Absent reads as empty rather than as `None`, so a caller iterating tags
+    never has to branch on whether the server sent the field — the same reason
+    an empty list result is `[]` and not `null`.
+
+    :param body: The wire object, or anything else.
+    :param key: The field to read.
+    :returns: The string items, in order; non-string items are dropped.
+    """
+    value = body.get(key) if isinstance(body, dict) else None
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def _mapping(body: Any, key: str) -> Dict[str, Any]:
+    """Read an opaque object field, defaulting to `{}`.
+
+    The values are **pass-through** and stay `Any`: `profile` is free-form
+    metadata an app's auth wrote, and a wrapper that modelled its internals
+    would be wrong for someone. A copy is returned, so a caller mutating it
+    cannot reach back into the parsed response body.
+
+    :param body: The wire object, or anything else.
+    :param key: The field to read.
+    :returns: A shallow copy of the mapping, or `{}`.
+    """
+    value = body.get(key) if isinstance(body, dict) else None
+    return dict(value) if isinstance(value, dict) else {}
 
 
 #: A document's format hint.
@@ -359,5 +478,208 @@ class Var:
             value=body.get("value") if isinstance(body, dict) else None,
             description=_text(body, "description"),
             createdAt=_text(body, "createdAt"),
+            updatedAt=_text(body, "updatedAt"),
+        )
+
+
+@dataclass(frozen=True)
+class Me:
+    """Who the caller is, plus the versions of the components that answered.
+
+    **The body is flat.** There is no wrapping object around the four identity
+    fields and this class does not add one: `/api/me` is mounted as an *alias*
+    of the host's existing identity handler (D15), whose live consumer is the
+    studio, so a nested `{"user": {…}}` shape would need a second handler on the
+    server or would break that consumer. The four fields mirror the server's
+    `Principal` exactly.
+
+    `versions` is a **string→string map that is open by construction**: it may
+    be absent from the wire entirely (an older server), and it may carry keys
+    this release has never heard of. Modelled as a `Dict[str, str]` rather than
+    a closed record for that reason — adding a key server-side must never break
+    an installed client.
+
+    Two keys are contracted today. `composition` is a build string the server
+    derives at build time. `wrapper` is filled in by :func:`w6w.fetch_me` from
+    this package's own version, because the server cannot know it — as a
+    **default that the server overrides**, never as an overwrite (the precedence
+    rule lives at that call site, with the merge that implements it).
+
+    What this class does **not** do is edit the map. A value that looks like an
+    unbumped placeholder reaches the caller exactly as the server sent it;
+    presenting such a value as `dev` is a *rendering* rule (D5) that belongs to
+    whatever puts a version in front of a person — the CLI's `w6w info` banner —
+    and applying it to the data here would leave a bug report quoting a version
+    the server never sent.
+    """
+
+    #: The tenant the credential resolves to.
+    tenant: str
+    #: The authenticated principal, e.g. `user_…`.
+    subject: str
+    #: The account within the tenant.
+    account: str
+    #: The principal's role, e.g. `"admin"`. A plain string: the set is the
+    #: server's to extend, and a closed union would reject a newer role.
+    role: str
+    #: Component versions. Always present on a :func:`w6w.fetch_me` result, and
+    #: always carrying `wrapper`; open to keys this release does not know.
+    versions: Dict[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def from_wire(cls, body: Any) -> "Me":
+        """Build a :class:`Me` from a parsed wire object, ignoring unknown keys.
+
+        `versions` is **copied** rather than aliased, so the merge that follows
+        (and any caller mutation) cannot reach back into the parsed body. A
+        `versions` that is not an object — a string, a list, `null` — is dropped
+        rather than merged, matching the `node` lane: spreading a string there
+        produced character-indexed junk that satisfied the declared type, and
+        inventing keys out of a malformed block would be worse than reporting
+        only what this client actually knows.
+
+        :param body: The parsed, flat `me` body.
+        :returns: The identity, with `versions` exactly as it arrived.
+        """
+        raw = body.get("versions") if isinstance(body, dict) else None
+        return cls(
+            tenant=_text(body, "tenant"),
+            subject=_text(body, "subject"),
+            account=_text(body, "account"),
+            role=_text(body, "role"),
+            versions=dict(raw) if isinstance(raw, dict) else {},
+        )
+
+
+#: The lifecycle state of a connection.
+#:
+#: `pending` is the state a connection is in before an auth flow completes;
+#: `needs_refresh`, `broken` and `revoked` are the three ways a live one stops
+#: working, and they are kept apart because a caller triaging them acts
+#: differently on each.
+ConnectionState = Literal["pending", "connected", "needs_refresh", "broken", "revoked"]
+
+
+@dataclass(frozen=True)
+class ConnectionSummary:
+    """One connection, as the list route projects it.
+
+    This is the server's **redacted projection**: the stored connection minus
+    the two secret-bearing fields it strips on the way out (named, with the
+    reason, in `connections.py`). Those two are deliberately absent from this
+    class rather than typed as optional — declaring a field that never arrives
+    invites a caller to look for it, and no response will ever carry it.
+
+    The wire additionally carries a field this class deliberately omits, and
+    that is a *tolerance* requirement rather than an oversight: the server's own
+    summary type has a `tenant` the exposed surface does not, so a reader that
+    refused unknown keys would raise on **every real response**. Unknown keys
+    are dropped here, never fatal.
+
+    Timestamps are ISO-8601 strings, exactly as they arrive; `lastTestedAt` and
+    `lastTestOk` are additionally **nullable**, and their `None` means *never
+    tested* — a distinct answer that is not flattened into `""` or `False`.
+    """
+
+    #: Server-issued id, `conn_…`. This is the URN a caller hands to `run`.
+    id: str
+    #: The app this connection authorizes against, e.g. `"sendgrid"`.
+    appId: str
+    #: Which of the app's auth methods this connection was made with.
+    authKey: str
+    #: The principal that owns it. Connections are user-private.
+    owner: str
+    #: Human-chosen label.
+    displayName: str
+    #: Lifecycle state.
+    state: ConnectionState
+    #: Free-form metadata an app's auth wrote. Opaque pass-through.
+    profile: Dict[str, Any]
+    #: Result of the last test: `True`/`False`, or `None` for never tested.
+    lastTestOk: Optional[bool]
+    #: ISO-8601 timestamp, or `None` for never tested.
+    lastTestedAt: Optional[str]
+    #: ISO-8601 timestamp. A string, deliberately.
+    createdAt: str
+    #: ISO-8601 timestamp. A string, deliberately.
+    updatedAt: str
+
+    @classmethod
+    def from_wire(cls, body: Any) -> "ConnectionSummary":
+        """Build a :class:`ConnectionSummary`, ignoring unknown keys.
+
+        :param body: One parsed item of the `connections` array.
+        :returns: The connection summary.
+        """
+        raw_state = body.get("state") if isinstance(body, dict) else None
+        return cls(
+            id=_text(body, "id"),
+            appId=_text(body, "appId"),
+            authKey=_text(body, "authKey"),
+            owner=_text(body, "owner"),
+            displayName=_text(body, "displayName"),
+            # An absent state reads as `pending`, the one member that asserts
+            # nothing about a working credential. There is no server-side
+            # default to mirror here (unlike `Doc.format`), and defaulting to
+            # `connected` would have this client claim a connection works on the
+            # strength of a field that never arrived.
+            state=raw_state if isinstance(raw_state, str) else "pending",  # type: ignore[arg-type]
+            profile=_mapping(body, "profile"),
+            lastTestOk=_nullable_flag(body, "lastTestOk"),
+            lastTestedAt=_nullable_text(body, "lastTestedAt"),
+            createdAt=_text(body, "createdAt"),
+            updatedAt=_text(body, "updatedAt"),
+        )
+
+
+#: A workflow's lifecycle state: an editable draft, or a published, live one.
+WorkflowStatus = Literal["draft", "active"]
+
+
+@dataclass(frozen=True)
+class WorkflowSummary:
+    """One workflow definition, as the list route projects it.
+
+    `id` is the `wf_…` handle a caller hands to `workflows.run` — which is the
+    whole reason the list operation is in a minimal surface (D4): without it
+    there is no way to *discover* what to run.
+    """
+
+    #: Server-issued id, `wf_…`. The handle `workflows.run` takes.
+    id: str
+    #: Machine name, unique per scope.
+    name: str
+    #: Human-facing label.
+    displayName: str
+    #: Free-text description; `""` when unset.
+    description: str
+    #: Lifecycle state.
+    status: WorkflowStatus
+    #: Free-form labels; `[]` when there are none.
+    tags: List[str]
+    #: Total runs accumulated; `0` when the server sends none.
+    runCount: int
+    #: ISO-8601 timestamp. A string, deliberately.
+    updatedAt: str
+
+    @classmethod
+    def from_wire(cls, body: Any) -> "WorkflowSummary":
+        """Build a :class:`WorkflowSummary`, ignoring unknown keys.
+
+        :param body: One parsed item of the `workflows` array.
+        :returns: The workflow summary.
+        """
+        raw_status = body.get("status") if isinstance(body, dict) else None
+        return cls(
+            id=_text(body, "id"),
+            name=_text(body, "name"),
+            displayName=_text(body, "displayName"),
+            description=_text(body, "description"),
+            # `draft` is the server's own answer for a row with no status, not
+            # an invented one — its repository reads the column as
+            # `status ?? "draft"`.
+            status=raw_status if isinstance(raw_status, str) else "draft",  # type: ignore[arg-type]
+            tags=_text_list(body, "tags"),
+            runCount=_count(body, "runCount"),
             updatedAt=_text(body, "updatedAt"),
         )

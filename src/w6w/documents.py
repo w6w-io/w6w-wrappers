@@ -15,9 +15,12 @@ correct failure and it is not worked around here.
 
 Documents are **project-scoped**: every route below accepts an optional
 `?project=`, resolved per call, then from the client's default, and otherwise
-left to the server (which picks the account's default project). Variables are
-not — see `_vars.py`, whose namespace is constructed without this client's
-configuration precisely so it cannot reach a default to send.
+left to the server (which picks the account's default project). Variables and
+connections are not — see `_vars.py`, whose namespace is constructed without this
+client's configuration precisely so it holds no default to send. (One sentence
+here previously said it *could not reach* one, which is false: a bound method
+carries its instance. Corrected 2026-07-27 under T2.3.4 alongside `_vars.py`
+itself, whose docstring explains what does hold the line.)
 """
 
 from __future__ import annotations

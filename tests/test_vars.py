@@ -347,11 +347,18 @@ class NoScopeParameterTest(unittest.TestCase):
                 self.assertNotIn("prj_default", call.full_url)
 
     def test_the_namespace_holds_no_configuration_to_scope_a_call_with(self) -> None:
-        # The structural half. `VarsApi` is constructed with the client's bound
-        # `request` and nothing else, so there is no resolved configuration in
-        # its reach — a later edit cannot quietly start reading a default,
-        # because there is nothing to read it from. This is what makes the
-        # asymmetry a mechanism rather than a convention.
+        # The structural half, stated precisely — this comment previously
+        # claimed more than the code delivers (corrected 2026-07-27, T2.3.4,
+        # conductor-authorised). `VarsApi` HOLDS no configuration: its only
+        # attribute is a callable, and nothing typed `ResolvedConfig` is in it.
+        #
+        # It is not a capability barrier, and calling it one would be false:
+        # `instance.vars._request.__self__` is the client, so `config` is
+        # reachable in one hop from a bound method. What makes the asymmetry a
+        # mechanism rather than a convention is the pair — the narrow host type
+        # (`VarsRequest` is a callable, so a type checker rejects a namespace
+        # that starts reading a client) and the wire assertions above, which
+        # fail on the parameter itself no matter how it was obtained.
         instance, _calls = client(responding({"vars": []}))
 
         held = list(vars(instance.vars).values())

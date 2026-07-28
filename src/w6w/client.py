@@ -19,7 +19,11 @@ from typing import Any, Mapping, Optional
 from ._config import ResolvedConfig, resolve_config
 from ._http import HttpResponse, Transport, _request, default_transport
 from ._vars import VarsApi
+from .connections import ConnectionsApi
 from .documents import DocumentsApi
+from .me import fetch_me
+from .types import Me
+from .workflows import WorkflowsApi
 
 
 class W6wClient:
@@ -49,8 +53,13 @@ class W6wClient:
     :ivar vars: Typed variables — `list`, `get`, `get_by_name`, `create`,
         `update`, `delete`. **No `project` argument anywhere**: variables are
         scoped by tenant/subject only, and the namespace is constructed with
-        this client's `request` method and nothing else, so it cannot reach a
-        default scope to send (`docs/implementation.md` §7).
+        this client's `request` method and nothing else, so it holds no
+        configuration to scope a call with (`docs/implementation.md` §7).
+    :ivar connections: Connection discovery — `list` only. Constructed the same
+        way as `vars`, for the same reason: connections are user-private and the
+        route reads no project.
+    :ivar workflows: Workflow discovery — `list`. Project-scoped, so it sees
+        this client's configuration.
     """
 
     def __init__(
@@ -86,12 +95,38 @@ class W6wClient:
 
         # Namespaces are per-instance and hold this client (or its bound
         # transport), so they inherit its credential and base URL — never a
-        # module-level one. `documents` additionally sees the configuration,
-        # because it is the project-scoped half of the surface and has a default
-        # project to apply; `vars` is handed the transport alone, so that half
-        # has nothing to reach for even by accident.
+        # module-level one. `documents` and `workflows` additionally see the
+        # configuration, because they are the project-scoped half of the surface
+        # and have a default project to apply; `vars` and `connections` are
+        # handed the transport alone, so neither holds a default to send.
         self.documents: DocumentsApi = DocumentsApi(self)
         self.vars: VarsApi = VarsApi(self.request)
+        self.connections: ConnectionsApi = ConnectionsApi(self.request)
+        self.workflows: WorkflowsApi = WorkflowsApi(self)
+
+    def me(self) -> Me:
+        """Fetch the caller's identity, plus the versions that answered.
+
+        A **method on the client**, not a namespace: `endpoints.json` names this
+        operation `client.me()`. The implementation lives in `me.py` and this is
+        the delegation — same layering as the namespaces, without inventing a
+        `client.me.me()`.
+
+        The returned `versions` map always exists and always carries `wrapper`,
+        filled from this package's own version as a **default** that any key the
+        server supplied overrides.
+
+        Example::
+
+            identity = client.me()
+            print(identity.account, identity.versions["wrapper"])
+
+        :returns: The caller's identity and the component versions.
+        :raises ConfigError: When no token is configured.
+        :raises ApiError: On any non-2xx; `404` against a server that has not
+            mounted `/api/me` yet (`status: "planned"`, T4.2.1).
+        """
+        return fetch_me(self.request)
 
     def request(
         self,
