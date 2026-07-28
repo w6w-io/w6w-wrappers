@@ -89,7 +89,7 @@ function authorizationOf(init: RequestInit | undefined): string | null {
   return new Headers(init?.headers).get("authorization");
 }
 
-/** Every request the CLI makes is to an absolute URL. Never `/api/…`. */
+/** Every request the CLI makes is to an absolute URL. Never a relative path. */
 function assertAbsolute(calls: { url: string }[]): void {
   for (const call of calls) {
     assert(
@@ -113,11 +113,11 @@ Deno.test("--base-url beats W6W_BASE_URL, and --token beats W6W_TOKEN", async ()
 
   // The base-path join is the SDK's, and this is the CLI reading it back rather
   // than re-deriving it — there is exactly one implementation of that rule.
-  assertEquals(client.config.baseUrl, "https://flag.example.com/api");
+  assertEquals(client.config.baseUrl, "https://flag.example.com");
   await client.request({ method: "GET", path: "/ping" });
 
   assertEquals(transport.calls.length, 1);
-  assertEquals(transport.calls[0].url, "https://flag.example.com/api/ping");
+  assertEquals(transport.calls[0].url, "https://flag.example.com/ping");
   assertEquals(authorizationOf(transport.calls[0].init), "Bearer t_flag");
   assertAbsolute(transport.calls);
 });
@@ -131,9 +131,9 @@ Deno.test("the environment configures the client when no flag does", async () =>
   );
 
   // A trailing slash does not double the base path — again, the SDK's rule.
-  assertEquals(client.config.baseUrl, "https://env.example.com/api");
+  assertEquals(client.config.baseUrl, "https://env.example.com");
   await client.request({ method: "GET", path: "/ping" });
-  assertEquals(transport.calls[0].url, "https://env.example.com/api/ping");
+  assertEquals(transport.calls[0].url, "https://env.example.com/ping");
   assertEquals(authorizationOf(transport.calls[0].init), "Bearer t_env");
   assertAbsolute(transport.calls);
 });
@@ -141,11 +141,11 @@ Deno.test("the environment configures the client when no flag does", async () =>
 Deno.test("one flag overrides its own source only", () => {
   const fromEnv = fakeEnv({ [ENV_BASE_URL]: "https://env.example.com", [ENV_TOKEN]: "t_env" });
   const baseUrlOnly = createClient(globals({ baseUrl: "https://flag.example.com" }), fromEnv);
-  assertEquals(baseUrlOnly.config.baseUrl, "https://flag.example.com/api");
+  assertEquals(baseUrlOnly.config.baseUrl, "https://flag.example.com");
   assertEquals(baseUrlOnly.config.token, "t_env");
 
   const tokenOnly = createClient(globals({ token: "t_flag" }), fromEnv);
-  assertEquals(tokenOnly.config.baseUrl, "https://env.example.com/api");
+  assertEquals(tokenOnly.config.baseUrl, "https://env.example.com");
   assertEquals(tokenOnly.config.token, "t_flag");
 });
 
@@ -162,7 +162,7 @@ Deno.test("the CLI never reads the real process environment behind the flags", (
       globals(),
       fakeEnv({ [ENV_BASE_URL]: "https://fake.example.com", [ENV_TOKEN]: "t_fake" }),
     );
-    assertEquals(client.config.baseUrl, "https://fake.example.com/api");
+    assertEquals(client.config.baseUrl, "https://fake.example.com");
     assertEquals(client.config.token, "t_fake");
   } finally {
     if (previous.base === undefined) Deno.env.delete(ENV_BASE_URL);

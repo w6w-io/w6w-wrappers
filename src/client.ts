@@ -54,9 +54,10 @@ export const NO_ENV: EnvReader = () => undefined;
  *
  * The check is a trim-and-emptiness test and deliberately **not** a nullish
  * coalesce. `??` does not convert `""`, so a set-but-empty variable would
- * survive as a value and be resolved into a base URL of `/api` — a relative URL,
- * which fails much later with a message about a request instead of here with a
- * message about configuration. A blank variable is not exotic: `export W6W_TOKEN=`,
+ * survive as a value and be resolved into an empty base URL — every request
+ * then goes out relative, which fails much later with a message about a request
+ * instead of here with a message about configuration. A blank variable is not
+ * exotic: `export W6W_TOKEN=`,
  * a Dockerfile `ENV` with no build argument behind it, and a CI variable whose
  * template did not interpolate all produce exactly this, and all three look
  * unset in every log line.
@@ -205,7 +206,7 @@ export function createClient(
       "No w6w base URL is configured.",
       "--base-url",
       ENV_BASE_URL,
-      "It holds the server's origin, like `https://api.example.com`; the API base path is appended for you.",
+      "It holds the server's origin, like `https://api.example.com`; the API is served at its root, so no path is appended.",
     );
   }
 

@@ -106,7 +106,7 @@ Deno.test("documents list: one GET, a readable table, and --json prints the payl
   assertEquals(human.code, 0, human.stderr);
   assertEquals(human.calls.length, 1, "a list is one request, never a list plus a lookup");
   assertEquals(human.calls[0].method, "GET");
-  assertEquals(human.calls[0].url, `${BASE}/api/documents`);
+  assertEquals(human.calls[0].url, `${BASE}/documents`);
   assertEquals(human.calls[0].authorization, "Bearer t_cli");
   assertStringIncludes(human.stdout, "KEY");
   assertStringIncludes(human.stdout, "onboarding-email");
@@ -130,7 +130,7 @@ Deno.test("documents get: addressed by the server-issued id, and the content is 
   assertEquals(result.code, 0, result.stderr);
   assertEquals(result.calls.length, 1);
   assertEquals(result.calls[0].method, "GET");
-  assertEquals(result.calls[0].url, `${BASE}/api/documents/doc_01HQ8N`);
+  assertEquals(result.calls[0].url, `${BASE}/documents/doc_01HQ8N`);
   assertStringIncludes(result.stdout, "onboarding-email");
   assertStringIncludes(result.stdout, "Welcome aboard!");
 });
@@ -140,7 +140,7 @@ Deno.test("documents get-by-key: the key is encoded and never rejected, and `..`
   // `by-key` route as one segment — not as two, which would be a different route.
   const slashed = await w6w(["documents", "get-by-key", "a/b"], () => json(200, { document: DOC }));
   assertEquals(slashed.code, 0, slashed.stderr);
-  assertEquals(slashed.calls[0].url, `${BASE}/api/documents/by-key/a%2Fb`);
+  assertEquals(slashed.calls[0].url, `${BASE}/documents/by-key/a%2Fb`);
   assert(!slashed.calls[0].url.includes("by-key/a/b"));
 
   // D1, this lane's half. `.` is unreserved, so percent-encoding cannot help:
@@ -149,10 +149,10 @@ Deno.test("documents get-by-key: the key is encoded and never rejected, and `..`
   // runtime's transport, so an injected `fetch` — which is handed the string the
   // SDK built — cannot observe it. `new URL` is that same parser, so this is the
   // divergence itself, asserted rather than described.
-  assertEquals(new URL(`${BASE}/api/documents/by-key/..`).pathname, "/api/documents/");
+  assertEquals(new URL(`${BASE}/documents/by-key/..`).pathname, "/documents/");
   assertEquals(
-    new URL(`${BASE}/api/documents/by-key/${encodeURIComponent("..")}`).pathname,
-    "/api/documents/",
+    new URL(`${BASE}/documents/by-key/${encodeURIComponent("..")}`).pathname,
+    "/documents/",
   );
   // Python's `urllib` sends the same path literally, so the two lanes reach
   // different routes for one key. Neither wrapper works around it; the server's
@@ -162,7 +162,7 @@ Deno.test("documents get-by-key: the key is encoded and never rejected, and `..`
   // a document a user legitimately created permanently unreadable.
   const dots = await w6w(["documents", "get-by-key", ".."], () => json(200, { documents: [DOC] }));
   assertEquals(dots.calls.length, 1, "the key was sent, not rejected");
-  assertEquals(dots.calls[0].url, `${BASE}/api/documents/by-key/..`);
+  assertEquals(dots.calls[0].url, `${BASE}/documents/by-key/..`);
   // What the user sees when that request lands on the list route: a loud
   // failure, not every document silently returned as if it were one.
   assertEquals(dots.code, 2);
@@ -190,7 +190,7 @@ Deno.test("documents create: the key is the positional, the body is the document
   assertEquals(result.code, 0, result.stderr);
   assertEquals(result.calls.length, 1);
   assertEquals(result.calls[0].method, "POST");
-  assertEquals(result.calls[0].url, `${BASE}/api/documents`);
+  assertEquals(result.calls[0].url, `${BASE}/documents`);
   // `description` was not given, so it is not on the wire — and `key` is in the
   // body, because a create is addressed by key and not by a path segment.
   assertEquals(result.calls[0].body, {
@@ -209,7 +209,7 @@ Deno.test("documents update: addressed by id, and only the typed flags reach the
   );
   assertEquals(one.code, 0, one.stderr);
   assertEquals(one.calls[0].method, "PATCH");
-  assertEquals(one.calls[0].url, `${BASE}/api/documents/doc_01HQ8N`);
+  assertEquals(one.calls[0].url, `${BASE}/documents/doc_01HQ8N`);
   // The assertion that matters: `format` and `description` are ABSENT, not null.
   // A patch that sent them as null would blank two fields the user never named.
   assertEquals(one.calls[0].body, { content: "Welcome back!" });
@@ -233,7 +233,7 @@ Deno.test("documents delete: addressed by id, and nothing at all on stdout", asy
   const result = await w6w(["documents", "delete", "doc_01HQ8N"], () => json(200, { ok: true }));
   assertEquals(result.code, 0, result.stderr);
   assertEquals(result.calls[0].method, "DELETE");
-  assertEquals(result.calls[0].url, `${BASE}/api/documents/doc_01HQ8N`);
+  assertEquals(result.calls[0].url, `${BASE}/documents/doc_01HQ8N`);
   assertEquals(result.calls[0].body, undefined);
   assertStringIncludes(result.stdout, "Deleted doc_01HQ8N.");
 
@@ -253,26 +253,26 @@ Deno.test("documents delete: addressed by id, and nothing at all on stdout", asy
 
 Deno.test("--project reaches the query string on every documents command, and only when given", async () => {
   const scoped: [string[], string][] = [
-    [["documents", "list", "--project", "prj_1"], `${BASE}/api/documents?project=prj_1`],
+    [["documents", "list", "--project", "prj_1"], `${BASE}/documents?project=prj_1`],
     [
       ["documents", "get", "doc_01HQ8N", "--project", "prj_1"],
-      `${BASE}/api/documents/doc_01HQ8N?project=prj_1`,
+      `${BASE}/documents/doc_01HQ8N?project=prj_1`,
     ],
     [
       ["documents", "get-by-key", "onboarding-email", "--project", "prj_1"],
-      `${BASE}/api/documents/by-key/onboarding-email?project=prj_1`,
+      `${BASE}/documents/by-key/onboarding-email?project=prj_1`,
     ],
     [
       ["documents", "create", "k", "--content", "c", "--project", "prj_1"],
-      `${BASE}/api/documents?project=prj_1`,
+      `${BASE}/documents?project=prj_1`,
     ],
     [
       ["documents", "update", "doc_01HQ8N", "--project", "prj_1"],
-      `${BASE}/api/documents/doc_01HQ8N?project=prj_1`,
+      `${BASE}/documents/doc_01HQ8N?project=prj_1`,
     ],
     [
       ["documents", "delete", "doc_01HQ8N", "--project", "prj_1"],
-      `${BASE}/api/documents/doc_01HQ8N?project=prj_1`,
+      `${BASE}/documents/doc_01HQ8N?project=prj_1`,
     ],
   ];
   for (const [argv, url] of scoped) {

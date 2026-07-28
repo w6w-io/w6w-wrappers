@@ -93,13 +93,13 @@ Deno.test("me: one GET to /auth/me, and info reaches the same handler", async ()
   assertEquals(result.code, 0, result.stderr);
   assertEquals(result.calls.length, 1);
   assertEquals(result.calls[0].method, "GET");
-  assertEquals(result.calls[0].url, `${BASE}/api/auth/me`);
+  assertEquals(result.calls[0].url, `${BASE}/auth/me`);
   assertStringIncludes(result.stdout, "t_acme");
   assertStringIncludes(result.stdout, "alice");
 
   const alias = await w6w(["info"], () => json(200, IDENTITY));
   assertEquals(alias.code, 0, alias.stderr);
-  assertEquals(alias.calls[0].url, `${BASE}/api/auth/me`, "info must hit the same route as me");
+  assertEquals(alias.calls[0].url, `${BASE}/auth/me`, "info must hit the same route as me");
 });
 
 Deno.test("me: D5 — 0.0.0 and empty versions render as `dev`, but --json carries them verbatim", async () => {
@@ -156,7 +156,7 @@ Deno.test("connections list: one GET, a readable table, and --json prints the pa
   const human = await w6w(["connections", "list"], () => json(200, { connections: [CONNECTION] }));
   assertEquals(human.code, 0, human.stderr);
   assertEquals(human.calls.length, 1);
-  assertEquals(human.calls[0].url, `${BASE}/api/connections`);
+  assertEquals(human.calls[0].url, `${BASE}/connections`);
   assertStringIncludes(human.stdout, "sendgrid");
   assertStringIncludes(human.stdout, "conn_01HQ8N");
 
@@ -250,7 +250,7 @@ Deno.test("run: the action arm — urn, action and payload all reach the body", 
     },
   );
   assertEquals(result.code, 0, result.stderr);
-  assertEquals(result.calls[0].url, `${BASE}/api/run`);
+  assertEquals(result.calls[0].url, `${BASE}/run`);
   assertStringIncludes(result.stdout, "action");
 });
 

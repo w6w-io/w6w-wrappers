@@ -106,7 +106,7 @@ Deno.test("vars list: one GET, a readable table, and --json prints the payload a
   assertEquals(human.code, 0, human.stderr);
   assertEquals(human.calls.length, 1, "a list is one request, never a list plus a lookup");
   assertEquals(human.calls[0].method, "GET");
-  assertEquals(human.calls[0].url, `${BASE}/api/vars`);
+  assertEquals(human.calls[0].url, `${BASE}/vars`);
   assertEquals(human.calls[0].authorization, "Bearer t_cli");
   assertStringIncludes(human.stdout, "NAME");
   assertStringIncludes(human.stdout, "greeting");
@@ -126,7 +126,7 @@ Deno.test("vars get and get-by-name: id- and name-addressed reads, both encoded"
   const byId = await w6w(["vars", "get", "var_01HQ8N"], () => json(200, ONE_VAR));
   assertEquals(byId.code, 0, byId.stderr);
   assertEquals(byId.calls[0].method, "GET");
-  assertEquals(byId.calls[0].url, `${BASE}/api/vars/var_01HQ8N`);
+  assertEquals(byId.calls[0].url, `${BASE}/vars/var_01HQ8N`);
   assertStringIncludes(byId.stdout, "greeting");
   assertStringIncludes(byId.stdout, '"hello"');
 
@@ -135,12 +135,12 @@ Deno.test("vars get and get-by-name: id- and name-addressed reads, both encoded"
   const byName = await w6w(["vars", "get-by-name", "greeting"], () => json(200, ONE_VAR));
   assertEquals(byName.code, 0, byName.stderr);
   assertEquals(byName.calls.length, 1);
-  assertEquals(byName.calls[0].url, `${BASE}/api/vars/by-name/greeting`);
+  assertEquals(byName.calls[0].url, `${BASE}/vars/by-name/greeting`);
 
   // Encoding, not validation: the name rule is the server's, and a name it
   // rejects comes back as `400 invalid_name` from the one place that owns it.
   const odd = await w6w(["vars", "get-by-name", "a b/c"], () => json(200, ONE_VAR));
-  assertEquals(odd.calls[0].url, `${BASE}/api/vars/by-name/a%20b%2Fc`);
+  assertEquals(odd.calls[0].url, `${BASE}/vars/by-name/a%20b%2Fc`);
 });
 
 // ---------------------------------------------------------------------------
@@ -154,7 +154,7 @@ Deno.test("vars create: the name is the positional, and --value is encoded by --
   );
   assertEquals(result.code, 0, result.stderr);
   assertEquals(result.calls[0].method, "POST");
-  assertEquals(result.calls[0].url, `${BASE}/api/vars`);
+  assertEquals(result.calls[0].url, `${BASE}/vars`);
   // `description` was not given, so it is not on the wire; `name` is in the body
   // because a create is addressed by name and not by a path segment.
   assertEquals(result.calls[0].body, { name: "greeting", type: "string", value: "hello" });
@@ -198,7 +198,7 @@ Deno.test("vars update: addressed by id — omit, set and explicit null are thre
   );
   assertEquals(one.code, 0, one.stderr);
   assertEquals(one.calls[0].method, "PATCH");
-  assertEquals(one.calls[0].url, `${BASE}/api/vars/var_01HQ8N`);
+  assertEquals(one.calls[0].url, `${BASE}/vars/var_01HQ8N`);
   assertEquals(one.calls[0].body, { description: "Salutation" });
 
   // (b) No flags at all: an empty patch, changing nothing. The control case —
@@ -232,7 +232,7 @@ Deno.test("vars delete: addressed by id, and nothing at all on stdout", async ()
   const result = await w6w(["vars", "delete", "var_01HQ8N"], () => json(200, { ok: true }));
   assertEquals(result.code, 0, result.stderr);
   assertEquals(result.calls[0].method, "DELETE");
-  assertEquals(result.calls[0].url, `${BASE}/api/vars/var_01HQ8N`);
+  assertEquals(result.calls[0].url, `${BASE}/vars/var_01HQ8N`);
   assertEquals(result.calls[0].body, undefined);
   assertStringIncludes(result.stdout, "Deleted var_01HQ8N.");
 
