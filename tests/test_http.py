@@ -84,7 +84,7 @@ def http_error(status: int, body: str, reason: str = "") -> HTTPError:
     of the test that uses it.
     """
     return HTTPError(
-        "https://api.example.com/api/x",
+        "https://api.example.com/x",
         status,
         reason,
         email.message.Message(),
@@ -105,7 +105,7 @@ class SuccessTest(unittest.TestCase):
         self.assertEqual(response.body, {"vars": [{"id": "var_1"}]})
         self.assertEqual(len(transport.calls), 1)
         sent = transport.calls[0]
-        self.assertEqual(sent.full_url, "https://api.example.com/api/vars")
+        self.assertEqual(sent.full_url, "https://api.example.com/vars")
         self.assertEqual(sent.get_method(), "GET")
         self.assertEqual(sent.get_header("Authorization"), "Bearer tok_1")
         # No body, no Content-Type: a GET must not advertise one. (urllib
@@ -135,7 +135,7 @@ class SuccessTest(unittest.TestCase):
         sent = transport.calls[0]
         self.assertEqual(
             sent.full_url,
-            "https://api.example.com/api/workflows/wf_1/run?wait=true",
+            "https://api.example.com/workflows/wf_1/run?wait=true",
         )
         self.assertEqual(sent.get_method(), "POST")
         self.assertEqual(sent.get_header("Content-type"), "application/json")
@@ -249,7 +249,7 @@ class FailureModeTest(unittest.TestCase):
         self.assertEqual(err.code, "network_error")
         # A bare URLError is useless on its own — the message has to say which
         # request, to where.
-        self.assertIn("GET https://api.example.com/api/vars", err.message)
+        self.assertIn("GET https://api.example.com/vars", err.message)
         self.assertIn("Connection refused", err.message)
         self.assertIsNone(err.raw)
 
@@ -440,13 +440,13 @@ class PathEncodingTest(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(
             transport.calls[0].full_url,
-            "https://api.example.com/api/documents/by-key/..%2F..?project=prj_a+b",
+            "https://api.example.com/documents/by-key/..%2F..?project=prj_a+b",
         )
         # urllib does not normalise the path away, so the encoded segment
         # reaches the server verbatim and the server decides what it means.
         self.assertEqual(
             transport.calls[0].selector,
-            "/api/documents/by-key/..%2F..?project=prj_a+b",
+            "/documents/by-key/..%2F..?project=prj_a+b",
         )
 
 
@@ -456,18 +456,18 @@ class QueryTest(unittest.TestCase):
     def test_none_values_are_dropped(self) -> None:
         self.assertEqual(
             build_url(CONFIG, "/documents", {"project": None}),
-            "https://api.example.com/api/documents",
+            "https://api.example.com/documents",
         )
 
     def test_values_are_encoded_and_booleans_are_wire_shaped(self) -> None:
         self.assertEqual(
             build_url(CONFIG, "/documents", {"project": "p/1", "wait": True}),
-            "https://api.example.com/api/documents?project=p%2F1&wait=true",
+            "https://api.example.com/documents?project=p%2F1&wait=true",
         )
         # str(False) would be "False", which is not what the server reads.
         self.assertEqual(
             build_url(CONFIG, "/workflows/wf_1/run", {"wait": False}),
-            "https://api.example.com/api/workflows/wf_1/run?wait=false",
+            "https://api.example.com/workflows/wf_1/run?wait=false",
         )
 
 
@@ -481,8 +481,8 @@ class ClientTest(unittest.TestCase):
         response = client.request("GET", "/me")
 
         self.assertEqual(response.body, {"tenant": "t_1"})
-        self.assertEqual(client.config.base_url, "https://api.example.com/api")
-        self.assertEqual(transport.calls[0].full_url, "https://api.example.com/api/me")
+        self.assertEqual(client.config.base_url, "https://api.example.com")
+        self.assertEqual(transport.calls[0].full_url, "https://api.example.com/me")
         self.assertEqual(transport.calls[0].get_header("Authorization"), "Bearer tok_c")
 
     def test_the_transport_defaults_to_urllib(self) -> None:
@@ -518,8 +518,8 @@ class ClientTest(unittest.TestCase):
             [call.get_header("Authorization") for call in second_transport.calls],
             ["Bearer tok_2"],
         )
-        self.assertEqual(first_transport.calls[0].full_url, "https://one.example.com/api/me")
-        self.assertEqual(second_transport.calls[0].full_url, "https://two.example.com/api/me")
+        self.assertEqual(first_transport.calls[0].full_url, "https://one.example.com/me")
+        self.assertEqual(second_transport.calls[0].full_url, "https://two.example.com/me")
 
     def test_a_client_with_no_base_url_never_reaches_the_transport(self) -> None:
         # Belt and braces on "no request is ever made with a relative URL": the

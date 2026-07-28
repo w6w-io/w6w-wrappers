@@ -110,7 +110,7 @@ class Recorder:
 def http_error(status: int, body: Any, reason: str = "") -> HTTPError:
     """Build the exception `urlopen` raises for a non-2xx status."""
     return HTTPError(
-        "https://api.example.com/api/workflows",
+        "https://api.example.com/workflows",
         status,
         reason,
         email.message.Message(),
@@ -186,7 +186,7 @@ class ConnectionsListTest(unittest.TestCase):
         self.assertEqual(connections[0].lastTestedAt, "2026-07-20T09:14:00.000Z")
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0].get_method(), "GET")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/connections")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/connections")
         self.assertEqual(calls[0].get_header("Authorization"), "Bearer tok_1")
 
     def test_list_with_no_connections_is_an_empty_list_not_an_error(self) -> None:
@@ -261,7 +261,7 @@ class ConnectionsListTest(unittest.TestCase):
 
         instance.connections.list()
 
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/connections")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/connections")
         self.assertNotIn("project", calls[0].full_url)
 
     def test_an_error_envelope_raises_ApiError_with_the_server_code(self) -> None:
@@ -305,7 +305,7 @@ class WorkflowsListTest(unittest.TestCase):
         self.assertEqual(workflows[0].runCount, 412)
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0].get_method(), "GET")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/workflows")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/workflows")
         self.assertEqual(calls[0].get_header("Authorization"), "Bearer tok_1")
 
     def test_list_of_an_empty_account_is_an_empty_list_not_an_error(self) -> None:
@@ -330,7 +330,7 @@ class WorkflowsListTest(unittest.TestCase):
 
         instance.workflows.list(project="prj_1")
 
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/workflows?project=prj_1")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/workflows?project=prj_1")
 
     def test_the_clients_default_project_is_used_when_none_is_passed(self) -> None:
         instance, calls = client(responding({"workflows": []}), project="prj_default")
@@ -339,7 +339,7 @@ class WorkflowsListTest(unittest.TestCase):
 
         self.assertEqual(
             calls[0].full_url,
-            "https://api.example.com/api/workflows?project=prj_default",
+            "https://api.example.com/workflows?project=prj_default",
         )
 
     def test_a_per_call_project_overrides_the_clients_default(self) -> None:
@@ -349,7 +349,7 @@ class WorkflowsListTest(unittest.TestCase):
 
         self.assertEqual(
             calls[0].full_url,
-            "https://api.example.com/api/workflows?project=prj_other",
+            "https://api.example.com/workflows?project=prj_other",
         )
 
     def test_an_explicit_empty_project_is_forwarded_rather_than_dropped(self) -> None:
@@ -363,7 +363,7 @@ class WorkflowsListTest(unittest.TestCase):
 
         instance.workflows.list(project="")
 
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/workflows?project=")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/workflows?project=")
 
     def test_an_error_envelope_raises_ApiError_with_the_server_code(self) -> None:
         instance, _calls = client(

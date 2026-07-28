@@ -78,7 +78,7 @@ def http_error(status: int, body: Any, reason: str = "") -> HTTPError:
     `urllib` trap a live server would.
     """
     return HTTPError(
-        "https://api.example.com/api/documents",
+        "https://api.example.com/documents",
         status,
         reason,
         email.message.Message(),
@@ -156,7 +156,7 @@ class ReadTest(unittest.TestCase):
         self.assertEqual(docs[0].createdAt, "2026-07-01T12:00:00.000Z")
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0].get_method(), "GET")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/documents")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/documents")
         self.assertEqual(calls[0].get_header("Authorization"), "Bearer tok_1")
 
     def test_list_of_an_empty_store_is_an_empty_list_not_an_error(self) -> None:
@@ -172,7 +172,7 @@ class ReadTest(unittest.TestCase):
         self.assertEqual(doc, DOC)
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0].get_method(), "GET")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/documents/doc_1")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/documents/doc_1")
 
     def test_get_by_key_percent_encodes_the_key_into_one_path_segment(self) -> None:
         instance, calls = client(responding({"document": DOC_BODY}))
@@ -185,16 +185,16 @@ class ReadTest(unittest.TestCase):
         # addresses a different route entirely.
         self.assertEqual(
             calls[0].full_url,
-            "https://api.example.com/api/documents/by-key/notes%2F2026",
+            "https://api.example.com/documents/by-key/notes%2F2026",
         )
         self.assertEqual(
             calls[1].full_url,
-            "https://api.example.com/api/documents/by-key/two%20words",
+            "https://api.example.com/documents/by-key/two%20words",
         )
         # And a `?` must not start a query string.
         self.assertEqual(
             calls[2].full_url,
-            "https://api.example.com/api/documents/by-key/what%3Fnow",
+            "https://api.example.com/documents/by-key/what%3Fnow",
         )
 
     def test_get_by_key_encodes_and_sends_a_dot_dot_key_rather_than_rejecting_it(
@@ -219,7 +219,7 @@ class ReadTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(
             calls[0].full_url,
-            "https://api.example.com/api/documents/by-key/..",
+            "https://api.example.com/documents/by-key/..",
         )
 
     def test_one_read_is_one_http_call_never_a_list_then_filter(self) -> None:
@@ -244,7 +244,7 @@ class WriteTest(unittest.TestCase):
 
         self.assertEqual(doc, DOC)
         self.assertEqual(calls[0].get_method(), "POST")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/documents")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/documents")
         # No `format`, no `description`: the server owns the default for one and
         # has nothing to store for the other.
         self.assertEqual(sent_body(calls[0]), {"key": "welcome-email-copy", "content": "# Welcome"})
@@ -289,7 +289,7 @@ class WriteTest(unittest.TestCase):
 
         self.assertEqual(doc, DOC)
         self.assertEqual(calls[0].get_method(), "PATCH")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/documents/doc_1")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/documents/doc_1")
         # D2: the omitted fields are ABSENT, not null. `{"format": null}` would
         # be an instruction to change the format.
         self.assertEqual(sent_body(calls[0]), {"content": "# Hello"})
@@ -329,7 +329,7 @@ class WriteTest(unittest.TestCase):
 
         self.assertIsNone(result)
         self.assertEqual(calls[0].get_method(), "DELETE")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/documents/doc_1")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/documents/doc_1")
 
     def test_delete_of_an_unknown_id_raises_rather_than_succeeding_silently(self) -> None:
         instance, _calls = client(
@@ -353,7 +353,7 @@ class ProjectScopeTest(unittest.TestCase):
 
         instance.documents.list()
 
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/documents")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/documents")
         self.assertNotIn("project", calls[0].full_url)
 
     def test_the_client_default_reaches_all_six_operations(self) -> None:
@@ -387,7 +387,7 @@ class ProjectScopeTest(unittest.TestCase):
 
         self.assertEqual(
             calls[0].full_url,
-            "https://api.example.com/api/documents?project=a+b%26c",
+            "https://api.example.com/documents?project=a+b%26c",
         )
 
 

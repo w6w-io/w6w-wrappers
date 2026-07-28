@@ -79,7 +79,7 @@ def http_error(status: int, body: Any, reason: str = "") -> HTTPError:
     server would.
     """
     return HTTPError(
-        "https://api.example.com/api/me",
+        "https://api.example.com/me",
         status,
         reason,
         email.message.Message(),
@@ -141,7 +141,7 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual(identity.role, "admin")
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0].get_method(), "GET")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/me")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/me")
         self.assertEqual(calls[0].get_header("Authorization"), "Bearer tok_1")
 
     def test_a_body_with_no_versions_still_yields_a_versions_map(self) -> None:

@@ -26,18 +26,22 @@ EMPTY: Dict[str, str] = {}
 
 
 class JoinBaseUrlTest(unittest.TestCase):
-    """`W6W_BASE_URL` holds an origin; the wrapper appends `/api` and never doubles it."""
+    """`W6W_BASE_URL` holds an origin; since 0.2.0 the wrapper appends nothing."""
 
-    def test_an_origin_gains_the_base_path(self) -> None:
-        self.assertEqual(join_base_url("https://api.example.com"), "https://api.example.com/api")
+    def test_an_origin_is_used_as_is(self) -> None:
+        self.assertEqual(join_base_url("https://api.example.com"), "https://api.example.com")
+        self.assertEqual(BASE_PATH, "")
 
-    def test_trailing_slashes_are_stripped_before_joining(self) -> None:
+    def test_trailing_slashes_are_stripped(self) -> None:
         # One slash and many: `url.replace(/\\/+$/, "")` in the house helper.
-        self.assertEqual(join_base_url("https://api.example.com/"), "https://api.example.com/api")
-        self.assertEqual(join_base_url("https://api.example.com///"), "https://api.example.com/api")
+        self.assertEqual(join_base_url("https://api.example.com/"), "https://api.example.com")
+        self.assertEqual(join_base_url("https://api.example.com///"), "https://api.example.com")
 
-    def test_a_value_already_ending_in_the_base_path_is_not_doubled(self) -> None:
-        # The bug this rule exists to prevent: .../api/api
+    def test_a_stale_api_path_is_preserved_not_stripped(self) -> None:
+        # Nothing is appended, so nothing can be doubled; the risk runs the
+        # other way now. A "/api" carried over from 0.1.x is indistinguishable
+        # from a real gateway prefix, so it is preserved verbatim and left to
+        # 404 rather than be guessed at. Only trailing slashes come off.
         self.assertEqual(
             join_base_url("https://api.example.com/api"),
             "https://api.example.com/api",
@@ -47,20 +51,16 @@ class JoinBaseUrlTest(unittest.TestCase):
             "https://api.example.com/api",
         )
 
-    def test_a_path_that_merely_starts_like_the_base_path_still_gains_it(self) -> None:
-        # "/apiary" is not "/api": the check is a suffix match on the whole
-        # segment, so a same-prefix path must not be mistaken for the base path.
-        self.assertEqual(
-            join_base_url("https://api.example.com/apiary"),
-            "https://api.example.com/apiary/api",
-        )
-
     def test_a_sub_path_origin_is_respected(self) -> None:
-        # Behind a reverse proxy the API can live under a prefix; the base path
-        # is appended to whatever origin was configured, not to the host.
+        # Behind a reverse proxy the API can live under a prefix; whatever path
+        # was configured is carried through untouched.
         self.assertEqual(
             join_base_url("https://example.com/w6w"),
-            "https://example.com/w6w/api",
+            "https://example.com/w6w",
+        )
+        self.assertEqual(
+            join_base_url("https://api.example.com/apiary"),
+            "https://api.example.com/apiary",
         )
 
     def test_the_exported_helper_is_the_same_code_path_the_client_uses(self) -> None:
@@ -74,9 +74,9 @@ class JoinBaseUrlTest(unittest.TestCase):
         # helper would move both answers together and the comparison would still
         # hold. The expected *value* is what pins the trim.
         for origin, expected in (
-            ("  https://api.example.com/  ", "https://api.example.com/api"),
-            ("https://api.example.com", "https://api.example.com/api"),
-            ("\thttps://x.io\n", "https://x.io/api"),
+            ("  https://api.example.com/  ", "https://api.example.com"),
+            ("https://api.example.com", "https://api.example.com"),
+            ("\thttps://x.io\n", "https://x.io"),
         ):
             with self.subTest(origin=repr(origin)):
                 self.assertEqual(join_base_url(origin), expected)
@@ -124,11 +124,11 @@ class AbsoluteBaseUrlTest(unittest.TestCase):
     def test_http_and_https_origins_are_accepted(self) -> None:
         self.assertEqual(
             resolve_config(base_url="http://localhost:8080").base_url,
-            "http://localhost:8080/api",
+            "http://localhost:8080",
         )
         self.assertEqual(
             resolve_config(base_url="https://api.example.com").base_url,
-            "https://api.example.com/api",
+            "https://api.example.com",
         )
 
 
@@ -139,7 +139,7 @@ class PrecedenceTest(unittest.TestCase):
         config = resolve_config(
             environ={ENV_BASE_URL: "https://env.example.com", ENV_TOKEN: "tok_env"},
         )
-        self.assertEqual(config.base_url, "https://env.example.com/api")
+        self.assertEqual(config.base_url, "https://env.example.com")
         self.assertEqual(config.token, "tok_env")
         self.assertIsNone(config.project)
 
@@ -150,7 +150,7 @@ class PrecedenceTest(unittest.TestCase):
             project="prj_1",
             environ={ENV_BASE_URL: "https://env.example.com", ENV_TOKEN: "tok_env"},
         )
-        self.assertEqual(config.base_url, "https://explicit.example.com/api")
+        self.assertEqual(config.base_url, "https://explicit.example.com")
         self.assertEqual(config.token, "tok_explicit")
         self.assertEqual(config.project, "prj_1")
 
@@ -165,9 +165,9 @@ class PrecedenceTest(unittest.TestCase):
         # The module-global-credential regression, caught at the config layer.
         first = resolve_config(base_url="https://one.example.com", token="tok_1")
         second = resolve_config(base_url="https://two.example.com", token="tok_2")
-        self.assertEqual(first.base_url, "https://one.example.com/api")
+        self.assertEqual(first.base_url, "https://one.example.com")
         self.assertEqual(first.token, "tok_1")
-        self.assertEqual(second.base_url, "https://two.example.com/api")
+        self.assertEqual(second.base_url, "https://two.example.com")
         self.assertEqual(second.token, "tok_2")
 
 
@@ -204,12 +204,13 @@ class MissingBaseUrlTest(unittest.TestCase):
         self.assertEqual(len(set(messages.values())), 1, messages)
 
     def test_no_blank_value_ever_resolves_to_a_relative_url(self) -> None:
-        # The trap, made explicit: a NAIVE join of a blank value yields "/api" —
-        # a RELATIVE url, the browser same-origin default a library must not
-        # have. It would not fail at construction with a message naming the
-        # variable; it would fail later, inside some operation, with a message
-        # about a request. Neither the helper nor the resolver will produce it.
-        self.assertEqual("".rstrip("/") + BASE_PATH, "/api")  # what NOT to do
+        # The trap, made explicit: a NAIVE join of a blank value yields an
+        # EMPTY base, so every request goes out relative — the browser
+        # same-origin default a library must not have. It would not fail at
+        # construction with a message naming the variable; it would fail later,
+        # inside some operation, with a message about a request. Neither the
+        # helper nor the resolver will produce it.
+        self.assertEqual("".rstrip("/") + BASE_PATH, "")  # what NOT to do
         with self.assertRaises(ConfigError):
             join_base_url("")
         for environ in ({ENV_BASE_URL: ""}, {ENV_BASE_URL: "   "}, EMPTY):

@@ -57,9 +57,10 @@ def read_env(name: str, environ: Optional[Mapping[str, str]] = None) -> Optional
     an `is None` test. `os.environ.get` returns `""` for a set-but-empty
     variable, never `None`, so `is None` is the Python spelling of the same
     nullish-coalescing mistake that `docs/implementation.md` §2 forbids in the
-    TypeScript wrappers: an empty `W6W_BASE_URL` would survive as a value, reach
-    the join rule, and resolve to the relative URL `"/api"` — exactly the
-    browser same-origin default a library must not have. Do not "tidy" this into
+    TypeScript wrappers: an empty `W6W_BASE_URL` would survive as a value and
+    short-circuit the precedence chain, leaving the client on an empty base and
+    issuing every request against a relative URL — exactly the browser
+    same-origin default a library must not have. Do not "tidy" this into
     `if value is None`.
 
     An empty environment variable is not a hypothetical. `export W6W_BASE_URL=`,

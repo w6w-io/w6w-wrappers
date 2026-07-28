@@ -17,9 +17,14 @@ from ._env import ENV_BASE_URL, ENV_TOKEN, read_env
 from .errors import ConfigError
 
 #: The API's base path, from the shared contract's `basePath`
-#: (`packages/wrappers/endpoints.json`). It is appended to the configured origin
-#: by :func:`join_base_url`; users never type it.
-BASE_PATH: str = "/api"
+#: (`packages/wrappers/endpoints.json`).
+#:
+#: **Empty since v0.2.0.** The server serves its routes at the ROOT of its own
+#: host (``https://api.w6w.io/vars``, not ``.../api/vars`` — the host already
+#: says "api"), so there is no prefix to append and :func:`join_base_url`
+#: appends nothing. Kept exported, and kept mirroring the contract, so the
+#: constant still answers "what does this client prepend?" — now "nothing".
+BASE_PATH: str = ""
 
 #: The schemes a w6w base URL may use. Anything else is a configuration
 #: mistake — most often a bare `host:port` that `urlsplit` reads as a scheme.
@@ -43,7 +48,7 @@ class ResolvedConfig:
     client's identity in place.
     """
 
-    #: Fully joined base, e.g. `https://api.example.com/api`. Never
+    #: The normalized base, e.g. `https://api.example.com`. Never
     #: trailing-slashed, never relative.
     base_url: str
     #: The bearer token, or `None` when none was configured.
@@ -68,28 +73,31 @@ def join_base_url(origin: str) -> str:
 
     1. strip surrounding whitespace, then **all** trailing slashes;
     2. reject anything that is not an absolute `http`/`https` URL;
-    3. if the result already ends with the base path, use it as-is — **never
-       double it**;
-    4. otherwise append the base path.
+    3. append nothing — the API is served at the root of its own host.
 
     ::
 
-        https://api.example.com      -> https://api.example.com/api
-        https://api.example.com/     -> https://api.example.com/api
-        https://api.example.com///   -> https://api.example.com/api
-        https://api.example.com/api  -> https://api.example.com/api
-        https://api.example.com/api/ -> https://api.example.com/api
+        https://api.example.com      -> https://api.example.com
+        https://api.example.com/     -> https://api.example.com
+        https://api.example.com///   -> https://api.example.com
+
+    Any path in the configured value is preserved verbatim, so a deployment
+    that genuinely sits behind a gateway prefix can still be addressed by
+    configuring that prefix. This is also why a stale
+    ``https://api.example.com/api`` is NOT silently rewritten: it is
+    indistinguishable from such a prefix, and quietly stripping it would break
+    the deployments that mean it. It will 404 — the announced break for the
+    v0.1.x base path.
 
     Step 2 exists because a **relative** base URL must fail *here*, as
-    configuration, with a message about configuration. Blank-is-absent
-    (`_env.read_env`) already stops `""` from joining to the relative `"/api"`;
-    without an absoluteness check, `W6W_BASE_URL=/foo` would walk straight past
-    that guard to `"/foo/api"` and then fail on the first request as "the server
-    may be down" — the same hole, reopened by another route, and misdiagnosed.
+    configuration, with a message about configuration. Without an absoluteness
+    check, ``W6W_BASE_URL=/foo`` would walk straight past blank-is-absent
+    (`_env.read_env`) and then fail on the first request as "the server may be
+    down" — the same hole, reopened by another route, and misdiagnosed.
 
     :param origin: The configured origin. Surrounding whitespace and trailing
         slashes are tolerated.
-    :returns: The joined base URL.
+    :returns: The normalized base URL.
     :raises ConfigError: When the origin is blank, relative, or not http(s).
     """
     trimmed = origin.strip().rstrip("/")
@@ -97,8 +105,9 @@ def join_base_url(origin: str) -> str:
         raise ConfigError(
             "No w6w base URL is configured. Pass one to the client "
             '(W6wClient(base_url="https://api.example.com")) or set the '
-            "{env} environment variable. It holds the server's origin — the "
-            "{base} base path is appended for you.".format(env=ENV_BASE_URL, base=BASE_PATH),
+            "{env} environment variable. It holds the server's origin, e.g. "
+            '"https://api.example.com" — the API is served at its root, so no '
+            "path is appended.".format(env=ENV_BASE_URL),
         )
 
     split = urlsplit(trimmed)
@@ -106,13 +115,12 @@ def join_base_url(origin: str) -> str:
         raise ConfigError(
             "The w6w base URL {value!r} is not an absolute http(s) URL. "
             "{env} holds an ORIGIN, e.g. \"https://api.example.com\" — scheme "
-            "and host, with the {base} base path appended for you. A relative "
-            "or host-only value cannot be requested and would fail later as a "
-            "connection problem rather than as the configuration mistake it "
-            "is.".format(value=trimmed, env=ENV_BASE_URL, base=BASE_PATH),
+            "and host. A relative or host-only value cannot be requested and "
+            "would fail later as a connection problem rather than as the "
+            "configuration mistake it is.".format(value=trimmed, env=ENV_BASE_URL),
         )
 
-    return trimmed if trimmed.endswith(BASE_PATH) else trimmed + BASE_PATH
+    return trimmed
 
 
 def resolve_config(
@@ -135,7 +143,7 @@ def resolve_config(
     - An **empty or whitespace-only environment variable is ABSENT** and falls
       through (see `_env.read_env`), so ``W6W_BASE_URL=``, ``W6W_BASE_URL="  "``
       and an unset ``W6W_BASE_URL`` all end here, in the same configuration
-      error — never in a relative ``"/api"``.
+      error — never in a relative base.
 
     The difference is the difference between a value a *caller* chose and a
     value a *shell* produced.

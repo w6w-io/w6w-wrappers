@@ -75,7 +75,7 @@ class Recorder:
 def http_error(status: int, body: Any, reason: str = "") -> HTTPError:
     """Build the exception `urlopen` raises for a non-2xx status."""
     return HTTPError(
-        "https://api.example.com/api/vars",
+        "https://api.example.com/vars",
         status,
         reason,
         email.message.Message(),
@@ -154,7 +154,7 @@ class ReadTest(unittest.TestCase):
         self.assertEqual(variables[0].updatedAt, "2026-07-22T18:03:00.000Z")
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0].get_method(), "GET")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/vars")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/vars")
         self.assertEqual(calls[0].get_header("Authorization"), "Bearer tok_1")
 
     def test_get_reads_the_singular_var_key(self) -> None:
@@ -163,7 +163,7 @@ class ReadTest(unittest.TestCase):
         variable = instance.vars.get("var_1")
 
         self.assertEqual(variable, VAR)
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/vars/var_1")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/vars/var_1")
 
     def test_a_json_variable_carries_its_value_through_untouched(self) -> None:
         # `value` is opaque pass-through: a nested structure arrives as it left,
@@ -185,8 +185,8 @@ class ReadTest(unittest.TestCase):
         # job. This lane encodes and sends rather than validating locally.
         instance.vars.get_by_name("a b/c")
 
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/vars/by-name/sender_email")
-        self.assertEqual(calls[1].full_url, "https://api.example.com/api/vars/by-name/a%20b%2Fc")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/vars/by-name/sender_email")
+        self.assertEqual(calls[1].full_url, "https://api.example.com/vars/by-name/a%20b%2Fc")
 
     def test_one_read_is_one_http_call_never_a_list_then_filter(self) -> None:
         instance, calls = client(responding({"var": VAR_BODY}))
@@ -206,7 +206,7 @@ class WriteTest(unittest.TestCase):
 
         self.assertEqual(variable, VAR)
         self.assertEqual(calls[0].get_method(), "POST")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/vars")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/vars")
         self.assertEqual(
             sent_body(calls[0]),
             {"name": "sender_email", "type": "string", "value": "a@b.c"},
@@ -253,7 +253,7 @@ class WriteTest(unittest.TestCase):
 
         self.assertEqual(variable, VAR)
         self.assertEqual(calls[0].get_method(), "PATCH")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/vars/var_1")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/vars/var_1")
         # D2: `type` and `description` are ABSENT, not null. The server tests
         # `body.field !== undefined`, so a null would be an instruction.
         self.assertEqual(sent_body(calls[0]), {"value": "c@d.e"})
@@ -295,7 +295,7 @@ class WriteTest(unittest.TestCase):
 
         self.assertIsNone(result)
         self.assertEqual(calls[0].get_method(), "DELETE")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/api/vars/var_1")
+        self.assertEqual(calls[0].full_url, "https://api.example.com/vars/var_1")
 
     def test_delete_of_an_unknown_id_raises_rather_than_succeeding_silently(self) -> None:
         # The delete is not idempotent and this namespace must not pretend
