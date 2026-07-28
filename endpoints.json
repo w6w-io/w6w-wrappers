@@ -1,7 +1,8 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.1.0",
-  "basePath": "/api",
+  "contractVersion": "0.2.0",
+  "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
+  "basePath": "",
   "auth": "bearer",
   "errorEnvelope": {
     "error": {

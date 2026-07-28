@@ -11,12 +11,18 @@ file says *how three languages must render it identically*.
 
 ## Conventions
 
-**Base URL.** All routes live under `/api` (`main.ts` mounts the API there;
-`/health` is the one exception and sits at the root). A wrapper takes an
-**origin** like `https://api-s2.w6w.dev` and appends `basePath` (`/api`) itself
-— users should never have to type the prefix. The exact join rule (strip
-trailing slashes, never double an already-present `/api`) is pinned in
+**Base URL.** All routes live at the **root** of the API's host — `main.ts`
+mounts the router at `/`, because the host already says "api" and
+`api.w6w.io/api/vars` reads as a mistake. A wrapper takes an **origin** like
+`https://api-s2.w6w.dev` and appends **nothing**: `basePath` is `""` as of
+contract 0.2.0. The exact join rule (strip trailing slashes, preserve any
+configured path) is pinned in
 [implementation.md §2](./implementation.md#2-configuration-and-environment).
+
+> **Breaking, 0.1.x → 0.2.0.** `basePath` was `/api`. A client still pointed at
+> `https://api.w6w.io/api` will 404 on every call; drop the suffix from
+> `W6W_BASE_URL`. The wrappers do not strip it for you — a path is preserved
+> verbatim, because it is indistinguishable from a real gateway prefix.
 
 **Auth.** `Authorization: Bearer <token>`. Every route below requires it; there
 are no anonymous operations in this surface.
@@ -84,7 +90,7 @@ from `endpoints.json` — see [cli.md](./cli.md).
 **Status field.** All seventeen operations now carry `"status": "required"`.
 `documents.getByKey`, `vars.getByName` and `run` were implemented server-side
 2026-07-28; `me` was fixed the same day to call the server's real `/auth/me`
-route directly rather than wait on a never-built `/api/me` alias.
+route directly rather than wait on a never-built `/me` alias.
 `me`'s `serverImplemented` stays `"partial"` — identity is fully live, but the
 optional `versions` block does not exist server-side yet, and every wrapper
 tolerates its absence. `status` records **server** readiness, not wrapper
@@ -97,7 +103,7 @@ against a mocked transport in every wrapper
 ## 1. `me` — caller identity and versions
 
 ```
-GET /api/auth/me
+GET /auth/me
 ```
 
 `status: required` · `serverImplemented: partial`
@@ -105,7 +111,7 @@ GET /api/auth/me
 **Fixed 2026-07-28.** Every wrapper calls `/auth/me` directly — the server's
 real, already-live identity route (verified live: `200`,
 `{tenant, subject, account, role}`) — rather than waiting on the never-built
-`/api/me` alias D15 originally specced. Its live consumer is the studio's
+`/me` alias D15 originally specced. Its live consumer is the studio's
 Session modal.
 
 **Still missing:** the `versions` block. The server does not send one today;
@@ -169,7 +175,7 @@ The four identity fields mirror the server's `Principal`.
 
 ### Server work required
 
-Two things, both small: alias `/api/me` onto the existing `/auth/me` handler, and
+Two things, both small: alias `/me` onto the existing `/auth/me` handler, and
 add the `versions` block sourced from the build-time composition string. Keep it
 cheap — this is called on every CLI invocation for the version banner, so it must
 not touch the catalog or do per-request version discovery.
@@ -179,7 +185,7 @@ not touch the catalog or do per-request version discovery.
 ## 2. `connections.list` — list connections
 
 ```
-GET /api/connections
+GET /connections
 ```
 
 `status: required` · served today
@@ -224,7 +230,7 @@ URN to pass to [`run`](#17-run--run-anything-addressable-by-urn).
 ## 3. `workflows.list` — list workflows
 
 ```
-GET /api/workflows[?project=<id>]
+GET /workflows[?project=<id>]
 ```
 
 `status: required` · served today
@@ -266,7 +272,7 @@ Kept in v0.1.0 (D4): it is how a user discovers a `wf_…` URN to pass to `run`.
 ## 4. `workflows.run` — trigger a workflow
 
 ```
-POST /api/workflows/:id/run[?wait=true]
+POST /workflows/:id/run[?wait=true]
 ```
 
 `status: required` · served today
@@ -353,7 +359,7 @@ shape.
 
 ### Companion: fetching a run
 
-`GET /api/runs/:id` exists and returns run state. It is **not** part of this
+`GET /runs/:id` exists and returns run state. It is **not** part of this
 version's contract (`runs.get` is in `outOfScope`). Prefer the server's
 `?wait=true` and add `runs.get` as a first-class operation in a later version —
 added to `endpoints.json` and shipped in all three at once, like everything else.
@@ -363,7 +369,7 @@ added to `endpoints.json` and shipped in all three at once, like everything else
 ## 5. `documents.list` — list documents
 
 ```
-GET /api/documents[?project=<id>]
+GET /documents[?project=<id>]
 ```
 
 `status: required` · served today
@@ -396,7 +402,7 @@ array.
 ## 6. `documents.get` — fetch a document by id
 
 ```
-GET /api/documents/:id[?project=<id>]
+GET /documents/:id[?project=<id>]
 ```
 
 `status: required` · served today
@@ -418,7 +424,7 @@ object.
 ## 7. `documents.getByKey` — fetch a document by key
 
 ```
-GET /api/documents/by-key/:key[?project=<id>]
+GET /documents/by-key/:key[?project=<id>]
 ```
 
 `status: required` · `serverImplemented: true` — implemented 2026-07-28.
@@ -447,7 +453,7 @@ Same envelope (`{ "document": … }`) and same `404 unknown_document` as
 ## 8. `documents.create` — create a document
 
 ```
-POST /api/documents[?project=<id>]
+POST /documents[?project=<id>]
 ```
 
 `status: required` · served today
@@ -481,7 +487,7 @@ error. **Response `400`** — `unknown_project` for an unknown `?project=`.
 ## 9. `documents.update` — patch a document
 
 ```
-PATCH /api/documents/:id[?project=<id>]
+PATCH /documents/:id[?project=<id>]
 ```
 
 `status: required` · served today
@@ -503,7 +509,7 @@ Addressed by the `doc_…` id, **not** by `key` (D6). `key` itself is **immutabl
 ## 10. `documents.delete` — delete a document
 
 ```
-DELETE /api/documents/:id[?project=<id>]
+DELETE /documents/:id[?project=<id>]
 ```
 
 `status: required` · served today
@@ -526,7 +532,7 @@ otherwise.
 ## 11. `vars.list` — list variables
 
 ```
-GET /api/vars
+GET /vars
 ```
 
 `status: required` · served today
@@ -562,7 +568,7 @@ array.
 ## 12. `vars.get` — fetch a variable by id
 
 ```
-GET /api/vars/:id
+GET /vars/:id
 ```
 
 `status: required` · served today
@@ -584,7 +590,7 @@ Addressed by the server-issued `var_…` id, not by `name` (D6).
 ## 13. `vars.getByName` — fetch a variable by name
 
 ```
-GET /api/vars/by-name/:name
+GET /vars/by-name/:name
 ```
 
 `status: required` · `serverImplemented: true` — implemented 2026-07-28.
@@ -605,7 +611,7 @@ Same envelope (`{ "var": … }`) and same `404 unknown_var` as
 ## 14. `vars.create` — create a variable
 
 ```
-POST /api/vars
+POST /vars
 ```
 
 `status: required` · served today
@@ -641,7 +647,7 @@ No `project` param: vars are not project-scoped.
 ## 15. `vars.update` — patch a variable
 
 ```
-PATCH /api/vars/:id
+PATCH /vars/:id
 ```
 
 `status: required` · served today
@@ -666,7 +672,7 @@ No `project` param.
 ## 16. `vars.delete` — delete a variable
 
 ```
-DELETE /api/vars/:id
+DELETE /vars/:id
 ```
 
 `status: required` · served today
@@ -685,7 +691,7 @@ TypeScript, `None` in Python, no stdout payload in the CLI beyond its exit code
 ## 17. `run` — run anything addressable by URN
 
 ```
-POST /api/run
+POST /run
 ```
 
 `status: required` · `serverImplemented: true` — implemented 2026-07-28. Dispatch

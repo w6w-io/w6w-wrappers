@@ -81,24 +81,29 @@ never conflict with a user's pins.
 
 ### `W6W_BASE_URL` — an origin, not a base path
 
-`W6W_BASE_URL` holds an **origin**: `https://api.example.com`. The wrapper appends
-`basePath` from `endpoints.json` (`/api`) itself. Users never type the prefix.
+`W6W_BASE_URL` holds an **origin**: `https://api.example.com`. As of contract
+0.2.0 the wrapper appends **nothing** — `basePath` in `endpoints.json` is `""`,
+because the server serves its routes at the root of its own host.
 
 The join rule, pinned — it mirrors `apiBase(url)`:
 
 1. Strip **all** trailing slashes: `url.replace(/\/+$/, "")`.
-2. If the result already ends with `basePath`, use it as-is. **Never double the
-   base path** — `https://api.example.com/api` must not become
-   `https://api.example.com/api/api`.
-3. Otherwise append `basePath`.
+2. Reject anything that is not an absolute `http(s)` URL with a host.
+3. Append nothing. Any **path** in the configured value is preserved verbatim.
 
 ```
-https://api.example.com        → https://api.example.com/api
-https://api.example.com/       → https://api.example.com/api
-https://api.example.com///     → https://api.example.com/api
-https://api.example.com/api    → https://api.example.com/api
-https://api.example.com/api/   → https://api.example.com/api
+https://api.example.com        → https://api.example.com
+https://api.example.com/       → https://api.example.com
+https://api.example.com///     → https://api.example.com
+https://api.example.com/gw/v2  → https://api.example.com/gw/v2
+https://api.example.com/api    → https://api.example.com/api   (preserved, not stripped)
 ```
+
+Step 3 is deliberate in both directions. Nothing is appended, so nothing can be
+doubled; and a configured path is **never** removed, because a stale `/api` left
+over from 0.1.x is indistinguishable from a genuine gateway prefix. Silently
+stripping it would break the deployments that mean it, so it is left to 404 —
+the announced break.
 
 Operation paths from `endpoints.json` (`/documents`, `/vars/{id}`, …) are appended
 to that resolved base verbatim. Their **parameters are not** — every
@@ -107,8 +112,9 @@ percent-encoded, by the mechanism pinned immediately below.
 
 There is **no default base URL**. A client constructed with neither an explicit
 base URL nor `W6W_BASE_URL` raises a configuration error at construction time,
-naming the env var. (The studio's `?? "/api"` relative default is a browser same-origin assumption and
-has no meaning in a library.)
+naming the env var. (The studio's `?? "/api"` relative default is a browser same-origin assumption — it
+covers the Vite dev proxy and `SERVE_STUDIO`, where the SPA owns `/` and the API
+keeps a prefix — and has no meaning in a library.)
 
 **A blank value is not a base URL.** An environment variable that is present but
 **empty or whitespace-only is treated as absent** — `W6W_BASE_URL=`,
@@ -116,7 +122,7 @@ has no meaning in a library.)
 three end in that same configuration error. The rule is stated in full under
 Precedence below and pinned mechanically in `readEnv`; it is repeated here
 because *this* is the section it protects. Run the join rule above on `""` and
-step 3 appends the base path to nothing, yielding **`/api`** — a relative URL,
+you get an **empty base** — every request then goes out against a relative URL,
 which is exactly what the paragraph above forbids. It would not fail here, at
 construction, with a message naming the variable; it would fail later, inside
 some operation, with a message about a request.
@@ -168,13 +174,13 @@ Naive concatenation — `` `${base}/documents/by-key/${key}` `` — produces:
 
 | key | naive URL | what it actually resolves to |
 |---|---|---|
-| `"."` | `…/api/documents/by-key/.` | `…/api/documents/by-key/` |
-| `".."` | `…/api/documents/by-key/..` | `…/api/documents/` — **the LIST route** |
-| `"../.."` | `…/api/documents/by-key/../..` | `…/api/` — the API root |
-| `"a/b"` | `…/api/documents/by-key/a/b` | a two-segment path — a different route entirely |
-| `"a?x=1"` | `…/api/documents/by-key/a?x=1` | path `…/by-key/a` **+ query `x=1`** — truncated, and a parameter smuggled in |
-| `"a#f"` | `…/api/documents/by-key/a#f` | path `…/by-key/a` — truncated at the fragment |
-| `"a b"` | `…/api/documents/by-key/a b` | a malformed URL |
+| `"."` | `…/documents/by-key/.` | `…/documents/by-key/` |
+| `".."` | `…/documents/by-key/..` | `…/documents/` — **the LIST route** |
+| `"../.."` | `…/documents/by-key/../..` | `…/` — the API root |
+| `"a/b"` | `…/documents/by-key/a/b` | a two-segment path — a different route entirely |
+| `"a?x=1"` | `…/documents/by-key/a?x=1` | path `…/by-key/a` **+ query `x=1`** — truncated, and a parameter smuggled in |
+| `"a#f"` | `…/documents/by-key/a#f` | path `…/by-key/a` — truncated at the fragment |
+| `"a b"` | `…/documents/by-key/a b` | a malformed URL |
 
 The second row is the one to hold on to: a caller asking for the single document
 whose key is `".."` receives **the entire collection** — a `200` with every
@@ -198,7 +204,7 @@ and hand-encoding it does not help either, because the URL Standard treats
 `%2E%2E`, `%2e%2e` and `.%2e` as double-dot segments as well. A literal `..` path
 segment is simply **not representable** in a WHATWG-parsed URL. Measured under
 `deno 2.8.2`: `new URL("documents/by-key/%2E%2E", base)` collapses to
-`…/api/documents/` exactly as the raw form does.
+`…/documents/` exactly as the raw form does.
 
 This is the one place the two toolchains genuinely behave differently, so it is
 pinned rather than left to be found three times:
@@ -206,7 +212,7 @@ pinned rather than left to be found three times:
 - **node / cli** — `fetch` parses the URL with the WHATWG parser, which removes
   dot segments. The keys `"."` and `".."` cannot be addressed through this route.
 - **python** — `urllib.request` does **not** normalise the path. Measured:
-  `Request(".../by-key/..").selector` is `'/api/documents/by-key/..'`, verbatim.
+  `Request(".../by-key/..").selector` is `'/documents/by-key/..'`, verbatim.
   The key reaches the server, which (or an intervening proxy, which) may still
   normalise it.
 
@@ -332,8 +338,9 @@ This is not a style choice.
     else return undefined;
     // Deliberately a truthiness/trim check, and deliberately NOT a nullish
     // coalesce (`??`): nullish-coalescing does not convert "", so an empty env
-    // var would survive as a value, reach the join rule, and resolve to the
-    // relative "/api" that §2 forbids. Blank is absent (see Precedence).
+    // var would survive as a value, short-circuit precedence, and leave the
+    // client on an empty base — the relative URL §2 forbids. Blank is absent
+    // (see Precedence).
     // Do not "tidy" this back to `??`.
     if (value === undefined || value.trim().length === 0) return undefined;
     return value;   // verbatim — trimming the emptiness test, not the value
