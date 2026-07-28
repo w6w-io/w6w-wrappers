@@ -90,7 +90,7 @@ Deno.test("documents.list unwraps the envelope and returns the array", async () 
   assertEquals(docs, [DOC]);
   assertEquals(c.calls.length, 1);
   assertEquals(c.calls[0].method, "GET");
-  assertEquals(c.calls[0].url, "https://api.example.com/api/documents");
+  assertEquals(c.calls[0].url, "https://api.example.com/documents");
   assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
 });
 
@@ -98,11 +98,11 @@ Deno.test("documents send ?project= from the client default, overridable per cal
   const c = client(() => json({ documents: [] }), "prj_default");
 
   await c.client.documents.list();
-  assertEquals(c.calls[0].url, "https://api.example.com/api/documents?project=prj_default");
+  assertEquals(c.calls[0].url, "https://api.example.com/documents?project=prj_default");
 
   // Per-call wins over the client default…
   await c.client.documents.list({ project: "prj_other" });
-  assertEquals(c.calls[1].url, "https://api.example.com/api/documents?project=prj_other");
+  assertEquals(c.calls[1].url, "https://api.example.com/documents?project=prj_other");
 
   // …and every one of the five id-addressed routes carries it too, because the
   // server accepts it on all of them.
@@ -124,7 +124,7 @@ Deno.test("documents omit ?project= entirely when none is configured", async () 
 
   await c.client.documents.get("doc_1");
 
-  assertEquals(c.calls[0].url, "https://api.example.com/api/documents/doc_1");
+  assertEquals(c.calls[0].url, "https://api.example.com/documents/doc_1");
 });
 
 Deno.test("documents.getByKey addresses the by-key route with the key encoded", async () => {
@@ -138,10 +138,10 @@ Deno.test("documents.getByKey addresses the by-key route with the key encoded", 
   // here would make a document that exists unreadable through this client.
   const doc = await c.client.documents.getByKey("../..");
 
-  assertEquals(c.calls[0].url, "https://api.example.com/api/documents/by-key/a%2Fb");
-  assertEquals(c.calls[1].url, "https://api.example.com/api/documents/by-key/a%20b");
-  assertEquals(c.calls[2].url, "https://api.example.com/api/documents/by-key/a%3Fx%3D1");
-  assertEquals(c.calls[3].url, "https://api.example.com/api/documents/by-key/..%2F..");
+  assertEquals(c.calls[0].url, "https://api.example.com/documents/by-key/a%2Fb");
+  assertEquals(c.calls[1].url, "https://api.example.com/documents/by-key/a%20b");
+  assertEquals(c.calls[2].url, "https://api.example.com/documents/by-key/a%3Fx%3D1");
+  assertEquals(c.calls[3].url, "https://api.example.com/documents/by-key/..%2F..");
   assertEquals(doc, DOC);
 });
 
@@ -157,7 +157,7 @@ Deno.test("documents.create posts key+content+format+description and accepts 201
 
   assertEquals(created, DOC);
   assertEquals(c.calls[0].method, "POST");
-  assertEquals(c.calls[0].url, "https://api.example.com/api/documents");
+  assertEquals(c.calls[0].url, "https://api.example.com/documents");
   assertEquals(c.calls[0].headers.get("content-type"), "application/json");
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
     key: "welcome-email-copy",
@@ -185,7 +185,7 @@ Deno.test("documents.update patches by id and cannot carry a key", async () => {
   assertEquals(updated, DOC);
   assertEquals(c.calls[0].method, "PATCH");
   // Addressed by the server-issued id (D6), never by the key.
-  assertEquals(c.calls[0].url, "https://api.example.com/api/documents/doc_1");
+  assertEquals(c.calls[0].url, "https://api.example.com/documents/doc_1");
   // The server's PATCH body has no `key`; the wrapper's body must not grow one,
   // even when a caller passes an object that happens to carry one.
   const patch = { content: "# Hello", key: "sneaky" } as { content: string };
@@ -200,7 +200,7 @@ Deno.test("documents.delete returns nothing rather than {ok:true}", async () => 
 
   assertEquals(result, undefined);
   assertEquals(c.calls[0].method, "DELETE");
-  assertEquals(c.calls[0].url, "https://api.example.com/api/documents/doc_1");
+  assertEquals(c.calls[0].url, "https://api.example.com/documents/doc_1");
   assertEquals(c.calls[0].body, null);
 });
 
@@ -241,9 +241,9 @@ Deno.test("documents: the id is percent-encoded into every id-addressed route", 
   await c.client.documents.update("doc/1", { content: "c" });
   await c.client.documents.delete("doc/1");
 
-  assertEquals(c.calls[0].url, "https://api.example.com/api/documents/doc%2F1");
-  assertEquals(c.calls[1].url, "https://api.example.com/api/documents/doc%2F1");
-  assertEquals(c.calls[2].url, "https://api.example.com/api/documents/doc%2F1");
+  assertEquals(c.calls[0].url, "https://api.example.com/documents/doc%2F1");
+  assertEquals(c.calls[1].url, "https://api.example.com/documents/doc%2F1");
+  assertEquals(c.calls[2].url, "https://api.example.com/documents/doc%2F1");
 });
 
 Deno.test("documents.delete does not swallow a 404 — it is not a silent success", async () => {

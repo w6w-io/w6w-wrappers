@@ -96,7 +96,7 @@ Deno.test("run: the action arm keeps `kind` and `value`, at 200", async () => {
   assertEquals(c.calls.length, 1);
   assertEquals(c.calls[0].method, "POST");
   // The URN travels in the body, so nothing here is interpolated into a path.
-  assertEquals(c.calls[0].url, "https://api.example.com/api/run");
+  assertEquals(c.calls[0].url, "https://api.example.com/run");
   assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
   assertEquals(sentBody(c.calls[0]), {
     urn: "conn_01HQ",

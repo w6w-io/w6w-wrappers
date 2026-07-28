@@ -116,7 +116,7 @@ Deno.test("connections.list unwraps the envelope and returns the array", async (
   assertEquals(connections, [CONNECTION]);
   assertEquals(c.calls.length, 1);
   assertEquals(c.calls[0].method, "GET");
-  assertEquals(c.calls[0].url, "https://api.example.com/api/connections");
+  assertEquals(c.calls[0].url, "https://api.example.com/connections");
   assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
 });
 
@@ -130,7 +130,7 @@ Deno.test("connections.list returns an empty array, and carries no query string"
   const connections = await c.client.connections.list();
 
   assertEquals(connections, []);
-  assertEquals(c.calls[0].url, "https://api.example.com/api/connections");
+  assertEquals(c.calls[0].url, "https://api.example.com/connections");
 });
 
 Deno.test("workflows.list unwraps the envelope, and is empty-safe", async () => {
@@ -140,7 +140,7 @@ Deno.test("workflows.list unwraps the envelope, and is empty-safe", async () => 
 
   assertEquals(workflows, [WORKFLOW]);
   assertEquals(c.calls[0].method, "GET");
-  assertEquals(c.calls[0].url, "https://api.example.com/api/workflows");
+  assertEquals(c.calls[0].url, "https://api.example.com/workflows");
 
   const empty = client(() => json({ workflows: [] }));
   assertEquals(await empty.client.workflows.list(), []);
@@ -150,17 +150,17 @@ Deno.test("workflows.list sends ?project= from the client default, overridable p
   const c = client(() => json({ workflows: [] }), "prj_default");
 
   await c.client.workflows.list();
-  assertEquals(c.calls[0].url, "https://api.example.com/api/workflows?project=prj_default");
+  assertEquals(c.calls[0].url, "https://api.example.com/workflows?project=prj_default");
 
   // Per-call wins over the client default…
   await c.client.workflows.list({ project: "prj_other" });
-  assertEquals(c.calls[1].url, "https://api.example.com/api/workflows?project=prj_other");
+  assertEquals(c.calls[1].url, "https://api.example.com/workflows?project=prj_other");
 
   // …and with nothing configured anywhere the parameter is omitted entirely.
   // An empty `?project=` would be a different, and wrong, request.
   const unscoped = client(() => json({ workflows: [] }));
   await unscoped.client.workflows.list();
-  assertEquals(unscoped.calls[0].url, "https://api.example.com/api/workflows");
+  assertEquals(unscoped.calls[0].url, "https://api.example.com/workflows");
 });
 
 Deno.test("discovery: an error envelope reaches the caller as an ApiError", async () => {

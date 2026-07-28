@@ -92,7 +92,7 @@ Deno.test("workflows.run: a 202 queued run is SUCCESS, and hands back the handle
   assertEquals(c.calls.length, 1, "exactly one request — no client-side polling");
   assertEquals(c.calls[0].method, "POST");
   // No `?wait=` at all, not `?wait=false`.
-  assertEquals(c.calls[0].url, "https://api.example.com/api/workflows/wf_01HQ/run");
+  assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_01HQ/run");
   assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
   assertEquals(sentBody(c.calls[0]), {});
 });
@@ -117,7 +117,7 @@ Deno.test("workflows.run: ?wait=true returns the terminal 200 result", async () 
   assertEquals(run.steps, { step_a: { status: "succeeded" } });
 
   assertEquals(c.calls.length, 1, "the wait happens server-side — one request");
-  assertEquals(c.calls[0].url, "https://api.example.com/api/workflows/wf_01HQ/run?wait=true");
+  assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_01HQ/run?wait=true");
 });
 
 Deno.test("workflows.run: a 200 carrying status 'failed' is RETURNED, never raised", async () => {
@@ -173,14 +173,14 @@ Deno.test("workflows.run: variables and trigger reach the request body", async (
   });
   assertEquals(c.calls[0].headers.get("content-type"), "application/json");
   // They are body fields, not query parameters.
-  assertEquals(c.calls[0].url, "https://api.example.com/api/workflows/wf_01HQ/run");
+  assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf_01HQ/run");
 
   // `wait: false` is the same request as no wait at all — the server compares
   // the query value to the string "true", so `?wait=false` would look like it
   // meant something while meaning nothing.
   const off = client(() => json({ runId: "run_2", status: "queued" }, 202));
   await off.client.workflows.run("wf_01HQ", { wait: false });
-  assertEquals(off.calls[0].url, "https://api.example.com/api/workflows/wf_01HQ/run");
+  assertEquals(off.calls[0].url, "https://api.example.com/workflows/wf_01HQ/run");
 });
 
 Deno.test("workflows.run: a 404 unknown_workflow reaches the caller as an ApiError", async () => {
@@ -204,7 +204,7 @@ Deno.test("workflows.run: the workflow id is percent-encoded into the path", asy
 
   await c.client.workflows.run("wf a/b?x");
 
-  assertEquals(c.calls[0].url, "https://api.example.com/api/workflows/wf%20a%2Fb%3Fx/run");
+  assertEquals(c.calls[0].url, "https://api.example.com/workflows/wf%20a%2Fb%3Fx/run");
 });
 
 Deno.test("workflows.run: a success body that is not a run object is bad_response", async () => {

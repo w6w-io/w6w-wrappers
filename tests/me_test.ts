@@ -88,7 +88,7 @@ Deno.test("me: a flat body with no versions parses cleanly", async () => {
 
   assertEquals(c.calls.length, 1);
   assertEquals(c.calls[0].method, "GET");
-  assertEquals(c.calls[0].url, "https://api.example.com/api/auth/me");
+  assertEquals(c.calls[0].url, "https://api.example.com/auth/me");
   assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
   // A bodiless GET: no body, and therefore no content-type either.
   assertEquals(c.calls[0].body, null);

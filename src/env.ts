@@ -54,10 +54,12 @@ interface EnvCapableGlobal {
  * This deviates deliberately from the pinned snippet in
  * `docs/implementation.md` §2, which reads `g.Deno.env.get(name) ?? undefined`.
  * A nullish coalesce does **not** convert `""` to `undefined`, so an empty
- * `W6W_BASE_URL` would survive as a value, reach the join rule, and resolve to
- * the relative URL `"/api"` — exactly the browser same-origin default that §2
- * forbids a library from having. A relative base URL fails later, somewhere
- * else, with a message about the request rather than about the configuration.
+ * `W6W_BASE_URL` would survive as a value and short-circuit the precedence
+ * chain — the client would resolve to an empty base instead of falling through
+ * to the next source, and every request would be issued against a relative URL.
+ * That is the browser same-origin default §2 forbids a library from having, and
+ * it fails later, somewhere else, with a message about the request rather than
+ * about the configuration.
  *
  * So the check below is a **truthiness/trim** check and not a nullish one, on
  * purpose. Do not "tidy" it back to `??`. An empty-string environment variable

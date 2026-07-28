@@ -109,7 +109,7 @@ Deno.test("the barrel's classes and guards are reachable and usable, not just pr
   assertEquals(typeof client.workflows.run, "function");
   assertEquals(typeof client.me, "function");
   assertEquals(typeof client.run, "function");
-  assertEquals(barrel.joinBaseUrl("https://x.example.com"), "https://x.example.com/api");
+  assertEquals(barrel.joinBaseUrl("https://x.example.com"), "https://x.example.com");
   assertEquals(barrel.path`/documents/${"a/b"}`, "/documents/a%2Fb");
   assertEquals(new barrel.ApiError(404, "unknown_document", "No such.").status, 404);
   assertEquals(barrel.isActionRun({ kind: "action", value: 1 }), true);

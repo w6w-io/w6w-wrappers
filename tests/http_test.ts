@@ -69,7 +69,7 @@ Deno.test("a 200 returns the parsed body, the status, and sends the bearer", asy
   assertEquals(res.status, 200);
   assertEquals(res.body, { vars: [{ id: "var_1" }] });
   assertEquals(fake.calls.length, 1);
-  assertEquals(fake.calls[0].url, "https://api.example.com/api/vars");
+  assertEquals(fake.calls[0].url, "https://api.example.com/vars");
   assertEquals(fake.calls[0].method, "GET");
   assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_1");
   // No body, no content-type: a GET must not advertise one.
@@ -92,7 +92,7 @@ Deno.test("a 202 is success and its status reaches the caller", async () => {
 
   assertEquals(res.status, 202);
   assertEquals(res.body, { runId: "run_1", status: "queued" });
-  assertEquals(fake.calls[0].url, "https://api.example.com/api/workflows/wf_1/run?wait=true");
+  assertEquals(fake.calls[0].url, "https://api.example.com/workflows/wf_1/run?wait=true");
   assertEquals(fake.calls[0].headers.get("content-type"), "application/json");
   assertEquals(fake.calls[0].body, '{"variables":{"a":1}}');
 });
@@ -187,7 +187,7 @@ Deno.test("a thrown fetch is network_error with status 0, naming the method and 
   assertEquals(err.code, "network_error");
   // A bare "TypeError: Failed to fetch" is useless on its own — the message has
   // to say which request, to where.
-  assertStringIncludes(err.message, "GET https://api.example.com/api/vars");
+  assertStringIncludes(err.message, "GET https://api.example.com/vars");
   assertStringIncludes(err.message, "Connection refused");
   assertEquals(err.raw, null);
 });
@@ -254,18 +254,18 @@ Deno.test("an unsafe key is encoded and sent — this rule is encoding, never va
   assertEquals(res.status, 200);
   assertEquals(
     fake.calls[0].url,
-    "https://api.example.com/api/documents/by-key/..%2F..?project=prj_a+b",
+    "https://api.example.com/documents/by-key/..%2F..?project=prj_a+b",
   );
 });
 
 Deno.test("query parameters are encoded, and undefined ones are dropped", () => {
   assertEquals(
     buildUrl(CONFIG, { method: "GET", path: "/documents", query: { project: undefined } }),
-    "https://api.example.com/api/documents",
+    "https://api.example.com/documents",
   );
   assertEquals(
     buildUrl(CONFIG, { method: "GET", path: "/documents", query: { project: "p/1", wait: true } }),
-    "https://api.example.com/api/documents?project=p%2F1&wait=true",
+    "https://api.example.com/documents?project=p%2F1&wait=true",
   );
 });
 
@@ -278,7 +278,7 @@ Deno.test("the client defaults to globalThis.fetch, and says so when there is no
     const client = new W6wClient({ baseUrl: "https://api.example.com", token: "tok_g" });
     const res = await client.request<{ ok: boolean }>({ method: "GET", path: "/me" });
     assertEquals(res.body, { ok: true });
-    assertEquals(fake.calls[0].url, "https://api.example.com/api/me");
+    assertEquals(fake.calls[0].url, "https://api.example.com/me");
     assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_g");
 
     // …and on a host with no fetch at all, fail at construction with a message

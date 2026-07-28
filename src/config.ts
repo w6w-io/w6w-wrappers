@@ -14,10 +14,15 @@ import { ConfigError } from "./errors.ts";
 
 /**
  * The API's base path, from the shared contract's `basePath`
- * (`packages/wrappers/endpoints.json`). It is appended to the configured
- * origin by {@linkcode joinBaseUrl}; users never type it.
+ * (`packages/wrappers/endpoints.json`).
+ *
+ * **Empty since v0.2.0.** The server serves its routes at the ROOT of its own
+ * host (`https://api.w6w.io/vars`, not `.../api/vars` — the host already says
+ * "api"), so there is no prefix to append and {@linkcode joinBaseUrl} appends
+ * nothing. Kept exported, and kept mirroring the contract, so the constant
+ * still answers "what does this client prepend?" — the answer is now "nothing".
  */
-export const BASE_PATH = "/api";
+export const BASE_PATH = "";
 
 /**
  * A `fetch`-shaped function.
@@ -35,11 +40,11 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 /** Constructor options for a client. Every field is optional. */
 export interface W6wClientOptions {
   /**
-   * The **origin** of the w6w server, e.g. `https://api.example.com`. The base
-   * path (`/api`) is appended for you and is never doubled. It must be an
-   * absolute `http(s)` URL with a host: a relative value like `/api` is a
-   * browser same-origin assumption with no meaning in a library, and is
-   * rejected at construction rather than misreported as an outage later.
+   * The **origin** of the w6w server, e.g. `https://api.example.com`. The API
+   * is served at its root, so no path is appended. It must be an absolute
+   * `http(s)` URL with a host: a relative value like `/api` is a browser
+   * same-origin assumption with no meaning in a library, and is rejected at
+   * construction rather than misreported as an outage later.
    * Overrides `W6W_BASE_URL`.
    */
   baseUrl?: string;
@@ -66,7 +71,7 @@ export interface W6wClientOptions {
  */
 export interface ResolvedConfig {
   /**
-   * Fully joined base, e.g. `https://api.example.com/api`. Never
+   * The normalized base, e.g. `https://api.example.com`. Never
    * trailing-slashed, and never relative — {@linkcode joinBaseUrl} rejects a
    * value that is not an absolute `http(s)` URL with a host.
    */
@@ -107,17 +112,20 @@ const ABSOLUTE_HTTP_ORIGIN = /^https?:\/\/[^/\\?#]/i;
  *
  * 1. strip surrounding whitespace, then **all** trailing slashes;
  * 2. reject anything that is not an absolute `http`/`https` URL with a host;
- * 3. if the result already ends with the base path, use it as-is — **never
- *    double it**;
- * 4. otherwise append the base path.
+ * 3. append nothing — the API is served at the root of its own host.
  *
  * ```
- * https://api.example.com      → https://api.example.com/api
- * https://api.example.com/     → https://api.example.com/api
- * https://api.example.com///   → https://api.example.com/api
- * https://api.example.com/api  → https://api.example.com/api
- * https://api.example.com/api/ → https://api.example.com/api
+ * https://api.example.com      → https://api.example.com
+ * https://api.example.com/     → https://api.example.com
+ * https://api.example.com///   → https://api.example.com
  * ```
+ *
+ * Any path in the configured value is preserved verbatim, so a deployment that
+ * genuinely sits behind a gateway prefix can still be addressed by configuring
+ * that prefix. This is also why a stale `https://api.example.com/api` is NOT
+ * silently rewritten: it is indistinguishable from such a prefix, and quietly
+ * stripping it would break the deployments that mean it. It will 404 — the
+ * announced break for the v0.1.x base path.
  *
  * Step 2 exists because a **relative** base URL has to fail *here*, as
  * configuration, with a message about configuration. Blank-is-absent
@@ -140,20 +148,20 @@ export function joinBaseUrl(origin: string): string {
     throw new ConfigError(
       "No w6w base URL is configured. Pass one to the client " +
         '(new W6wClient({ baseUrl: "https://api.example.com" })) or set the ' +
-        `${ENV_BASE_URL} environment variable. It holds the server's origin — the ` +
-        `${BASE_PATH} base path is appended for you.`,
+        `${ENV_BASE_URL} environment variable. It holds the server's origin, ` +
+        "e.g. \"https://api.example.com\" — the API is served at its root, so no " +
+        "path is appended.",
     );
   }
   if (!ABSOLUTE_HTTP_ORIGIN.test(trimmed) || !parses(trimmed)) {
     throw new ConfigError(
       `The w6w base URL "${trimmed}" is not an absolute http(s) URL. ` +
-        `${ENV_BASE_URL} holds an ORIGIN, e.g. "https://api.example.com" — scheme and host, ` +
-        `with the ${BASE_PATH} base path appended for you. A relative or hostless value ` +
-        "cannot be requested and would fail later as a connection problem rather than as " +
-        "the configuration mistake it is.",
+        `${ENV_BASE_URL} holds an ORIGIN, e.g. "https://api.example.com" — scheme and host. ` +
+        "A relative or hostless value cannot be requested and would fail later as a " +
+        "connection problem rather than as the configuration mistake it is.",
     );
   }
-  return trimmed.endsWith(BASE_PATH) ? trimmed : `${trimmed}${BASE_PATH}`;
+  return trimmed;
 }
 
 /**

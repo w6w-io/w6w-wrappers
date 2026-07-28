@@ -90,7 +90,7 @@ Deno.test("vars.list unwraps the envelope and returns the array", async () => {
   assertEquals(vars, [VAR]);
   assertEquals(c.calls.length, 1);
   assertEquals(c.calls[0].method, "GET");
-  assertEquals(c.calls[0].url, "https://api.example.com/api/vars");
+  assertEquals(c.calls[0].url, "https://api.example.com/vars");
   assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
 });
 
@@ -116,12 +116,12 @@ Deno.test("no var operation ever sends a query string, even with one configured"
     assertEquals(call.url.includes("?"), false, `unexpected query string: ${call.url}`);
   }
   assertEquals(ok.calls.map((call) => call.url), [
-    "https://api.example.com/api/vars",
-    "https://api.example.com/api/vars/var_1",
-    "https://api.example.com/api/vars/by-name/sender_email",
-    "https://api.example.com/api/vars",
-    "https://api.example.com/api/vars/var_1",
-    "https://api.example.com/api/vars/var_1",
+    "https://api.example.com/vars",
+    "https://api.example.com/vars/var_1",
+    "https://api.example.com/vars/by-name/sender_email",
+    "https://api.example.com/vars",
+    "https://api.example.com/vars/var_1",
+    "https://api.example.com/vars/var_1",
   ]);
 });
 
@@ -133,7 +133,7 @@ Deno.test("vars.get reads the singular `var` envelope key", async () => {
   const v = await c.client.vars.get("var_1");
 
   assertEquals(v, VAR);
-  assertEquals(c.calls[0].url, "https://api.example.com/api/vars/var_1");
+  assertEquals(c.calls[0].url, "https://api.example.com/vars/var_1");
 });
 
 Deno.test("vars.getByName addresses the by-name route with the name encoded", async () => {
@@ -145,8 +145,8 @@ Deno.test("vars.getByName addresses the by-name route with the name encoded", as
   // pre-empt with an error that would go stale the moment the rule changed.
   await c.client.vars.getByName("a/b c");
 
-  assertEquals(c.calls[0].url, "https://api.example.com/api/vars/by-name/sender_email");
-  assertEquals(c.calls[1].url, "https://api.example.com/api/vars/by-name/a%2Fb%20c");
+  assertEquals(c.calls[0].url, "https://api.example.com/vars/by-name/sender_email");
+  assertEquals(c.calls[1].url, "https://api.example.com/vars/by-name/a%2Fb%20c");
 });
 
 Deno.test("vars.create posts name+type+value+description and accepts 201", async () => {
@@ -161,7 +161,7 @@ Deno.test("vars.create posts name+type+value+description and accepts 201", async
 
   assertEquals(created, VAR);
   assertEquals(c.calls[0].method, "POST");
-  assertEquals(c.calls[0].url, "https://api.example.com/api/vars");
+  assertEquals(c.calls[0].url, "https://api.example.com/vars");
   assertEquals(c.calls[0].headers.get("content-type"), "application/json");
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
     name: "sender_email",
@@ -193,7 +193,7 @@ Deno.test("vars.update patches by id and cannot carry a name", async () => {
   assertEquals(updated, VAR);
   assertEquals(c.calls[0].method, "PATCH");
   // Addressed by the server-issued id (D6), never by the name.
-  assertEquals(c.calls[0].url, "https://api.example.com/api/vars/var_1");
+  assertEquals(c.calls[0].url, "https://api.example.com/vars/var_1");
   // A `value` with no `type` is validated against the existing type server-side,
   // so the body must carry exactly what was asked for and nothing more.
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { value: "new@example.com" });
@@ -210,7 +210,7 @@ Deno.test("vars.delete returns nothing rather than {ok:true}", async () => {
 
   assertEquals(result, undefined);
   assertEquals(c.calls[0].method, "DELETE");
-  assertEquals(c.calls[0].url, "https://api.example.com/api/vars/var_1");
+  assertEquals(c.calls[0].url, "https://api.example.com/vars/var_1");
   assertEquals(c.calls[0].body, null);
 });
 
@@ -248,9 +248,9 @@ Deno.test("vars: the id is percent-encoded into every id-addressed route", async
   await c.client.vars.update("var/1", { value: 1 });
   await c.client.vars.delete("var/1");
 
-  assertEquals(c.calls[0].url, "https://api.example.com/api/vars/var%2F1");
-  assertEquals(c.calls[1].url, "https://api.example.com/api/vars/var%2F1");
-  assertEquals(c.calls[2].url, "https://api.example.com/api/vars/var%2F1");
+  assertEquals(c.calls[0].url, "https://api.example.com/vars/var%2F1");
+  assertEquals(c.calls[1].url, "https://api.example.com/vars/var%2F1");
+  assertEquals(c.calls[2].url, "https://api.example.com/vars/var%2F1");
 });
 
 Deno.test("vars.delete does not swallow a 404 — it is not a silent success", async () => {

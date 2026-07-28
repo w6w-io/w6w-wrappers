@@ -43,15 +43,16 @@ function withEnv(vars: Record<string, string | undefined>, fn: () => void): void
 
 const NO_ENV = { W6W_BASE_URL: undefined, W6W_TOKEN: undefined };
 
-Deno.test("the base path is appended to a bare origin", () => {
+Deno.test("a bare origin is used as-is — no base path is appended", () => {
   withEnv(NO_ENV, () => {
     assertEquals(
       resolveConfig({ baseUrl: "https://api.example.com" }).baseUrl,
-      "https://api.example.com/api",
+      "https://api.example.com",
     );
   });
-  assertEquals(joinBaseUrl("https://api.example.com"), "https://api.example.com/api");
-  assertEquals(BASE_PATH, "/api");
+  assertEquals(joinBaseUrl("https://api.example.com"), "https://api.example.com");
+  // Empty since 0.2.0: the API serves at the root of its own host.
+  assertEquals(BASE_PATH, "");
 });
 
 Deno.test("joinBaseUrl and the client resolve to the same EXPECTED value", () => {
@@ -61,19 +62,21 @@ Deno.test("joinBaseUrl and the client resolve to the same EXPECTED value", () =>
   // assertion between the two can never fail, whatever either of them does.
   // (The python lane shipped exactly that vacuous test and then caught it.)
   const cases: Array<[string, string]> = [
-    ["https://api.example.com", "https://api.example.com/api"],
-    ["https://api.example.com/", "https://api.example.com/api"],
-    ["https://api.example.com///", "https://api.example.com/api"],
+    ["https://api.example.com", "https://api.example.com"],
+    ["https://api.example.com/", "https://api.example.com"],
+    ["https://api.example.com///", "https://api.example.com"],
+    // A configured path is PRESERVED, never stripped — it may be a real gateway
+    // prefix. That includes a stale "/api" carried over from 0.1.x, which is
+    // indistinguishable from one and is left to 404 rather than be guessed at.
     ["https://api.example.com/api", "https://api.example.com/api"],
     ["https://api.example.com/api/", "https://api.example.com/api"],
+    ["https://api.example.com/myapi", "https://api.example.com/myapi"],
     // The divergence this pin closes: the helper used to skip the whitespace
-    // trim the resolver did, so it answered "  https://api.example.com/  /api"
-    // for the value the client resolved correctly.
-    ["  https://api.example.com/  ", "https://api.example.com/api"],
-    ["\thttps://api.example.com\n", "https://api.example.com/api"],
-    // A look-alike suffix is NOT the base path and is not de-duplicated.
-    ["https://api.example.com/myapi", "https://api.example.com/myapi/api"],
-    ["http://localhost:8080", "http://localhost:8080/api"],
+    // trim the resolver did, so it answered "  https://api.example.com/  " for
+    // the value the client resolved correctly.
+    ["  https://api.example.com/  ", "https://api.example.com"],
+    ["\thttps://api.example.com\n", "https://api.example.com"],
+    ["http://localhost:8080", "http://localhost:8080"],
   ];
   withEnv(NO_ENV, () => {
     for (const [origin, expected] of cases) {
@@ -89,7 +92,7 @@ Deno.test("joinBaseUrl and the client resolve to the same EXPECTED value", () =>
 
 Deno.test("a relative or hostless base URL is a configuration error, not an outage", () => {
   // The hole this closes: `resolveConfig({baseUrl: "/foo"})` used to SUCCEED,
-  // yielding the relative "/foo/api". The request then went nowhere useful and
+  // yielding a relative base. The request then went nowhere useful and
   // surfaced as `network_error` — "It may be down or unreachable" — which sends
   // the user looking at the server instead of at their own configuration.
   //
@@ -161,21 +164,25 @@ Deno.test("a client with a relative base URL never issues a request", () => {
   assertEquals(calls, 0);
 });
 
-Deno.test("trailing slashes are stripped before the base path is appended", () => {
+Deno.test("trailing slashes are stripped", () => {
   withEnv(NO_ENV, () => {
     assertEquals(
       resolveConfig({ baseUrl: "https://api.example.com/" }).baseUrl,
-      "https://api.example.com/api",
+      "https://api.example.com",
     );
     // "All trailing slashes", not "one".
     assertEquals(
       resolveConfig({ baseUrl: "https://api.example.com///" }).baseUrl,
-      "https://api.example.com/api",
+      "https://api.example.com",
     );
   });
 });
 
-Deno.test("a base URL that already ends in the base path is not doubled", () => {
+Deno.test("a configured path is preserved, not stripped", () => {
+  // Nothing is appended, so nothing can be doubled; the risk runs the other way
+  // now. A path in the configured value may be a real gateway prefix, so it is
+  // carried through verbatim — including a stale "/api" from 0.1.x, which is
+  // indistinguishable from one. Only trailing slashes come off.
   withEnv(NO_ENV, () => {
     assertEquals(
       resolveConfig({ baseUrl: "https://api.example.com/api" }).baseUrl,
@@ -185,13 +192,17 @@ Deno.test("a base URL that already ends in the base path is not doubled", () => 
       resolveConfig({ baseUrl: "https://api.example.com/api/" }).baseUrl,
       "https://api.example.com/api",
     );
+    assertEquals(
+      resolveConfig({ baseUrl: "https://api.example.com/gw/v2" }).baseUrl,
+      "https://api.example.com/gw/v2",
+    );
   });
 });
 
 Deno.test("W6W_BASE_URL and W6W_TOKEN are read from the environment", () => {
   withEnv({ W6W_BASE_URL: "https://env.example.com/", W6W_TOKEN: "tok_env" }, () => {
     const config = resolveConfig();
-    assertEquals(config.baseUrl, "https://env.example.com/api");
+    assertEquals(config.baseUrl, "https://env.example.com");
     assertEquals(config.token, "tok_env");
   });
 });
@@ -199,7 +210,7 @@ Deno.test("W6W_BASE_URL and W6W_TOKEN are read from the environment", () => {
 Deno.test("an explicit argument overrides the environment", () => {
   withEnv({ W6W_BASE_URL: "https://env.example.com", W6W_TOKEN: "tok_env" }, () => {
     const config = resolveConfig({ baseUrl: "https://arg.example.com", token: "tok_arg" });
-    assertEquals(config.baseUrl, "https://arg.example.com/api");
+    assertEquals(config.baseUrl, "https://arg.example.com");
     assertEquals(config.token, "tok_arg");
   });
 });
@@ -273,9 +284,11 @@ Deno.test("two clients in one process hold different credentials and base URLs",
     const b = new W6wClient({ baseUrl: "https://b.example.com/api/", token: "tok_b" });
     const fromEnv = new W6wClient();
 
-    assertEquals(a.config, { baseUrl: "https://a.example.com/api", token: "tok_a", project: null });
+    assertEquals(a.config, { baseUrl: "https://a.example.com", token: "tok_a", project: null });
+    // `b` configured an explicit "/api/" path: the trailing slash comes off, the
+    // path itself is preserved (it may be a gateway prefix).
     assertEquals(b.config, { baseUrl: "https://b.example.com/api", token: "tok_b", project: null });
-    assertEquals(fromEnv.config.baseUrl, "https://env.example.com/api");
+    assertEquals(fromEnv.config.baseUrl, "https://env.example.com");
     assertEquals(fromEnv.config.token, "tok_env");
   });
 });

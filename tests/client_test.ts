@@ -67,9 +67,9 @@ Deno.test("the client uses the transport it was injected with, and only that one
   // have put three real requests on the network from a unit test.
   assertEquals(spy.calls.length, 3);
   assertEquals(spy.calls.map((c) => c.url), [
-    "https://api.example.com/api/documents",
-    "https://api.example.com/api/vars",
-    "https://api.example.com/api/anything",
+    "https://api.example.com/documents",
+    "https://api.example.com/vars",
+    "https://api.example.com/anything",
   ]);
 });
 
@@ -137,10 +137,10 @@ Deno.test("two clients in one process never share a credential", async () => {
   // The base URL is instance state for the same reason: B's requests must never
   // arrive at A's server.
   assertEquals(spyA.calls.map((c) => c.url), [
-    "https://tenant-a.example.com/api/documents",
-    "https://tenant-a.example.com/api/documents",
+    "https://tenant-a.example.com/documents",
+    "https://tenant-a.example.com/documents",
   ]);
-  assertEquals(spyB.calls[0].url, "https://tenant-b.example.com/api/documents");
+  assertEquals(spyB.calls[0].url, "https://tenant-b.example.com/documents");
 });
 
 Deno.test("a client with no token borrows nobody else's", async () => {
