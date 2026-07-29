@@ -65,7 +65,7 @@ character-for-character:
 | `me` | `client.me()` | `client.me()` | `w6w me` |
 | `connections.list` | `client.connections.list()` | `client.connections.list()` | `w6w connections list` |
 | `workflows.list` | `client.workflows.list(opts?)` | `client.workflows.list(project=None)` | `w6w workflows list [--project <id>]` |
-| `workflows.run` | `client.workflows.run(id, opts?)` | `client.workflows.run(id, **opts)` | `w6w workflows run <id> [--wait]` |
+| `workflows.run` | `client.workflows.run(id, opts?)` | `client.workflows.run(id, wait=False, variables=None, trigger=None)` | `w6w workflows run <id> [--wait]` |
 | `documents.list` | `client.documents.list(opts?)` | `client.documents.list(project=None)` | `w6w documents list [--project <id>]` |
 | `documents.get` | `client.documents.get(id, opts?)` | `client.documents.get(id, project=None)` | `w6w documents get <id> [--project <id>]` |
 | `documents.getByKey` | `client.documents.getByKey(key, opts?)` | `client.documents.get_by_key(key, project=None)` | `w6w documents get-by-key <key> [--project <id>]` |
@@ -173,12 +173,18 @@ The four identity fields mirror the server's `Principal`.
   the data and rendered to the user as `dev` — one precedence rule, one display
   rule, and no lane inventing a third.
 
-### Server work required
+### Server work still required
 
-Two things, both small: alias `/me` onto the existing `/auth/me` handler, and
-add the `versions` block sourced from the build-time composition string. Keep it
-cheap — this is called on every CLI invocation for the version banner, so it must
-not touch the catalog or do per-request version discovery.
+One thing, and it is optional by construction: add the `versions` block, sourced
+from the build-time composition string. Keep it cheap — this route is called on
+every CLI invocation for the version banner, so it must not touch the catalog or
+do per-request version discovery. Until it lands, every wrapper returns a
+`versions` map carrying only its own `wrapper` entry, which is the contracted
+behaviour and not a degraded one.
+
+The `/me` alias this section used to ask for is **not** being built: the wrappers
+call `/auth/me` directly instead (see above), which is one fewer route to keep in
+step for no loss of anything.
 
 ---
 

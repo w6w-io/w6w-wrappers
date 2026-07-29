@@ -116,7 +116,7 @@
       ],
       "naming": {
         "ts": "client.workflows.run(id, opts?)",
-        "python": "client.workflows.run(id, **opts)",
+        "python": "client.workflows.run(id, wait=False, variables=None, trigger=None)",
         "cli": "w6w workflows run <id> [--wait]"
       },
       "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. `trigger` is a STRING, not an object: the server reads it as `RunTrigger` (the server, the workflow engine \u2014 `\"manual\" | \"schedule\" | \"webhook\" | \"event\" | \"replay\"`), and it defaults to 'manual' server-side when omitted. The five values are recorded in `knownValues` as documentation only \u2014 every wrapper types the param as an open string (`trigger?: string` / `trigger: str | None`) and passes it through unvalidated, so a sixth server value needs no wrapper release. D4 \u2014 kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape. Verified live at the server"
