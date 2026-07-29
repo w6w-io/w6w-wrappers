@@ -42,6 +42,7 @@ packages/wrappers/
 ├── endpoints.json     # machine-readable surface contract (drives conformance tests)
 ├── docs/
 │   ├── endpoints.md      # the endpoint catalog — wire shapes + per-language signatures
+│   ├── sdk-surface.md    # the client catalog — every published symbol and how it behaves
 │   ├── implementation.md # the cross-language spec — types, errors, env, toolchains, tests
 │   ├── cli.md            # the CLI help surface (--help), exit codes
 │   ├── parity.md         # lockstep rules, conformance test, CI gate
@@ -57,6 +58,12 @@ everything else — types, error model, environment handling, toolchains, tests 
 the conformance runner — so that three people implementing in three languages
 produce the same client. Where it says "pinned", it is not a starting point for
 discussion.
+
+Those three describe the **API**. [`docs/sdk-surface.md`](./docs/sdk-surface.md)
+describes the **client**: every symbol a wrapper publishes, side by side in both
+languages, including the ones no contract entry covers — `request`, `path`,
+`joinBaseUrl`, the error classes, the run predicates, `UNSET` — plus the handful
+of places the two SDKs deliberately differ in idiom while agreeing on the wire.
 
 ## What a wrapper is
 
