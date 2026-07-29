@@ -1,8 +1,24 @@
-"""`client.workflows.*` — discovery now, the typed run next.
+"""`client.workflows.*` — discovery and the typed run.
 
-`list` lives here; **`run` lands with T2.3.5** and joins it in this module. `list`
-earns its place in a minimal surface for the same reason `connections.list` does
-(D4): it is how a caller discovers a `wf_…` id to pass to `run`.
+Two operations: `list` and `run`. `list` earns its place in a minimal surface for
+the same reason `connections.list` does (D4): it is how a caller discovers a
+`wf_…` id to pass to `run`.
+
+── `run`, and the three things this API gets called wrong ──
+1. **`202` is success.** No `wait` → the run is queued and the server answers
+   `202 {runId, status:"queued"}`. With `?wait=true` and a timeout → `202` again,
+   with the current status. Neither raises.
+2. **A failed run is data.** `?wait=true` on a run that failed is a plain `200`
+   carrying `status: "failed"` and an `error`. This module returns it like any
+   other result. Mapping it to an exit code is the CLI's job (`cli.exitCodes` in
+   `endpoints.json`), not the SDK's.
+3. **No client-side polling.** The server already polls internally for
+   `?wait=true`, up to its own `RUN_WAIT_TIMEOUT_SEC`. The studio's 600 × 500 ms
+   browser loop predates that and is deliberately **not** transcribed
+   (`docs/implementation.md` §4): three wrappers each re-implementing a poll
+   would be three timeout policies and three retry-storm bugs to keep in sync.
+   There is no timer, no sleep and no retry anywhere in this package — a `202`
+   hands the caller `runId` and lets them decide.
 
 Workflows are **project-scoped**, like documents and unlike vars: the route reads
 an optional `?project=`, resolved per call, then from the client's default, and
@@ -26,11 +42,12 @@ a cursor, all three grow the same container together, as a versioned change.
 
 from __future__ import annotations
 
-from typing import Any, List, Mapping, Optional, Protocol
+from typing import Any, Dict, List, Mapping, Optional, Protocol
 
 from ._config import ResolvedConfig
-from ._http import HttpResponse
-from .types import WorkflowSummary, unwrap_list
+from ._http import HttpResponse, path
+from .errors import ApiError
+from .types import WorkflowRunResult, WorkflowSummary, require_object, unwrap_list
 
 
 class WorkflowsHost(Protocol):
@@ -75,6 +92,10 @@ class WorkflowsApi:
     Example::
 
         active = [w for w in client.workflows.list() if w.status == "active"]
+
+        run = client.workflows.run(active[0].id, wait=True)
+        if run.status == "failed":
+            print(run.error)  # data, not an exception
     """
 
     def __init__(self, host: WorkflowsHost) -> None:
@@ -128,3 +149,112 @@ class WorkflowsApi:
             query={"project": self._project(project)},
         )
         return [WorkflowSummary.from_wire(item) for item in unwrap_list(response, "workflows")]
+
+    def run(
+        self,
+        id: str,
+        wait: bool = False,
+        variables: Optional[Mapping[str, Any]] = None,
+        trigger: Optional[str] = None,
+    ) -> WorkflowRunResult:
+        """Start a run of one workflow, optionally waiting for it to finish.
+
+        Returns on **both** success statuses this route uses:
+
+        ==========================  ======  ==================================  ==========
+        Call                        HTTP    Body                                `terminal`
+        ==========================  ======  ==================================  ==========
+        no `wait`                   `202`   `{runId, status:"queued"}`          `False`
+        `wait=True`, finished       `200`   `{runId, status, output, error, …}` `True`
+        `wait=True`, timed out      `202`   `{runId, status}`                   `False`
+        ==========================  ======  ==================================  ==========
+
+        **A run that failed is the second row, not an error**: `200` with
+        `status: "failed"` and the failure in `error`. This method returns it. It
+        raises only when the *request* failed — `404 unknown_workflow`, a
+        rejected token, a transport failure.
+
+        There is **no `project` argument**, on purpose: a `wf_…` id is
+        unambiguous on its own, and `endpoints.json` gives this operation exactly
+        four parameters. Sending a `?project=` the route does not read would be
+        inventing one.
+
+        :param id: The `wf_…` id, percent-encoded into the path by
+            :func:`w6w.path`.
+        :param wait: Wait for the run to reach a terminal state before
+            answering. Sent as `?wait=true` **only when true**: the server
+            compares the raw query value to the string `"true"`, so `?wait=false`
+            would mean the same thing as omitting it while looking like it meant
+            something else. The wait happens **server-side**, bounded by the
+            server's own timeout.
+        :param variables: Variables handed to the run, merged into its scope by
+            the engine. Opaque pass-through.
+        :param trigger: What triggered the run; defaults to `"manual"`
+            server-side. A plain string rather than a closed enum: the value is a
+            server-owned set (`manual`, `schedule`, `webhook`, `event`, `replay`
+            today) that the server may extend, and a wrapper that froze it would
+            reject a value a newer server accepts.
+        :returns: The run handle, its status, and the result when the run has
+            one.
+        :raises ConfigError: When no token is configured.
+        :raises ApiError: `404 unknown_workflow` when there is no such workflow.
+        :raises ApiError: `bad_response` when a success body is not a run object.
+        """
+        response = self._host.request(
+            "POST",
+            path("/workflows/{id}/run", id=id),
+            # `?wait=true` or no `wait` at all — never `?wait=false`, which the
+            # server reads as "no wait" anyway and which would misrepresent the
+            # request in a log or a proxy.
+            query={"wait": True} if wait else None,
+            # Always a body, even when empty: the route parses one when the text
+            # is non-empty and defaults to `{}` otherwise, so `{}` and no body
+            # are the same request — and sending the object keeps the two
+            # optional fields in one place instead of behind a conditional.
+            body=_run_body(variables, trigger),
+        )
+
+        # The `runId` and `status` checks are the guard, not decoration. An
+        # object-only check let `{}`, `{"ok": true}` and `{"runId": 42}` through
+        # and returned a result whose `runId: str` and `status: RunStatus` were
+        # **not strings at runtime** — a lie the annotations cannot catch, which
+        # becomes an error somewhere in the caller minutes later. That is the
+        # failure this package's own `unwrap` exists to prevent, and it makes
+        # this guard exactly as strict as its sibling in `run.py`, which requires
+        # a string `kind`: two operations in one package must not disagree about
+        # what a malformed success body is.
+        body = require_object(response, "a run object")
+        if not isinstance(body.get("runId"), str) or not isinstance(body.get("status"), str):
+            raise ApiError(
+                response.status,
+                "bad_response",
+                "Server returned a {status} whose body is not a run object.".format(
+                    status=response.status,
+                ),
+                body,
+            )
+        return WorkflowRunResult.from_wire(body, response.status)
+
+
+def _run_body(
+    variables: Optional[Mapping[str, Any]],
+    trigger: Optional[str],
+) -> Dict[str, Any]:
+    """Assemble the request body of a run, dropping what was not supplied.
+
+    `None` means *omitted* for both fields, not JSON `null`: neither has a prior
+    value to preserve (this is a trigger, not a patch), the server defaults
+    `trigger` itself, and a `null` would be a value the route would have to
+    reject. The omit-vs-null distinction that :data:`w6w.UNSET` exists for
+    belongs to the PATCH operations.
+
+    :param variables: Run variables, if any.
+    :param trigger: Trigger name, if any.
+    :returns: The body — `{}` when the caller supplied neither.
+    """
+    body: Dict[str, Any] = {}
+    if variables is not None:
+        body["variables"] = dict(variables)
+    if trigger is not None:
+        body["trigger"] = trigger
+    return body

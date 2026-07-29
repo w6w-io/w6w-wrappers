@@ -1,17 +1,17 @@
 """`client.me()` — who the caller is, and what answered.
 
-One GET, no envelope: the response body is **flat**
-(`{tenant, subject, account, role, versions?}`), because `/api/me` is mounted as
-an alias of the host's existing identity handler rather than as a second one
-(`docs/endpoints.md` §1, D15). There is therefore nothing for `unwrap` to do
-here — this is one of the two operations that reads a flat body, and it asserts
-the body's shape with :func:`w6w.types.require_object` instead.
+One GET to `/auth/me` — the server's real identity route (verified live: `200`,
+`{tenant, subject, account, role}`). The response body is **flat**, so there is
+nothing for `unwrap` to do here; this is one of the two operations that reads a
+flat body, and it asserts the body's shape with
+:func:`w6w.types.require_object` instead.
 
-**`status: "planned"`** in `endpoints.json`: the identity half is served today at
-a different path, and `/api/me` itself lands with T4.2.1 (fenced by BLK-1). The
-wrapper targets the contracted path now; against a server that has not mounted it
-yet the call is a `404`, which is the correct failure and is not worked around
-here.
+**Fixed 2026-07-28** (`docs/endpoints.md` §1): every wrapper calls `/auth/me`
+directly rather than waiting on the `/me` alias D15 originally specced and that
+was never built. The live consumer of that route is the studio, whose typed `Me`
+is the flat body — a nested envelope would break it. What is still missing
+server-side is the optional `versions` block, which this module tolerates being
+absent entirely.
 
 It is deliberately **not a namespace class**. `endpoints.json` names this
 operation `client.me()` — a method on the client itself — so this module exports
@@ -84,15 +84,15 @@ def fetch_me(request: MeRequest) -> Me:
     :param request: The client's bound `request` method.
     :returns: The identity, with `versions["wrapper"]` filled in as a default.
     :raises ConfigError: When no token is configured.
-    :raises ApiError: On any non-2xx — `401` when the token is not accepted, and
-        `404` against a server that has not mounted `/api/me` yet.
+    :raises ApiError: On any non-2xx — e.g. `401` when the token is not
+        accepted.
     :raises ApiError: `bad_response` when a `2xx` body is not an object. A list
         included: `200 []` must fail here rather than return an identity whose
         only populated field is the one this function just added (measured in the
         `node` lane, `evals/T2.1.4.eval.md`; `isinstance(body, dict)` is what
         makes this lane get it right for free).
     """
-    response = request("GET", "/me")
+    response = request("GET", "/auth/me")
     identity = Me.from_wire(require_object(response, "an identity object"))
     # Merge order IS the policy, and the two orders are observably different on
     # the one field a bug report is read off: this package's version is the

@@ -10,9 +10,9 @@ here ever will — see README "Zero runtime dependencies".
 THE BARREL RULE
 ---------------
 **Every public symbol of this package must be re-exported from this module and
-listed in `__all__`.** `w6w.ApiError`, `w6w.Client`, `w6w.Doc`, … are the only
-import paths users are promised; anything reachable only as
-`w6w._transport.something` is private and may move without a major bump.
+listed in `__all__`.** `w6w.ApiError`, `w6w.W6wClient`, `w6w.Doc`, … are the
+only import paths users are promised; anything reachable only as
+`w6w._http.something` is private and may move without a major bump.
 Modules whose names start with an underscore (`_version`, `_config`, `_vars`,
 …) are implementation detail — the underscore is the signal, and `_vars` in
 particular is spelled that way because the public attribute it backs is
@@ -36,6 +36,7 @@ from .connections import ConnectionsApi, ConnectionsRequest
 from .documents import DocumentsApi, DocumentsHost
 from .errors import ApiError, ConfigError
 from .me import MeRequest, fetch_me
+from .run import RunRequest, run_urn
 from .types import (
     UNSET,
     ConnectionState,
@@ -44,11 +45,20 @@ from .types import (
     DocFormat,
     Me,
     PatchableStr,
+    RunEnvelope,
+    RunResult,
+    RunStatus,
+    StepError,
     Unset,
     Var,
     VarType,
+    WorkflowRunResult,
     WorkflowStatus,
     WorkflowSummary,
+    is_action_run,
+    is_function_run,
+    is_terminal_run_status,
+    is_workflow_run,
 )
 from .workflows import WorkflowsApi, WorkflowsHost
 
@@ -76,6 +86,15 @@ __all__ = [
     "MeRequest",
     "PatchableStr",
     "ResolvedConfig",
+    # Execution (T2.3.5). `run` dispatches on a URN and hands back the
+    # kind-tagged envelope as it arrived — a plain dict, so a `kind` this
+    # release has never heard of keeps every sibling field. The predicates are
+    # how a caller discriminates the three known arms.
+    "RunEnvelope",
+    "RunRequest",
+    "RunResult",
+    "RunStatus",
+    "StepError",
     "Transport",
     # The omit-vs-null sentinel and its type. Public because a caller assembling
     # a patch programmatically has to be able to say "not this field" — `None`
@@ -87,14 +106,20 @@ __all__ = [
     "VarsApi",
     "VarsRequest",
     "W6wClient",
+    "WorkflowRunResult",
     "WorkflowStatus",
     "WorkflowSummary",
     "WorkflowsApi",
     "WorkflowsHost",
     "__version__",
-    # `client.me()` is a method rather than a namespace, so the function it
-    # delegates to is the exported symbol — same layering as the namespaces.
+    # `client.me()` and `client.run()` are methods rather than namespaces, so
+    # the functions they delegate to are the exported symbols — same layering
+    # as the namespaces.
     "fetch_me",
+    "is_action_run",
+    "is_function_run",
+    "is_terminal_run_status",
+    "is_workflow_run",
     "join_base_url",
     # Exported because `W6wClient.request` is public: a host reaching an
     # endpoint this version does not model yet must have the same
@@ -102,4 +127,5 @@ __all__ = [
     # concatenate a caller value into a path by hand — the one bug the encoding
     # pin exists to prevent.
     "path",
+    "run_urn",
 ]

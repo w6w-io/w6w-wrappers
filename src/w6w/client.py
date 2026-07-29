@@ -14,7 +14,7 @@ last. **Nothing in `src/w6w/` holds mutable module state.**
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional
 
 from ._config import ResolvedConfig, resolve_config
 from ._http import HttpResponse, Transport, _request, default_transport
@@ -22,7 +22,8 @@ from ._vars import VarsApi
 from .connections import ConnectionsApi
 from .documents import DocumentsApi
 from .me import fetch_me
-from .types import Me
+from .run import run_urn
+from .types import Me, RunEnvelope
 from .workflows import WorkflowsApi
 
 
@@ -55,11 +56,15 @@ class W6wClient:
         scoped by tenant/subject only, and the namespace is constructed with
         this client's `request` method and nothing else, so it holds no
         configuration to scope a call with (`docs/implementation.md` §7).
-    :ivar connections: Connection discovery — `list` only. Constructed the same
-        way as `vars`, for the same reason: connections are user-private and the
-        route reads no project.
-    :ivar workflows: Workflow discovery — `list`. Project-scoped, so it sees
-        this client's configuration.
+    :ivar connections: Connection discovery — `list` only. Read-only on
+        purpose: creating or testing a connection is an interactive,
+        secret-handling flow that `endpoints.json` puts out of scope for this
+        version. Constructed the same way as `vars`, for the same reason:
+        connections are user-private and the route reads no project.
+    :ivar workflows: Workflows — `list` and `run`. `list` is project-scoped and
+        accepts an optional `project` that overrides this client's default, so
+        the namespace sees this client's configuration; `run` is addressed by
+        `wf_…` id and takes `wait`, `variables` and `trigger`.
     """
 
     def __init__(
@@ -72,15 +77,18 @@ class W6wClient:
         """Build a client.
 
         :param base_url: The **origin** of the w6w server, e.g.
-            `https://api.example.com`. The base path (`/api`) is appended for
-            you and is never doubled. Overrides `W6W_BASE_URL`.
+            `https://api.example.com`. The API is served at the root of its own
+            host, so **nothing is appended** (`BASE_PATH` is `""` as of contract
+            0.2.0); any path in the value is preserved verbatim, because it is
+            indistinguishable from a real gateway prefix. Overrides
+            `W6W_BASE_URL`.
         :param token: Bearer token, sent on every request. Overrides
             `W6W_TOKEN`.
-        :param project: Default project id for the project-scoped operations
-            (`documents.*`). Omitted, the server resolves the account's default
-            project. There is no environment variable for it, and no `vars.*`
-            operation takes one — vars are not project-scoped
-            (`docs/implementation.md` §7).
+        :param project: Default project id for the project-scoped operations —
+            `documents.*` and `workflows.list`, which reads it too. Omitted, the
+            server resolves the account's default project. There is no
+            environment variable for it, and no `vars.*` operation takes one —
+            vars are not project-scoped (`docs/implementation.md` §7).
         :param transport: Transport override, for tests and for hosts with their
             own opener. Defaults to `urllib.request.urlopen`.
         :raises ConfigError: When no base URL is configured, naming
@@ -123,10 +131,47 @@ class W6wClient:
 
         :returns: The caller's identity and the component versions.
         :raises ConfigError: When no token is configured.
-        :raises ApiError: On any non-2xx; `404` against a server that has not
-            mounted `/api/me` yet (`status: "planned"`, T4.2.1).
+        :raises ApiError: On any non-2xx, e.g. `401` when the token is not
+            accepted.
         """
         return fetch_me(self.request)
+
+    def run(
+        self,
+        urn: str,
+        action: Optional[str] = None,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> RunEnvelope:
+        """Run whatever a URN addresses, and get back the kind-tagged envelope.
+
+        A **method on the client**, not a namespace: `endpoints.json` names this
+        operation `client.run(urn, …)`. The implementation lives in `run.py` and
+        this is the delegation.
+
+        It is the dispatching counterpart to :meth:`WorkflowsApi.run`, which
+        stays separate because `?wait=`, `variables` and `trigger` have no slot
+        in this three-field shape (D4).
+
+        Discriminate the result with :func:`w6w.is_action_run` /
+        :func:`w6w.is_function_run` / :func:`w6w.is_workflow_run`; a `kind` this
+        version has never heard of is handed back verbatim rather than raised.
+
+        Example::
+
+            env = client.run("conn_01H", action="send_email", payload={"to": "a@b.c"})
+            if w6w.is_action_run(env):
+                print(env["value"])
+
+        :param urn: What to run: `conn_…`, `wf_…`, `fn_…` or `ep_…`.
+        :param action: Which action to invoke; omitted from the body when
+            `None`. Required in practice only for a `conn_…` URN.
+        :param payload: Input to the run; defaults to `{}`.
+        :returns: The `RunEnvelope`, exactly as it arrived.
+        :raises ConfigError: When no token is configured.
+        :raises ApiError: On any non-2xx, e.g. `404` for an unresolvable URN or
+            `424` when the target app failed during execute.
+        """
+        return run_urn(self.request, urn, action=action, payload=payload)
 
     def request(
         self,

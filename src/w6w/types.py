@@ -233,8 +233,8 @@ def unwrap_list(response: HttpResponse, key: str) -> List[Any]:
 def require_object(response: HttpResponse, what: str) -> Dict[str, Any]:
     """Read a **flat**, envelope-less `2xx` body, or fail the same way.
 
-    Two routes have no envelope key at all — `me` and (from T2.3.5)
-    `workflows.run` — so :func:`unwrap` has nothing to unwrap for them. What they
+    Two routes have no envelope key at all — `me` and `workflows.run` — so
+    :func:`unwrap` has nothing to unwrap for them. What they
     still need is the *other* half of what `unwrap` does: the assertion that a
     `2xx` body is the kind of thing it promised to be, reported as
     `bad_response` while the status is still in hand.
@@ -487,11 +487,11 @@ class Me:
     """Who the caller is, plus the versions of the components that answered.
 
     **The body is flat.** There is no wrapping object around the four identity
-    fields and this class does not add one: `/api/me` is mounted as an *alias*
-    of the host's existing identity handler (D15), whose live consumer is the
-    studio, so a nested `{"user": {…}}` shape would need a second handler on the
-    server or would break that consumer. The four fields mirror the server's
-    `Principal` exactly.
+    fields and this class does not add one: the operation calls the host's own
+    `/auth/me` handler, whose live consumer is the studio, so a nested
+    `{"user": {…}}` shape would need a second handler on the server or would
+    break that consumer. The four fields mirror the server's `Principal`
+    exactly.
 
     `versions` is a **string→string map that is open by construction**: it may
     be absent from the wire entirely (an older server), and it may carry keys
@@ -683,3 +683,230 @@ class WorkflowSummary:
             runCount=_count(body, "runCount"),
             updatedAt=_text(body, "updatedAt"),
         )
+
+
+#: The lifecycle state of a run.
+#:
+#: `queued` and `running` are in flight; `succeeded`, `failed` and `canceled`
+#: are terminal (:func:`is_terminal_run_status`). **`failed` is a status, not an
+#: error**: a run that failed comes back as an ordinary `200` carrying this
+#: value, and no operation in this package raises on it
+#: (`docs/implementation.md` §4).
+RunStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
+
+#: The terminal members of :data:`RunStatus`, written down once so that
+#: :func:`is_terminal_run_status` and the rule it implements cannot drift apart.
+_TERMINAL_RUN_STATUSES = frozenset({"succeeded", "failed", "canceled"})
+
+
+@dataclass(frozen=True)
+class StepError:
+    """One step's failure inside a run.
+
+    `error` is **opaque pass-through**: it is whatever the step reported, and
+    its shape belongs to the app that reported it, not to this client.
+    """
+
+    #: Id of the step that failed.
+    stepId: str
+    #: Whatever the step reported.
+    error: Any
+
+    @classmethod
+    def from_wire(cls, body: Any) -> "StepError":
+        """Build a :class:`StepError`, ignoring unknown keys.
+
+        :param body: One parsed item of the `stepErrors` array.
+        :returns: The step failure.
+        """
+        return cls(
+            stepId=_text(body, "stepId"),
+            error=body.get("error") if isinstance(body, dict) else None,
+        )
+
+
+@dataclass(frozen=True)
+class RunResult:
+    """A workflow run: the handle, its state, and the result when it has one.
+
+    A `202` body carries only `runId` + `status` — the run is queued or still
+    going — while a `200` additionally carries `output`, `error` and `steps`.
+    That is why everything after the first two fields has a default.
+
+    `output`, `error` and the values in `steps` are **opaque pass-through**:
+    they come from user workflows and vendor apps, and a client that modelled
+    their internals would be wrong for someone. `steps` is a map **keyed by step
+    id**, not a list (`docs/implementation.md` §5), and it is normalised to `{}`
+    rather than left absent so a caller iterating a run's steps never has to
+    branch on which status carried the body.
+
+    `None` for `output` and `error` means *either* absent *or* an explicit wire
+    `null` — the server sends `"error": null` on a successful waited run, and
+    the two readings are the same statement here. The question a caller actually
+    has is answered by `status`.
+    """
+
+    #: Server-issued run handle, `run_…`. Present on every response, queued
+    #: included.
+    runId: str
+    #: Where the run has got to.
+    status: RunStatus
+    #: Per-step state, keyed by step id. `{}` when the server sent none.
+    steps: Dict[str, Any] = field(default_factory=dict)
+    #: The run's output when it finished; `None` while it is still going.
+    output: Any = None
+    #: The run-level error when it failed. **Data, never a raised exception.**
+    error: Any = None
+    #: Per-step failures, when the server reports them; `None` when it does not.
+    stepErrors: Optional[List[StepError]] = None
+
+    @classmethod
+    def from_wire(cls, body: Any) -> "RunResult":
+        """Build a :class:`RunResult` from a parsed wire object.
+
+        :param body: The parsed, flat run body.
+        :returns: The run result.
+        """
+        return cls(**_run_fields(body))
+
+
+@dataclass(frozen=True)
+class WorkflowRunResult(RunResult):
+    """What `workflows.run` returns: the wire body, plus two derived signals.
+
+    It **is** a :class:`RunResult` — the wire fields are present under their wire
+    names, unwrapped from nothing (this route has no envelope). The two extra
+    fields exist because a caller otherwise cannot tell a queued run from a
+    finished one without re-deriving the rule:
+
+    - :attr:`terminal` answers "has this run finished?" from the **run's own
+      status**, which is the question a caller actually has.
+    - :attr:`httpStatus` is the transport's own answer (`200` finished in time,
+      `202` still going), kept because it is the distinction the server makes:
+      dropping it would leave a caller unable to tell a `?wait=` timeout from a
+      run that was never waited on.
+
+    Both defaults exist only because a dataclass cannot put a required field
+    after an inherited optional one. :meth:`from_wire` always supplies them.
+    """
+
+    #: `True` when `status` is `succeeded`, `failed` or `canceled`.
+    terminal: bool = False
+    #: The HTTP status that carried this body: `200` terminal, `202` queued or
+    #: still running.
+    httpStatus: int = 0
+
+    @classmethod
+    def from_wire(cls, body: Any, http_status: int = 0) -> "WorkflowRunResult":
+        """Build a :class:`WorkflowRunResult` from a body and the status that carried it.
+
+        :param body: The parsed, flat run body.
+        :param http_status: The HTTP status of the response.
+        :returns: The run result, with `terminal` derived from `status`.
+        """
+        fields = _run_fields(body)
+        return cls(
+            terminal=is_terminal_run_status(fields["status"]),
+            httpStatus=http_status,
+            **fields,
+        )
+
+
+def _run_fields(body: Any) -> Dict[str, Any]:
+    """Read the six wire fields of a run body, with the pinned normalisations.
+
+    Shared by :meth:`RunResult.from_wire` and
+    :meth:`WorkflowRunResult.from_wire` so the two can never disagree about what
+    a run body means.
+
+    :param body: The parsed, flat run body.
+    :returns: Constructor keyword arguments for a run result.
+    """
+    raw_status = body.get("status") if isinstance(body, dict) else None
+    raw_steps = body.get("steps") if isinstance(body, dict) else None
+    raw_step_errors = body.get("stepErrors") if isinstance(body, dict) else None
+    return {
+        "runId": _text(body, "runId"),
+        # `queued` is the server's own answer for a run it has just accepted,
+        # not an invented one. The callers that reach this default are the ones
+        # whose body failed the caller-facing guard anyway.
+        "status": raw_status if isinstance(raw_status, str) else "queued",
+        # `{}` rather than absent: see the class docstring.
+        "steps": dict(raw_steps) if isinstance(raw_steps, dict) else {},
+        "output": body.get("output") if isinstance(body, dict) else None,
+        "error": body.get("error") if isinstance(body, dict) else None,
+        "stepErrors": (
+            [StepError.from_wire(item) for item in raw_step_errors]
+            if isinstance(raw_step_errors, list)
+            else None
+        ),
+    }
+
+
+#: What `client.run()` returns: the parsed envelope, **exactly as it arrived**.
+#:
+#: A plain dict and deliberately **not** a dataclass, which is the one place
+#: this lane's usual "transcribe into a frozen dataclass" rule is suspended.
+#: `docs/implementation.md` §5 pins the return type as the three known arms
+#: **plus an open fallback** — "a plain `dict`" in so many words — because a
+#: `kind` this release has never heard of must reach the caller with every
+#: sibling field intact. A dataclass drops unknown keys by construction (that is
+#: its contract everywhere else in this file), so modelling the envelope as one
+#: would throw away exactly the payload the open arm exists to preserve.
+#:
+#: The three arms the server sends today:
+#:
+#: ===================  ==================  ======
+#: ``kind``             field               HTTP
+#: ===================  ==================  ======
+#: ``"action"``         ``value``           200
+#: ``"function"``       ``output``          200
+#: ``"workflow"``       ``runId``/``status``  202
+#: ===================  ==================  ======
+#:
+#: Discriminate with :func:`is_action_run`, :func:`is_function_run` and
+#: :func:`is_workflow_run`; anything else is a kind this release does not know,
+#: and it is handed back rather than raised.
+RunEnvelope = Dict[str, Any]
+
+
+def is_action_run(env: Mapping[str, Any]) -> bool:
+    """Is this the `action` arm — a `conn_…` URN that executed an app action?
+
+    :param env: Any envelope `run` returned.
+    :returns: `True` when `kind` is `"action"`; the value is under `value`.
+    """
+    return env.get("kind") == "action"
+
+
+def is_function_run(env: Mapping[str, Any]) -> bool:
+    """Is this the `function` arm — a `fn_…` / `ep_…` URN that executed?
+
+    :param env: Any envelope `run` returned.
+    :returns: `True` when `kind` is `"function"`; the value is under `output`.
+    """
+    return env.get("kind") == "function"
+
+
+def is_workflow_run(env: Mapping[str, Any]) -> bool:
+    """Is this the `workflow` arm — a `wf_…` URN that was enqueued?
+
+    :param env: Any envelope `run` returned.
+    :returns: `True` when `kind` is `"workflow"`; the handle is under `runId`.
+    """
+    return env.get("kind") == "workflow"
+
+
+def is_terminal_run_status(status: str) -> bool:
+    """Has a run reached a state it will not leave?
+
+    Public because it is the same question :attr:`WorkflowRunResult.terminal`
+    answers, and a caller following a `202` handle on its own schedule needs it
+    too. It reads the **run's** status rather than an HTTP code: a `202` can
+    carry `queued` or `running`, and the answer is about the run, not the
+    transport.
+
+    :param status: A run status.
+    :returns: `True` for `succeeded`, `failed` and `canceled`.
+    """
+    return status in _TERMINAL_RUN_STATUSES

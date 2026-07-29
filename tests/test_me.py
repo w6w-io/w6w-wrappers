@@ -3,9 +3,13 @@
 No case here needs a live server or opens a socket
 (`docs/implementation.md` §9): every one hands the client a callable that
 records the `urllib.request.Request` it was given and returns — or raises —
-whatever the case is about. The real `urlopen` is never called. That matters
-more for this operation than for most: `/api/me` is `status: "planned"`, so
-there is no server anywhere that answers it yet.
+whatever the case is about. The real `urlopen` is never called.
+
+The route is **`GET /auth/me`** — the server's real, already-live identity
+handler, called directly since 2026-07-28 rather than through the `/me` alias
+D15 originally specced and that was never built (`docs/endpoints.md` §1). The
+path is asserted below, because "which route does identity live at" is exactly
+the kind of fact that drifts silently between a contract and three lanes.
 
 Three of the cases below exist because they are the ones a plausible refactor
 gets backwards:
@@ -35,7 +39,11 @@ from urllib.request import Request
 
 from w6w import ApiError, Me, W6wClient, __version__
 
-#: The identity half of the body, exactly as the aliased handler sends it —
+#: The full URL `me` must request. One constant, so a lane that moved the route
+#: fails on the assertion rather than on a fixture that moved with it.
+ME_URL = "https://api.example.com/auth/me"
+
+#: The identity half of the body, exactly as the server's handler sends it —
 #: flat, with no wrapping object around the four fields.
 ME_BODY = {
     "tenant": "default",
@@ -79,7 +87,7 @@ def http_error(status: int, body: Any, reason: str = "") -> HTTPError:
     server would.
     """
     return HTTPError(
-        "https://api.example.com/me",
+        ME_URL,
         status,
         reason,
         email.message.Message(),
@@ -141,7 +149,9 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual(identity.role, "admin")
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0].get_method(), "GET")
-        self.assertEqual(calls[0].full_url, "https://api.example.com/me")
+        # `/auth/me`, not `/me`: the alias was never built and the wrapper calls
+        # the server's real identity route directly.
+        self.assertEqual(calls[0].full_url, ME_URL)
         self.assertEqual(calls[0].get_header("Authorization"), "Bearer tok_1")
 
     def test_a_body_with_no_versions_still_yields_a_versions_map(self) -> None:
