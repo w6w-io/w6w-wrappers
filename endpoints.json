@@ -26,7 +26,7 @@
         "python": "client.me()",
         "cli": "w6w me"
       },
-      "notes": "Fixed 2026-07-28: the wrapper calls `/auth/me` directly \u2014 the server\u2019s real, already-live identity route (verified live: 200, `{tenant, subject, account, role}`), not the not-yet-built `/api/me` alias D15 originally specced. `{tenant, subject, account, role}` (the server, `app.get(\"/auth/me\", ...)`). The response body is flat, NOT a `{user:{\u2026}}` envelope. The live consumer is the studio (the studio, typed `Me` at the studio); a nested envelope would break it. `versions` is optional and additive \u2014 the server does not send one today, so a wrapper must tolerate it being absent entirely and must tolerate unknown keys inside it when it does. `versions.wrapper` is filled client-side from the wrapper\u2019s own package version. PRECEDENCE IS SERVER-WINS: the wrapper\u2019s own version is only a DEFAULT that any key the server supplied overrides \u2014 `{ wrapper: VERSION, ...body.versions }` in TS, `{\"wrapper\": VERSION, **(body.get(\"versions\") or {})}` in Python. Do NOT write the other order (`{**server, wrapper: VERSION}`), which would make the wrapper\u2019s value win; the two are observably different on the one field a bug report is read off. DISPLAY IS A SEPARATE RULE: a wrapper must never SHOW a version of `0.0.0` or empty \u2014 if the resolved value is `0.0.0` or empty string, it presents `\"dev\"` (D5). The two rules do not conflict, because they act at different layers: server-wins governs the VALUE carried in the returned object (which stays a faithful transcription of the wire), the display rule governs what a banner such as `w6w info` PRINTS. So a server sending `versions.wrapper: \"0.0.0\"` is carried through in the data and rendered as `dev` to the user. D8 \u2014 the operation name is `me`; `w6w info` is a CLI alias only (see `cliAlias`)."
+      "notes": "Fixed 2026-07-28: the wrapper calls `/auth/me` directly \u2014 the server\u2019s real, already-live identity route (verified live: 200, `{tenant, subject, account, role}`), not the not-yet-built `/api/me` alias D15 originally specced. `{tenant, subject, account, role}`. The response body is flat, NOT a `{user:{\u2026}}` envelope. The live consumer is the reference studio; a nested envelope would break it. `versions` is optional and additive \u2014 the server does not send one today, so a wrapper must tolerate it being absent entirely and must tolerate unknown keys inside it when it does. `versions.wrapper` is filled client-side from the wrapper\u2019s own package version. PRECEDENCE IS SERVER-WINS: the wrapper\u2019s own version is only a DEFAULT that any key the server supplied overrides \u2014 `{ wrapper: VERSION, ...body.versions }` in TS, `{\"wrapper\": VERSION, **(body.get(\"versions\") or {})}` in Python. Do NOT write the other order (`{**server, wrapper: VERSION}`), which would make the wrapper\u2019s value win; the two are observably different on the one field a bug report is read off. DISPLAY IS A SEPARATE RULE: a wrapper must never SHOW a version of `0.0.0` or empty \u2014 if the resolved value is `0.0.0` or empty string, it presents `\"dev\"` (D5). The two rules do not conflict, because they act at different layers: server-wins governs the VALUE carried in the returned object (which stays a faithful transcription of the wire), the display rule governs what a banner such as `w6w info` PRINTS. So a server sending `versions.wrapper: \"0.0.0\"` is carried through in the data and rendered as `dev` to the user. D8 \u2014 the operation name is `me`; `w6w info` is a CLI alias only (see `cliAlias`)."
     },
     {
       "name": "connections.list",
@@ -42,7 +42,7 @@
         "python": "client.connections.list()",
         "cli": "w6w connections list"
       },
-      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 \u2014 kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_\u2026` URN to pass to `run`. Verified live at the server"
+      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 \u2014 kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_\u2026` URN to pass to `run`. Verified live."
     },
     {
       "name": "workflows.list",
@@ -65,7 +65,7 @@
         "python": "client.workflows.list(project=None)",
         "cli": "w6w workflows list [--project <id>]"
       },
-      "notes": "Unpaginated today. Return a container type that can grow a cursor without a breaking change. D4 \u2014 kept in v0.1.0: it is how a user discovers a `wf_\u2026` URN to pass to `run`. Verified live at the server"
+      "notes": "Unpaginated today. Return a container type that can grow a cursor without a breaking change. D4 \u2014 kept in v0.1.0: it is how a user discovers a `wf_\u2026` URN to pass to `run`. Verified live."
     },
     {
       "name": "workflows.run",
@@ -119,7 +119,7 @@
         "python": "client.workflows.run(id, wait=False, variables=None, trigger=None)",
         "cli": "w6w workflows run <id> [--wait]"
       },
-      "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. `trigger` is a STRING, not an object: the server reads it as `RunTrigger` (the server, the workflow engine \u2014 `\"manual\" | \"schedule\" | \"webhook\" | \"event\" | \"replay\"`), and it defaults to 'manual' server-side when omitted. The five values are recorded in `knownValues` as documentation only \u2014 every wrapper types the param as an open string (`trigger?: string` / `trigger: str | None`) and passes it through unvalidated, so a sixth server value needs no wrapper release. D4 \u2014 kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape. Verified live at the server"
+      "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. `trigger` is a STRING, not an object: the server reads it as a `RunTrigger` (`\"manual\" | \"schedule\" | \"webhook\" | \"event\" | \"replay\"` today), and it defaults to 'manual' server-side when omitted. The five values are recorded in `knownValues` as documentation only \u2014 every wrapper types the param as an open string (`trigger?: string` / `trigger: str | None`) and passes it through unvalidated, so a sixth server value needs no wrapper release. D4 \u2014 kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape. Verified live."
     },
     {
       "name": "documents.list",
@@ -142,7 +142,7 @@
         "python": "client.documents.list(project=None)",
         "cli": "w6w documents list [--project <id>]"
       },
-      "notes": "Server wraps the body as `{ documents: Doc[] }`; the wrapper unwraps and returns the array. Documents ARE project-scoped: every `documents.*` route accepts an optional `?project=` and otherwise resolves the account's default project (the server). An unknown project id is `400 unknown_project`."
+      "notes": "Server wraps the body as `{ documents: Doc[] }`; the wrapper unwraps and returns the array. Documents ARE project-scoped: every `documents.*` route accepts an optional `?project=` and otherwise resolves the account's default project. An unknown project id is `400 unknown_project`."
     },
     {
       "name": "documents.get",
@@ -342,7 +342,7 @@
         "python": "client.vars.list()",
         "cli": "w6w vars list"
       },
-      "notes": "Vars are NOT project-scoped \u2014 unlike documents, no `vars.*` route accepts `?project=` (verified: the string `project` does not occur anywhere in the server). They are scoped by tenant/subject only. Do not add a `project` option to any `vars.*` signature; adding one later would be additive, faking one now would be a lie the server does not honour. Server wraps the body as `{ vars: Var[] }`; the wrapper unwraps."
+      "notes": "Vars are NOT project-scoped \u2014 unlike documents, no `vars.*` route accepts `?project=` (verified: no `vars` route reads it). They are scoped by tenant/subject only. Do not add a `project` option to any `vars.*` signature; adding one later would be additive, faking one now would be a lie the server does not honour. Server wraps the body as `{ vars: Var[] }`; the wrapper unwraps."
     },
     {
       "name": "vars.get",
@@ -535,7 +535,7 @@
         "python": "client.run(urn, action=None, payload=None)",
         "cli": "w6w run <urn> [--action <a>] [--payload <json>]"
       },
-      "notes": "D3 \u2014 `RunEnvelope` is kind-discriminated with exactly three arms: `{kind:\"action\", value}` | `{kind:\"function\", output}` | `{kind:\"workflow\", runId, status}`. The action and function arms return 200; the workflow arm returns 202, and 202 is a NORMAL outcome, not an error \u2014 the run is queued, and `runId` is how the caller follows it. Wrappers must switch on `kind` and must tolerate an unknown future `kind` rather than crashing. `action` is optional because a workflow, function or endpoint URN has no action; it is required in practice for a `conn_\u2026` URN. `urn` resolves over four runnable arms only \u2014 `conn_`, `wf_`, `fn_`, `ep_` (D16); `doc_` and `var_` are NOT URN arms in v0.1.0 and are addressed by the `documents.*` / `vars.*` operations above. This is deliberately narrower than `workflows.run`: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape (D4). Server-implemented 2026-07-28: a third sibling BLL service (the server) dispatching to the same runners the dedicated invoke routes use \u2014 no new execution path, no change to core Callable."
+      "notes": "D3 \u2014 `RunEnvelope` is kind-discriminated with exactly three arms: `{kind:\"action\", value}` | `{kind:\"function\", output}` | `{kind:\"workflow\", runId, status}`. The action and function arms return 200; the workflow arm returns 202, and 202 is a NORMAL outcome, not an error \u2014 the run is queued, and `runId` is how the caller follows it. Wrappers must switch on `kind` and must tolerate an unknown future `kind` rather than crashing. `action` is optional because a workflow, function or endpoint URN has no action; it is required in practice for a `conn_\u2026` URN. `urn` resolves over four runnable arms only \u2014 `conn_`, `wf_`, `fn_`, `ep_` (D16); `doc_` and `var_` are NOT URN arms in v0.1.0 and are addressed by the `documents.*` / `vars.*` operations above. This is deliberately narrower than `workflows.run`: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape (D4). Server-implemented 2026-07-28: a third sibling BLL service dispatching to the same runners the dedicated invoke routes use \u2014 no new execution path, no change to core Callable."
     }
   ],
   "cli": {

@@ -44,7 +44,7 @@ failure mode: an operation added to two wrappers and forgotten in the third.
 
 **`status` records *server readiness*, not wrapper obligation, so the runner
 exempts nothing.** An operation is `"planned"` when its route is not live yet — a
-statement about the server, aimed at a *user* deciding whether a call will
+statement about the **server**, aimed at a *user* deciding whether a call will
 reach anything today. It tells an *implementer* nothing: this project implements
 all of the operations ahead of the server, some of them `planned` only because the
 server work is fenced. A wrapper that skipped an operation "because it is planned"
@@ -97,8 +97,8 @@ Two rules survive the change, because they were never about the mirror:
 The order is not negotiable, because each step depends on the previous one being
 real:
 
-1. **Server first — for `status`, not for the code.** The endpoint ships in
-   the server, is deployed, and only then does its operation become
+1. **Server first — for `status`, not for the code.** The endpoint ships in the
+   server, is deployed, and only then does its operation become
    `status: "required"`. That is what "wrappers never lead the API" means: no
    operation is ever *advertised as live* before its route is, because a client
    method that silently returns 404 is worse than no method.

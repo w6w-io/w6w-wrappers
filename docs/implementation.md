@@ -10,20 +10,18 @@ languages, and anything left ambiguous here becomes three different truths that
 only surface at the conformance gate. **Where this file says "pinned", it is not a
 suggestion and not a starting point for discussion — implement it verbatim.**
 
-Every claim below that rests on a server or studio behaviour cites its file and
-enclosing route or symbol, so a reader can check it rather than trust it. Those
-paths are inside **private** repos and are marked.
+Every claim below rests on a behaviour of the w6w server or of a reference
+client, and each is stated so that it can be checked against the API itself
+rather than taken on trust.
 
-> **This is why `w6w-io/w6w-wrappers` is private.** There are 20 such citations
-> in this file and 14 in [endpoints.md](./endpoints.md), and together they
-> describe the closed host's layout, route handlers and symbol names — which
-> STRATEGY §5.1 keeps closed. **Stripping every one of them is a precondition of
-> making this repo public**, not a cleanup task to do afterwards, and the strip
-> has to cover the git history as well as the working tree. Nothing about the
-> layout depends on visibility: the contract sits beside the lanes either way,
-> which is what removed the need for a public mirror
-> ([parity.md](./parity.md#where-the-contract-comes-from-in-ci)). Visibility is
-> now a strategy decision, decoupled from the mechanism.
+> **No paths into the closed host.** This file and [endpoints.md](./endpoints.md)
+> used to cite the server's own route handlers by file and line. That was useful
+> while these documents lived inside a private monorepo and is not something to
+> publish: STRATEGY §5.1 keeps *whose the API is and how it is operated at scale*
+> closed, and a public file that maps the host's internals gives a reader of
+> **this** package nothing it can act on. Those coordinates were removed when
+> this repo went public. **Do not add them back** — describe the behaviour, name
+> the route, and let the API be the thing that is checkable.
 
 ---
 
@@ -95,7 +93,8 @@ never conflict with a user's pins.
 0.2.0 the wrapper appends **nothing** — `basePath` in `endpoints.json` is `""`,
 because the server serves its routes at the root of its own host.
 
-The join rule, pinned — it mirrors `apiBase(url)`:
+The join rule, pinned — it mirrors the one the operator console already applies
+against this same API, so every client agrees on what `W6W_BASE_URL` means:
 
 1. Strip **all** trailing slashes: `url.replace(/\/+$/, "")`.
 2. Reject anything that is not an absolute `http(s)` URL with a host.
@@ -389,8 +388,8 @@ invoke error rides alongside `logs` and `apiCalls`.
 
 ### The three failure modes — implement these verbatim, in all three languages
 
-Transcribed from `req<T>()`,
-which has exactly these three and no others.
+Transcribed from the reference studio's own request helper, which has exactly
+these three and no others.
 
 **(a) Transport failure** — the request never produced an HTTP response (server
 down, DNS failure, TLS failure, connection refused, timeout).
@@ -468,7 +467,8 @@ refresh, no callback hook (§8).
 Three rules. They are the most common way a thin client gets this API wrong.
 
 1. **`202` is success.** `workflows.run` returns `202` when the run is queued (the
-   default) and again when `?wait=true` times out with the run still going. `run`'s
+   default) and again when `?wait=true` times out with the run still going.
+   `run`'s
    workflow arm returns `202` for the same reason (D3). Success statuses are
    declared per-operation in `endpoints.json` as `successStatuses`; a wrapper
    treats `200` and `202` **identically** and never raises on either. The
@@ -494,9 +494,9 @@ Three rules. They are the most common way a thin client gets this API wrong.
 
 ## 5. Wire types
 
-Read off the studio on `main` — the best
-wire-shape reference in the workspace. **Transcribe these; do not import or vendor
-the studio's file.** The field lists below are the pin: three languages, same
+Transcribed from the shapes the server actually puts on the wire, cross-checked
+against the reference studio's own API types. **Transcribe these; do not import
+or vendor another package's file.** The field lists below are the pin: three languages, same
 names, same optionality.
 
 Naming per language: TypeScript keeps these names verbatim; Python uses the same
@@ -675,7 +675,8 @@ fallback.
 ### The project asymmetry, stated honestly
 
 - Every `documents.*` operation accepts an **optional `project`**, which becomes
-  `?project=`. Omitted, the server resolves the account's default project. An unknown project id is
+  `?project=`. Omitted, the server resolves the account's default project. An
+  unknown project id is
   `400 unknown_project`.
 - **No `vars.*` operation accepts `project`.** Vars are scoped by tenant/subject
   only; the `vars` table has **no `project` column** and no `vars` route reads the
@@ -701,27 +702,26 @@ operation.
 
 ## 8. Do not carry over
 
-the studio is the transcription source for
-§3 and §5 — it is the most accurate wire reference in the workspace. It is also a
-**browser** client, and six of its behaviours are browser couplings that must not
+§3 and §5 are transcribed from the reference studio's API client, which is the
+most accurate wire reference available. It is also a **browser** client, and six of its behaviours are browser couplings that must not
 appear in a library. Listed with reasons so no reviewer has to re-derive them:
 
 | # | In the studio client | Why it must not be carried over |
 |---|---|---|
-| 1 | `const BASE = import.meta.env.VITE_API_BASE ?? "/api"` *(`client.ts:48`)* | `import.meta.env` is a **Vite-only** global — it does not exist in Deno, Node or Python. And the `"/api"` fallback is a same-origin relative URL, meaningless outside a page. Base URL comes from constructor-or-env (§2). |
-| 2 | `localStorage.getItem("w6w.token")` token bootstrap *(`client.ts:53-54`)* | `localStorage` is a browser API. A library reads `W6W_TOKEN` or takes the token as an argument, and never reaches for ambient browser storage. |
-| 3 | Module-global mutable `token` + `setApiToken()` *(`client.ts:53-57`)* | A single mutable module-level credential means **two clients in one process share one token** — an outright bug for a server-side SDK juggling tenants. Credentials are instance state (§2, MECHANISM PIN). |
-| 4 | `onAuthError` callback + `setAuthErrorHandler()` *(`client.ts:63-66`)* | A registration hook for "session died" only makes sense where there is a session and a UI. |
-| 5 | `if (res.status === 401 && code === "unauthorized") onAuthError?.()` *(`client.ts:153`)* | A redirect-to-login side effect has no meaning in a library. Wrappers raise the `ApiError` and stop — no redirect, no refresh, no retry (§3). |
-| 6 | `runWorkflow`'s **600 × 500 ms client-side poll** *(`client.ts:420-445`)* | The server offers `?wait=true`, which polls server-side. Re-implementing the poll in three languages means three timeout policies and three retry-storm bugs to keep in sync. Use `?wait=` and hand back the `202` handle (§4). |
+| 1 | `const BASE = import.meta.env.VITE_API_BASE ?? "/api"` | `import.meta.env` is a **Vite-only** global — it does not exist in Deno, Node or Python. And the `"/api"` fallback is a same-origin relative URL, meaningless outside a page. Base URL comes from constructor-or-env (§2). |
+| 2 | `localStorage.getItem("w6w.token")` token bootstrap | `localStorage` is a browser API. A library reads `W6W_TOKEN` or takes the token as an argument, and never reaches for ambient browser storage. |
+| 3 | Module-global mutable `token` + `setApiToken()` | A single mutable module-level credential means **two clients in one process share one token** — an outright bug for a server-side SDK juggling tenants. Credentials are instance state (§2, MECHANISM PIN). |
+| 4 | `onAuthError` callback + `setAuthErrorHandler()` | A registration hook for "session died" only makes sense where there is a session and a UI. |
+| 5 | `if (res.status === 401 && code === "unauthorized") onAuthError?.()` | A redirect-to-login side effect has no meaning in a library. Wrappers raise the `ApiError` and stop — no redirect, no refresh, no retry (§3). |
+| 6 | `runWorkflow`'s **600 × 500 ms client-side poll** | The server offers `?wait=true`, which polls server-side. Re-implementing the poll in three languages means three timeout policies and three retry-storm bugs to keep in sync. Use `?wait=` and hand back the `202` handle (§4). |
 
-Positively: the closest thing in the house to what a wrapper actually is, is
-the operator console — it talks to the same API server-side, from Node,
-with an env-supplied bearer: `apiBase()` at `src/lib/targets.ts:51` (the base-URL
-rule in §2), env config with an explicit "configured?" predicate at
-`targets.ts:20-48`, and `src/app/api/proxy/route.ts` doing `res.text()` + guarded
-`JSON.parse` + status passthrough — the same three failure modes as §3. Prefer it
-as the shape reference wherever the two disagree.
+Positively: the closest shape to what a wrapper actually is, is the operator
+console — it talks to the same API **server-side**, from Node, with an
+env-supplied bearer, and it independently arrived at the same three things this
+spec pins: the base-URL join rule of §2, environment config behind an explicit
+"is this configured?" predicate, and a proxy that does `res.text()` + a guarded
+`JSON.parse` + status passthrough — the same three failure modes as §3. Where a
+browser client and that one disagree, follow that one.
 
 ---
 
@@ -881,7 +881,7 @@ the mechanics. The two documents agree; if they ever drift, **this one is the
 pinned spec** and `parity.md` follows it.
 
 The reason is that this project implements all seventeen operations **ahead of the
-server**: four are `planned` because the server is fenced (BLK-1), not
+server**: four are `planned` because the server work is fenced, not
 because the wrappers are unfinished. **`status` records *server* readiness, not
 wrapper obligation.** A wrapper that omitted `run` or `documents.getByKey` "because
 they are planned" would ship a surface that silently differs from its two

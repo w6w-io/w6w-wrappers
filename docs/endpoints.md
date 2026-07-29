@@ -48,14 +48,12 @@ server exactly (D6). Read-by-key exists only where the server offers a
 `by-key`/`by-name` route; there is **no client-side list-then-filter** in any
 wrapper (D12, and `README.md` "What a wrapper is").
 
-**Internal citations.** Lines below marked cite paths inside the
-**private** the server / the studio repos. They are here because
-this repo is private too. **Every citation must be stripped before
-this repo is made public** — STRATEGY §5.1 keeps the host closed, and a public
-file that names its route handlers by path leaks the host's shape for no user
-benefit. The strip is a precondition of the visibility flip, and it has to cover
-the git history as well as the working tree; see
-[implementation.md](./implementation.md) for the count and the standing note.
+**What this file does not cite.** Route behaviour below is described and dated,
+never traced to a file and line inside the server. The host is closed (STRATEGY
+§5.1) and naming its handlers by path would tell a reader of this package
+nothing it can act on — see the note at the top of
+[implementation.md](./implementation.md), which applies here identically. Verify
+a claim against the API, not against a path you cannot open.
 
 **Naming.** Operation names in `endpoints.json` are the contract. Each language
 renders them in its own idiom but the mapping is mechanical and must not drift.
@@ -447,6 +445,8 @@ removal before the request is even sent — one client's normalizer turns
 two values at creation means `by-key/:key` never has to disambiguate an
 unrepresentable key.
 
+
+
 D12 (amending D6): a user who chose a key should be able to address by it, and
 the alternative leaks internal `doc_…` ids to users who never saw them. **No
 client-side list-then-filter** — `README.md` "What a wrapper is" forbids composing
@@ -606,6 +606,8 @@ GET /vars/by-name/:name
 Names are already regex-validated (`[a-z_][a-z0-9_]*`) at create time, which is
 URL-safe by construction — unlike documents' free-form `key`, no dot-segment
 hazard exists here and no extra normalization is needed.
+
+
 
 D12: key-addressed reads become server routes rather than client-side
 composition. No list-then-filter workaround. If the fence never clears, wrappers

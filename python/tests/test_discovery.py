@@ -26,8 +26,8 @@ from w6w import ApiError, ConnectionSummary, W6wClient, WorkflowSummary
 
 #: One connection, as the server sends it — **including the `tenant` the exposed
 #: type deliberately omits**. This is not a synthetic extra key: the server's own
-#: summary carries it (the server), so
-#: a reader that rejected unknown keys would raise on every real response.
+#: summary really carries it, so a reader that rejected unknown keys would raise
+#: on every real response.
 CONNECTION_BODY = {
     "id": "conn_1",
     "appId": "sendgrid",
