@@ -16,9 +16,9 @@ caution about leaking a secret this client never receives; it is about not
 promising a field that will never arrive.
 
 ── What the server *does* send that this type omits ──
-The server's own summary carries a `tenant` the exposed type deliberately drops
-(the server). It is dropped, not
-rejected: a reader that treated an unmodelled key as an error would raise on
+The server's own summary carries a `tenant` the exposed type deliberately drops.
+It is dropped, not rejected: a reader that treated an unmodelled key as an error
+would raise on
 **every real response**, and it would do so on the day the server adds its next
 field rather than the day anyone tested it. Unknown keys are tolerated
 everywhere in this package (`docs/implementation.md` §5).

@@ -50,10 +50,12 @@ wrapper (D12, and `README.md` "What a wrapper is").
 
 **Internal citations.** Lines below marked cite paths inside the
 **private** the server / the studio repos. They are here because
-this directory is root-tracked and private. **Every citation must be
-stripped before any of this text ships in a public wrapper repo's README or docs
-site** — STRATEGY §5.1 keeps the host closed, and a public file that names its
-route handlers by path leaks the host's shape for no user benefit.
+this repo is private too. **Every citation must be stripped before
+this repo is made public** — STRATEGY §5.1 keeps the host closed, and a public
+file that names its route handlers by path leaks the host's shape for no user
+benefit. The strip is a precondition of the visibility flip, and it has to cover
+the git history as well as the working tree; see
+[implementation.md](./implementation.md) for the count and the standing note.
 
 **Naming.** Operation names in `endpoints.json` are the contract. Each language
 renders them in its own idiom but the mapping is mechanical and must not drift.
