@@ -162,8 +162,9 @@ class SurfaceTest(unittest.TestCase):
     def test_neither_namespace_exposes_a_write_operation(self) -> None:
         # `endpoints.json` puts every connection write and every workflow write
         # out of scope for this version: they are interactive studio flows, and
-        # half of one in an SDK is worse than none. `workflows.run` is the one
-        # addition still to come (T2.3.5) and is not asserted absent here.
+        # half of one in an SDK is worse than none. `workflows.run` is not a
+        # write in that sense — it triggers a definition rather than editing one
+        # — so it is contracted, present, and covered by `test_workflows_run.py`.
         instance = W6wClient(base_url="https://api.example.com", token="t")
 
         for name in ("create", "update", "delete", "test"):
