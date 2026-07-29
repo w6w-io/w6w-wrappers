@@ -47,9 +47,11 @@ dependencies = []
 dev = ["coverage>=7.0"]
 
 [project.urls]
-Homepage = "https://github.com/w6w-io/w6w-python"
-Repository = "https://github.com/w6w-io/w6w-python"
-Issues = "https://github.com/w6w-io/w6w-python/issues"
+# The wrappers share one repo, one directory per language. These pointed at
+# w6w-io/w6w-python, which was specced but never created.
+Homepage = "https://github.com/w6w-io/w6w-wrappers/tree/main/python"
+Repository = "https://github.com/w6w-io/w6w-wrappers"
+Issues = "https://github.com/w6w-io/w6w-wrappers/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

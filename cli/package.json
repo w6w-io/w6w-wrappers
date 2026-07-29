@@ -5,10 +5,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/w6w-io/w6w-cli.git"
+    "url": "git+https://github.com/w6w-io/w6w-wrappers.git",
+    "directory": "cli"
   },
-  "homepage": "https://github.com/w6w-io/w6w-cli#readme",
-  "bugs": "https://github.com/w6w-io/w6w-cli/issues",
+  "homepage": "https://github.com/w6w-io/w6w-wrappers/tree/main/cli#readme",
+  "bugs": "https://github.com/w6w-io/w6w-wrappers/issues",
   "keywords": ["w6w", "workflow", "cli", "client", "api"],
   "type": "module",
   "bin": {

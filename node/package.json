@@ -5,10 +5,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/w6w-io/w6w-node.git"
+    "url": "git+https://github.com/w6w-io/w6w-wrappers.git",
+    "directory": "node"
   },
-  "homepage": "https://github.com/w6w-io/w6w-node#readme",
-  "bugs": "https://github.com/w6w-io/w6w-node/issues",
+  "homepage": "https://github.com/w6w-io/w6w-wrappers/tree/main/node#readme",
+  "bugs": "https://github.com/w6w-io/w6w-wrappers/issues",
   "keywords": ["w6w", "workflow", "sdk", "client", "api"],
   "type": "module",
   "types": "./dist/mod.d.ts",
