@@ -7,9 +7,9 @@ builtin. The namespace class itself is public and exported from the barrel.
 Six operations, **one HTTP call each**. Create by `name`, read by id or by name,
 update and delete by id (`docs/implementation.md` §7, D6 amended by D12). No
 client-side list-then-filter: :meth:`VarsApi.get_by_name` targets a real route,
-`GET /vars/by-name/{name}`, which is `status: "planned"` in `endpoints.json` and
-lands with T4.4.1 (fenced by BLK-1). Until it does, a live server answers `404`
-— the correct failure, and it is not papered over here.
+`GET /vars/by-name/{name}`, served since 2026-07-28. Names are regex-validated
+(`^[a-z_][a-z0-9_]*$`) at create time and so are URL-safe by construction —
+unlike a document's free-form key, there is no dot-segment hazard here.
 
 **There is no scoping query parameter on any variable operation, and this module
 cannot invent one.** Variables are scoped by tenant/subject only: the server's
@@ -132,9 +132,6 @@ class VarsApi:
         (encoded), and a name it rejects comes back as `400 invalid_name` from
         the one place that owns the rule, instead of as a client-side error that
         would go stale the moment the rule changed.
-
-        **`status: "planned"`** — the route lands with T4.4.1; until then a live
-        server answers `404`.
 
         :param name: The variable name, sent encoded and otherwise untouched.
         :returns: The variable.

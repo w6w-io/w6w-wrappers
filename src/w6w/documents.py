@@ -8,10 +8,10 @@ everything and scan" is O(n) over someone's whole store, it races, and
 `packages/wrappers/README.md` ("What a wrapper is") states that a wrapper needing
 to compose two calls is describing an operation that belongs in the API.
 
-`get_by_key` therefore targets a real route — `GET /documents/by-key/{key}` —
-which is `status: "planned"` in `endpoints.json` and lands with T4.4.1 (fenced by
-BLK-1). Against a server that does not serve it yet it raises `404`; that is the
-correct failure and it is not worked around here.
+`get_by_key` therefore targets a real route — `GET /documents/by-key/{key}`,
+served since 2026-07-28. The route trims the incoming key to match what
+`POST /documents` stores, and creation rejects a key of exactly `"."` or `".."`
+— the one class no HTTP client can round-trip through a URL path segment.
 
 Documents are **project-scoped**: every route below accepts an optional
 `?project=`, resolved per call, then from the client's default, and otherwise
@@ -170,12 +170,10 @@ class DocumentsApi:
           before sending and issues `GET /api/documents/`, i.e. the *list*
           route.
 
-        Neither is wrong and neither is worked around here; the server-side
-        resolution is pinned by T4.4.1. If you have a document whose key is
-        `"."` or `".."`, address it by its `doc_…` id.
-
-        **`status: "planned"`** — the route lands with T4.4.1; until then a live
-        server answers `404`.
+        Neither is wrong and neither is worked around here. The server settled
+        it at the other end instead: `POST /documents` rejects a key of exactly
+        `"."` or `".."`, so `by-key/{key}` never has to disambiguate a key no
+        client can represent.
 
         :param key: The document key, sent encoded and otherwise untouched.
         :param project: Project to scope this call to; defaults to the client's.

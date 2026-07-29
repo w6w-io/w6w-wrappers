@@ -8,11 +8,10 @@ CLI expose, at the same version. All three wrappers implement one shared
 contract and release together, so `w6w==X` gives you the same operations as
 `@w6w/sdk@X`.
 
-**Status: pre-release.** The transport core is in — `W6wClient`, configuration,
-the error model and one request path. The named operations (`documents.*`,
-`vars.*`, `workflows.*`, `me`, `run`) land in the releases that follow. Below
-`1.0.0`, breaking changes may arrive in a minor bump — that grace ends at
-`1.0.0`.
+**Status: pre-release.** The full surface is in — `me`, `run`,
+`connections.list`, `workflows.list` / `workflows.run`, and the complete
+`documents.*` and `vars.*` CRUD. Below `1.0.0`, breaking changes may arrive in a
+minor bump — that grace ends at `1.0.0`.
 
 MIT licensed — see [LICENSE](./LICENSE).
 
@@ -52,24 +51,88 @@ client = W6wClient()                      # from the environment
 client = W6wClient(base_url="https://api.example.com", token="tok_…")
 
 try:
-    status, body = client.request("GET", "/me")
+    identity = client.me()                # who am I, and what answered?
 except ApiError as err:
     print(err.status, err.code, err.message)
+
+# What can I run? `run` is addressed by a conn_… / fn_… / ep_… / wf_… id, and
+# these two operations are how you discover one.
+connections = client.connections.list()
+workflows = client.workflows.list()
 ```
 
-`client.request` returns `(status, body)` — the status comes back because a
-`202` is a normal outcome on this API (a queued workflow run), not an error.
-Named operations arrive in the next releases; `request` stays public so you can
-reach an endpoint this version does not model yet.
+### Run anything addressable by a URN
 
-When any part of a path comes from the caller, build it with `w6w.path` rather
-than by concatenation — it percent-encodes every interpolated value:
+`run` returns a `kind`-tagged envelope — the parsed body, exactly as it arrived.
+Discriminate it before reading a field, because the arms use different field
+names on purpose (`value` vs `output` vs `runId` + `status`):
+
+```python
+import w6w
+
+env = client.run(
+    connections[0].id,                    # "conn_…"
+    action="send_message",                # which of the app's actions to invoke
+    payload={"channel": "#general", "text": "Hello from w6w"},
+)
+
+if w6w.is_action_run(env):
+    print(env["value"])                   # the action's return value
+```
+
+A `fn_…` or `ep_…` id runs the same way with no `action`; a `wf_…` id is
+enqueued and comes back `202` with `runId` and `status` — which is success, not
+an error. A `kind` this release has never heard of is handed back verbatim
+rather than raised, so a newer server cannot break an installed client.
+
+### Run a workflow, and optionally wait
+
+`workflows.run` is the typed path, and the only one that can wait for the result
+**server-side** — this package contains no polling loop of its own:
+
+```python
+run = client.workflows.run(workflows[0].id, wait=True, variables={"customerId": "cus_1"})
+
+# A failed run is DATA, not a raised error. `terminal` says whether it finished.
+if run.terminal and run.status == "failed":
+    print(run.error)
+elif run.terminal:
+    print(run.output)
+```
+
+### Documents and vars
+
+```python
+doc = client.documents.create("welcome", "# Hi", format="markdown")
+client.documents.update(doc.id, content="# Hello")
+client.documents.delete(doc.id)
+
+v = client.vars.create("sender_email", "string", "a@b.c")
+client.vars.update(v.id, value="c@d.e")
+```
+
+Documents are project-scoped (every operation takes an optional `project`);
+**variables are not** — they are scoped by tenant/subject only, so no `vars.*`
+signature has a `project` argument. The asymmetry is the server's, and this
+package documents it rather than papering over it with an argument the server
+ignores.
+
+`update` distinguishes *leave this field alone* from *set this field to null*:
+every patchable parameter defaults to `w6w.UNSET` (send nothing), and passing
+`None` explicitly sends JSON `null`.
+
+### Reaching an endpoint this version does not model
+
+`client.request` is public and returns `(status, body)` — the status comes back
+because a `202` is a normal outcome on this API, not an error. When any part of
+a path comes from the caller, build it with `w6w.path` rather than by
+concatenation; it percent-encodes every interpolated value:
 
 ```python
 from w6w import path
 
 client.request("GET", path("/documents/by-key/{key}", key="notes/2026"))
-# -> GET https://api.example.com/api/documents/by-key/notes%2F2026
+# -> GET https://api.example.com/documents/by-key/notes%2F2026
 ```
 
 That is not defensive ceremony. Document keys are user-chosen and the server
@@ -82,7 +145,7 @@ Two environment variables, read once when a client is constructed:
 
 | Variable | Meaning |
 |---|---|
-| `W6W_BASE_URL` | The **origin** of your w6w API — e.g. `https://api.example.com`. The client appends the `/api` base path itself; you never type it. There is no default. |
+| `W6W_BASE_URL` | The **origin** of your w6w API — e.g. `https://api.example.com`. The API is served at the root of that host, so the client appends nothing. There is no default. |
 | `W6W_TOKEN` | Your API token. Sent as `Authorization: Bearer <token>` on every request. |
 
 These variables are part of the published contract and are identical across all
@@ -98,15 +161,22 @@ in one process can point at two servers with two tokens and not interfere.
 
 ### `W6W_BASE_URL` is an origin
 
-The `/api` base path is appended for you, and never doubled:
+The API is served at the **root** of its own host — `https://api.example.com/vars`,
+not `…/api/vars` — so nothing is appended. Trailing slashes never matter, and a
+path you configure is preserved verbatim, because it is indistinguishable from a
+real gateway prefix:
 
 | You set | The client uses |
 |---|---|
-| `https://api.example.com` | `https://api.example.com/api` |
-| `https://api.example.com/` | `https://api.example.com/api` |
-| `https://api.example.com///` | `https://api.example.com/api` |
-| `https://api.example.com/api` | `https://api.example.com/api` |
-| `https://api.example.com/api/` | `https://api.example.com/api` |
+| `https://api.example.com` | `https://api.example.com` |
+| `https://api.example.com/` | `https://api.example.com` |
+| `https://api.example.com///` | `https://api.example.com` |
+| `https://api.example.com/gw` | `https://api.example.com/gw` |
+
+> **Breaking in `0.2.0`.** The client used to append `/api`. If your
+> `W6W_BASE_URL` ends in `/api` because of that, **drop the suffix** — a stale
+> one now 404s on every call. It is not stripped for you: a configured path is
+> exactly how a deployment behind a gateway prefix is addressed.
 
 **A blank value is not a base URL.** An environment variable that is set but
 empty or whitespace-only is treated as **absent**: `W6W_BASE_URL=`,
@@ -171,6 +241,14 @@ No test reaches the network. Client behaviour is exercised against an injected
 transport seam, never a live server — conformance against a running server is a
 separate, environment-dependent step and is not part of this suite.
 
+`tests/test_surface.py` is the exception in kind rather than in method: it reads
+the shared `endpoints.json` sitting **beside** this repository and asserts that
+every contracted operation is reachable under the symbol the contract names it —
+and that no namespace has grown one the contract does not have. It never
+vendors a copy, and it fails naming the path it looked for rather than skipping,
+because a guard that passes quietly when its input is missing is worse than no
+guard.
+
 ### Why coverage is measured in CI and not locally
 
 Coverage is gated at **90 %**, enforced by CI, and there is deliberately no
@@ -194,6 +272,19 @@ The local bar is different and, for the thing that actually matters, stricter:
 path has a test.** A percentage catches a whole operation going untested; it
 does not catch an operation tested badly. If you are adding an operation, the
 list above is your gate, not the number.
+
+## The surface
+
+Which operations exist is not decided in this repository. It is defined by the
+shared machine-readable contract **`endpoints.json`**, which all three w6w
+wrappers implement and which each one's conformance test reads directly — the
+same file, never a vendored copy. An operation missing from a wrapper, or one it
+has grown alone, is a failing test rather than a preference.
+
+Some operations may be marked `planned` in that contract: they are implemented
+and unit-tested here, but the corresponding server route is not live yet, so
+calling one against a server today returns `404`. The marker records **server**
+readiness, not wrapper completeness.
 
 ## Versioning
 
