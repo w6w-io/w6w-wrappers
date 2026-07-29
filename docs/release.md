@@ -58,8 +58,8 @@ Outward-facing, one-time, and human:
    and workflow `release.yml`:
    - npm: `@w6w/sdk`, `@w6w/cli`
    - JSR: `@w6w/sdk`, `@w6w/cli`
-   - PyPI: `w6w` (the name is unclaimed — claim it with the first upload, or
-     reserve it first)
+   - PyPI: `w6w` — as a **pending publisher**, since the project does not exist
+     yet. The first upload creates it.
 2. Nothing else. There is no repo to create, no token to mint, no secret to
    store.
 
@@ -67,6 +67,32 @@ The registration is the **one-way step**: it hard-binds to whichever repo
 publishes. It has not happened yet, which is fortunate timing — registering it
 against the now-archived `w6w-io/w6w-node` and `w6w-io/w6w-cli` would have had
 to be undone by hand.
+
+### The PyPI name is not reserved until the first upload
+
+There is no reserve-first option, and a pending publisher is not one.
+[PyPI's own docs](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/):
+a pending publisher *"does **not** create a project or reserve a project's name
+**until** it is actually used to publish"*, and if someone else registers the
+name first, the pending publisher is **invalidated**. PyPI has no scopes — `w6w`
+is a flat global name, unlike the `@w6w` npm and JSR scopes, so it is
+first-come.
+
+**Do not wait on the organization to publish it.** A `w6w` **Company**
+organization was requested on 2026-07-27 and is pending; PyPI states it *"is
+unable to specify a timeline"* for approval and reviews requests
+*"periodically"*. The org name and the project name are separate things —
+approving the org neither grants nor holds `w6w` as a project.
+
+The sequence that does not depend on that queue: publish `w6w` from an
+individual account (claiming the name), then, once the organization is
+approved, use *Your organizations → Manage → Projects → Transfer existing
+project*, which exists precisely for *"pre-existing projects associated with
+[an] individual user account"*. **Re-check the trusted publisher after the
+transfer** — it is bound to a GitHub repo and workflow rather than to the PyPI
+owner, so it ought to survive a change of ownership, but that is worth
+confirming on the project page before the next release rather than discovering
+at upload time.
 
 > `@w6w/sdk@0.1.1` and `@w6w/cli@0.1.1` are already on npm, published before
 > this workflow existed. `0.2.0` is the first release this document describes,
