@@ -10,7 +10,7 @@ The package is authored as runtime-neutral TypeScript against Web standards (`fe
 `URL`, `AbortController`), so the same build runs under Node 18+, Deno and Bun.
 
 - **License:** MIT (see [LICENSE](./LICENSE)).
-- **Version:** `0.1.1`.
+- **Version:** `0.2.0`.
 
 ## Install
 
@@ -112,7 +112,7 @@ Two environment variables, both read only at client construction:
 
 | Variable       | Meaning                                                                                                                               | Required |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `W6W_BASE_URL` | The **origin** of your w6w server, e.g. `https://api.example.com`. The API's base path is appended by the client — do not include it. | Yes      |
+| `W6W_BASE_URL` | The **origin** of your w6w server, e.g. `https://api.example.com`. The API is served at the root of that host, so nothing is appended. | Yes      |
 | `W6W_TOKEN`    | The bearer token, sent as `Authorization: Bearer <token>` on every request.                                                           | Yes      |
 
 Explicit constructor arguments always win over the environment, and credentials are **instance
@@ -132,15 +132,21 @@ const other = new W6wClient({ baseUrl: "https://api.example.com", token: "…" }
 
 ### `W6W_BASE_URL` is an origin
 
-The client appends the API's base path (`/api`) itself, and never doubles it — so a value that
-already carries the prefix is left alone, and trailing slashes never matter:
+The API is served at the **root** of its own host — `https://api.example.com/vars`, not
+`…/api/vars` — so the client appends **nothing**. Trailing slashes never matter, and any path you
+configure is preserved verbatim, because it is indistinguishable from a real gateway prefix:
 
 | `W6W_BASE_URL`                | Requests go to                  |
 | ----------------------------- | ------------------------------- |
-| `https://api.example.com`     | `https://api.example.com/api/…` |
-| `https://api.example.com/`    | `https://api.example.com/api/…` |
-| `https://api.example.com///`  | `https://api.example.com/api/…` |
-| `https://api.example.com/api` | `https://api.example.com/api/…` |
+| `https://api.example.com`     | `https://api.example.com/…`     |
+| `https://api.example.com/`    | `https://api.example.com/…`     |
+| `https://api.example.com///`  | `https://api.example.com/…`     |
+| `https://api.example.com/gw`  | `https://api.example.com/gw/…`  |
+
+> **Breaking in `0.2.0`.** The client used to append `/api`. If your `W6W_BASE_URL` ends in `/api`
+> because of that, **drop the suffix** — the path is now preserved rather than deduplicated, so a
+> stale one 404s on every call. It is not stripped for you: a configured path is exactly how a
+> deployment behind a gateway prefix is addressed, and silently removing it would break those.
 
 A variable that is **set but empty** — or whitespace-only — counts as **unset**, in both variables.
 `W6W_BASE_URL=` is how a shell or a Dockerfile spells "I meant to set this and did not", so it
