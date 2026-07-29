@@ -12,8 +12,18 @@ suggestion and not a starting point for discussion — implement it verbatim.**
 
 Every claim below that rests on a server or studio behaviour cites its file and
 enclosing route or symbol, so a reader can check it rather than trust it. Those
-paths are inside **private** repos and are marked; **strip them
-before any of this text ships in a public wrapper repo** (STRATEGY §5.1).
+paths are inside **private** repos and are marked.
+
+> **This is why `w6w-io/w6w-wrappers` is private.** There are 20 such citations
+> in this file and 14 in [endpoints.md](./endpoints.md), and together they
+> describe the closed host's layout, route handlers and symbol names — which
+> STRATEGY §5.1 keeps closed. **Stripping every one of them is a precondition of
+> making this repo public**, not a cleanup task to do afterwards, and the strip
+> has to cover the git history as well as the working tree. Nothing about the
+> layout depends on visibility: the contract sits beside the lanes either way,
+> which is what removed the need for a public mirror
+> ([parity.md](./parity.md#where-the-contract-comes-from-in-ci)). Visibility is
+> now a strategy decision, decoupled from the mechanism.
 
 ---
 
@@ -809,21 +819,22 @@ the gate is ever raised to 100, the tests do not change; only the number does.
 
 ## 10. Conformance runner
 
-Every wrapper repo carries a conformance test. It is the drift alarm: the actual
+Every wrapper carries a conformance test. It is the drift alarm: the actual
 failure mode this project guards against is an operation added to two wrappers and
-forgotten in the third.
+forgotten in a third.
 
 ### Input
 
-Read **`packages/wrappers/endpoints.json`** — the sibling of the wrapper repo,
-resolved **relative to the wrapper repo root**. The wrappers are submodules at
-`packages/wrappers/{node,cli,python}/`, so from a wrapper repo root the contract
-is at `../endpoints.json`. Resolve it from the test file's own location, never
-from the process working directory.
+Read **`endpoints.json`** — one level above the wrapper's own directory. Every
+lane lives at the root of this repo (`node/`, `cli/`, `python/`, …) beside the
+contract, so from a lane's root the contract is at `../endpoints.json`. Resolve
+it from the test file's own location, never from the process working directory:
+that is what makes the answer identical in CI, in a laptop checkout, and inside
+the monorepo's submodule.
 
 If the file is not found, the test **fails loudly** naming the path it looked for.
-It must never skip, and it must never fall back to a copy vendored inside the
-wrapper repo — a stale pinned copy defeats the entire mechanism.
+It must never skip, and it must never fall back to a copy vendored inside a lane
+directory — a stale pinned copy defeats the entire mechanism.
 
 ### Assertion
 

@@ -2,23 +2,28 @@
 
 Open-source client libraries that wrap the w6w HTTP API.
 
-| Wrapper | Repo | Published as | Language |
-|---------|------|--------------|----------|
-| `node`   | `w6w-io/w6w-node`   | `@w6w/sdk` (npm)  | TypeScript |
-| `cli`    | `w6w-io/w6w-cli`    | `@w6w/cli` (npm), binary `w6w` | TypeScript |
-| `python` | `w6w-io/w6w-python` | `w6w` (PyPI)      | Python |
+| Wrapper | Directory | Published as | Language |
+|---------|-----------|--------------|----------|
+| SDK  | [`node/`](./node)     | `@w6w/sdk` (npm + JSR) | TypeScript |
+| CLI  | [`cli/`](./cli)       | `@w6w/cli` (npm), binary `w6w` | TypeScript |
+| SDK  | [`python/`](./python) | `w6w` (PyPI) | Python |
 
-Each wrapper is its **own git repo**, open source. This directory itself is
-tracked by the monorepo — it holds the shared contract (`endpoints.json`,
-`VERSION`, these docs) plus the wrappers. The release workflows live in the
-monorepo too, at `.github/workflows/`, not in the wrapper repos.
+**One repo, one directory per language, one version.** The wrappers live here
+together with the contract they implement (`endpoints.json`, `VERSION`, these
+docs), which is what lets a surface change touch every language in a single
+diff — and lets every lane's CI read the contract as a plain sibling file
+instead of fetching a mirror of it.
 
-> **Today `node/`, `cli/` and `python/` are plain local git repos**, not
-> submodules: the `w6w-io` repos in the table above do not exist yet, so there is
-> nothing to point a submodule at (HITL-1). Each has its own `.git` and its own
-> history, so the switch is mechanical — create the GitHub repo, add it as a
-> remote, push, then `git submodule add` — and nothing in the code or the contract
-> changes when it happens.
+This repo is open source and public. The private `w6w` monorepo consumes it as a
+**submodule** at `packages/wrappers`, the same way it consumes `w6w-io/w6w-core`;
+after a change lands here, the monorepo bumps its pointer in a dedicated
+`chore(wrappers): bump submodule` commit.
+
+> **Adding a language is adding a directory** — `go/`, `dart/` — with a lane in
+> this repo's CI and a publish job on the shared release trigger. There is no
+> repo to create, no CI to bootstrap, and no fourth set of publish secrets. What
+> it does still cost is the obligation in [docs/parity.md](./docs/parity.md):
+> every future operation gets written one more time, on the same day.
 
 ## The two rules
 
@@ -36,9 +41,9 @@ at version *X* — that is the whole promise. See [docs/parity.md](./docs/parity
 ## Layout
 
 ```
-packages/wrappers/
+w6w-wrappers/                  # ← submodule of the w6w monorepo at packages/wrappers
 ├── README.md          # this file
-├── VERSION            # the single version all three publish under
+├── VERSION            # the single version every wrapper publishes under
 ├── endpoints.json     # machine-readable surface contract (drives conformance tests)
 ├── docs/
 │   ├── endpoints.md      # the endpoint catalog — wire shapes + per-language signatures
@@ -47,10 +52,15 @@ packages/wrappers/
 │   ├── cli.md            # the CLI help surface (--help), exit codes
 │   ├── parity.md         # lockstep rules, conformance test, CI gate
 │   └── release.md        # how a release actually runs
-├── node/              # local git repo today → w6w-io/w6w-node (submodule once it exists)
-├── cli/               # local git repo today → w6w-io/w6w-cli (submodule once it exists)
-└── python/            # local git repo today → w6w-io/w6w-python (submodule once it exists)
+├── node/              # @w6w/sdk   (npm + JSR)
+├── cli/               # @w6w/cli   (npm, binary `w6w`)
+└── python/            # w6w        (PyPI)
 ```
+
+Every lane reads the contract at `../endpoints.json` and `../VERSION` — resolved
+from its own test file's location, never from the working directory, so the
+answer is the same in CI, in a laptop checkout, and inside the monorepo's
+submodule.
 
 `endpoints.json` says *which* operations exist and `docs/endpoints.md` says *what
 the API returns*; [`docs/implementation.md`](./docs/implementation.md) pins
@@ -82,8 +92,10 @@ Adding or changing an operation is always the same four steps, in this order:
 
 1. Land the endpoint in the server first — the API leads, wrappers follow.
 2. Update `endpoints.json` and `docs/endpoints.md`.
-3. Implement in all three wrapper repos; each opens its own PR upstream.
-4. Bump `VERSION` and release all three together ([docs/release.md](./docs/release.md)).
+3. Implement it in **every** language directory, in the same PR.
+4. Bump `VERSION` and release them together ([docs/release.md](./docs/release.md)).
 
-Step 3 is not optional or deferrable. A wrapper that skips a release is a
-wrapper whose users silently have a different API than everyone else's.
+Step 3 is not optional or deferrable, and the layout is what makes it hard to
+skip: one diff, one CI run, every lane's conformance test reading the same
+`endpoints.json` you just edited. A wrapper that sits out a release is a wrapper
+whose users silently have a different API than everyone else's.

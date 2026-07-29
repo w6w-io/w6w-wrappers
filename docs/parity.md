@@ -1,14 +1,19 @@
 # Parity and versioning
 
-Three wrappers, one surface, one version. This document is how that stays true
+Every wrapper, one surface, one version. This document is how that stays true
 once it stops being convenient.
+
+They all live in **this repo**, one directory per language, beside the contract
+they implement. That is what makes the rest of this document enforceable rather
+than aspirational: a change that touches the surface touches every lane in the
+same diff, and CI runs all of them together before it can merge.
 
 ## The version is a shared fact
 
 [`../VERSION`](../VERSION) is the single source of truth. Every wrapper's
 manifest — `package.json` for node and cli, `pyproject.toml` for python — is
-**written from** it during release, never edited by hand. If a wrapper repo's
-manifest disagrees with `VERSION`, the manifest is wrong.
+**written from** it during release, never edited by hand. If a manifest
+disagrees with `VERSION`, the manifest is wrong.
 
 Consequences worth accepting deliberately:
 
@@ -25,7 +30,7 @@ Below `1.0.0`, breaking changes may land in a minor bump. That grace ends at
 
 ## Conformance
 
-Each wrapper repo carries a conformance test that reads `endpoints.json` and
+Each wrapper carries a conformance test that reads `endpoints.json` and
 asserts the client exposes **every** operation in `operations[]` — **regardless of
 its `status`** — under the name in that operation's `naming` entry for its
 language. The mechanics of resolving a `naming` string to a symbol or a CLI
@@ -50,43 +55,42 @@ transport, and assert all of them in conformance.
 
 ### Where the contract comes from in CI
 
-`endpoints.json` lives in the monorepo, which is **private** — verified
-2026-07-27, `gh repo view --json visibility,nameWithOwner` →
-`{"nameWithOwner":"segevsh/w6w","visibility":"PRIVATE"}` — while the three
-wrapper repos are public. So a wrapper repo's CI **cannot** fetch the contract
-from the monorepo, and the fix is not a private-monorepo PAT in a public repo's
-CI.
+From the checkout. There is nothing to fetch.
 
-The route is a small **public mirror**, `w6w-io/w6w-contract`, holding
-`endpoints.json` and `VERSION` and nothing else, which the monorepo pushes to
-whenever either file changes. Each wrapper repo's `ci.yml` fetches both over
-plain unauthenticated HTTPS and writes them **beside the checkout** —
-`../endpoints.json` and `../VERSION` from the wrapper repo root, which is where
-every lane already looks. The alternatives considered and the costs accepted are
-in [release.md §Where the contract comes
-from](./release.md#where-the-contract-comes-from); that section is the authority
-if this one ever drifts from it.
+`endpoints.json` and `VERSION` sit at the root of **this** repo,
+`w6w-io/w6w-wrappers`, one level above every lane — so `../endpoints.json` from
+`node/`, `cli/` or `python/` is a plain sibling path in the same working tree,
+in CI exactly as on a laptop. Every lane's conformance and version guard already
+resolves it that way, from the test file's own location rather than the process
+working directory.
 
-Two rules that are not negotiable:
+This is the single largest thing the one-repo layout buys, so it is worth
+recording what it replaced. When the wrappers were three separate public repos
+and the contract lived in the **private** monorepo, no wrapper's CI could read
+it — and the answer was not a private-monorepo PAT in a public repo. The plan
+was a third repo, `w6w-io/w6w-contract`, mirroring two files and nothing else,
+plus a monorepo job to push to it on every change and a fetch step in each
+wrapper's `ci.yml`. That repo was never created and never needs to be: a mirror
+is a copy, a copy goes stale, and the staleness would have been invisible
+precisely when the contract changed. **Do not reintroduce it.**
 
-- **Fail loudly, never skip.** If the contract or `VERSION` cannot be fetched,
-  the job fails naming the path it looked for. All three lanes' version guards
-  already behave exactly this way — measured 2026-07-27 in
-  `node/tests/version_test.ts:32-47`, `cli/tests/help_test.ts:286-305` and
-  `python/tests/test_version.py:87-94` — and a guard that quietly passes when
-  its input is missing is worse than no guard. A standalone clone is precisely
-  the case a public repo's CI is, so this is the normal path, not an edge.
-- **Never vendor a copy.** A committed copy inside a wrapper repo goes stale
-  silently and defeats the whole mechanism — the same rule
-  [implementation.md §10](./implementation.md#10-conformance-runner) pins.
-  Fetching at CI time is not vendoring: nothing is committed.
+Two rules survive the change, because they were never about the mirror:
 
-> **Not submodules yet.** `packages/wrappers/{node,cli,python}` are plain local
-> git repos **with no remotes** today; the `w6w-io` repos do not exist (HITL-1),
-> so there is nothing to point a submodule at. When they do exist and are
-> attached as submodules, a *monorepo-side* checkout will see the contract as a
-> sibling directly — but the public mirror is still what each wrapper repo's own
-> CI uses, because that runs standalone against a private monorepo either way.
+- **Fail loudly, never skip.** If the contract or `VERSION` cannot be read, the
+  job fails naming the path it looked for. All four guards behave exactly this
+  way — `node/tests/version_test.ts`, `cli/tests/help_test.ts`,
+  `python/tests/test_version.py` and `python/tests/test_surface.py` — and a
+  guard that quietly passes when its input is missing is worse than no guard.
+- **Never vendor a copy.** A committed copy of the contract inside a lane
+  directory goes stale silently and defeats the whole mechanism — the same rule
+  [implementation.md §10](./implementation.md#10-conformance-runner) pins. Every
+  lane reads the one file at the repo root.
+
+> **On the monorepo side**, this repo is attached at `packages/wrappers` as a
+> submodule of the private `w6w` monorepo — the same treatment `packages/core`
+> gets. A monorepo checkout therefore sees exactly the layout above; the
+> submodule pointer is bumped in its own `chore(wrappers): bump submodule`
+> commit after a change lands here.
 
 ## Adding an operation
 
@@ -110,24 +114,39 @@ real:
 2. **Contract second.** Add the operation to `endpoints.json` (`status: "required"`)
    and document it in `docs/endpoints.md` with its wire shape and per-language
    naming. Decide the naming *here*, once, rather than three times in three PRs.
-3. **All three wrappers third.** One PR per wrapper repo, opened against
-   `w6w-io` upstream. Conformance CI in each will fail until its own PR lands —
-   that failure is the mechanism, not an annoyance to route around.
+3. **Every wrapper third — in one PR.** All lanes move together, in a single
+   change against this repo, and conformance runs over every one of them in the
+   same CI run. It cannot half-land.
+
+   This used to be "one PR per wrapper repo", three PRs that had to be
+   coordinated by hand and each of which was red until the others merged. That
+   coordination *was* the drift risk this document exists to manage: a fourth
+   language would have made it four PRs, and the failure mode — an operation
+   added to two lanes and forgotten in the third — was only ever caught after
+   the fact, by a conformance run in a repo nobody was looking at. Now it is
+   caught before merge, in the diff.
 4. **Release together.** Bump `VERSION`, tag, ship ([release.md](./release.md)).
 
 ## Adding a language
 
-A fourth wrapper is a real commitment: it makes step 3 above wider forever. Before
-adding one, be sure the language will get the same release-day attention the first
-three get. A wrapper that lags a version behind is worse for its users than no
-wrapper at all, because they will reasonably assume it is current.
+A new language is **a directory in this repo** — `go/`, `dart/`, beside the three
+that are here. Not a repo, not a CI bootstrap, not a new set of publish secrets:
+a directory, a lane in the existing workflow, and a conformance test.
+
+That is the whole point of the layout, and it is worth being explicit about what
+it does *not* make cheap. A wrapper is still a real commitment, because it makes
+step 3 above wider forever: every future operation now has to be written a fourth
+time, by someone who knows that language, on the same day. A wrapper that lags a
+version behind is worse for its users than no wrapper at all — they will
+reasonably assume it is current. The repo layout removes the *ceremony*, not the
+obligation.
 
 The bar for a new wrapper joining the lockstep:
 
 - **Every** operation in `endpoints.json` implemented — `required` and `planned`
   alike, per §Conformance — and the conformance test green.
-- Publishing automated on the same trigger as the others — its own repo, its own
-  OIDC workflow, fired by the monorepo's release dispatch
+- Its own lane in this repo's CI workflow, running its gates on a path filter,
+  and its own publish job on the shared release trigger
   ([release.md](./release.md)).
 - Its manifest version written from `VERSION`.
 
