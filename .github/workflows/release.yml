@@ -1,0 +1,161 @@
+name: Release
+
+# Publishes the wrappers — tokenless, over OIDC. No stored registry credential
+# exists in this repo, and none should ever be added: every upload mints a
+# short-lived one from the workflow's own identity.
+#
+# THE FILENAME IS PART OF THE CREDENTIAL. Trusted publishing binds to
+# `owner/repo` PLUS this file's name (and, for PyPI, the environment). Renaming
+# `release.yml` silently invalidates every publisher registration. Don't.
+#
+# One-time setup (docs/release.md §Before any of this can run):
+#   PyPI — pypi.org → Your projects → Publishing → add a GitHub "pending"
+#          publisher:  project `w6w`, owner `w6w-io`, repository
+#          `w6w-wrappers`, workflow `release.yml`, environment `pypi`.
+#          Pending, because the project does not exist yet: the first run of
+#          this workflow creates it. The name is NOT reserved until then.
+#   The `pypi` GitHub environment must exist (Settings → Environments) and its
+#   name must match the publisher registration exactly.
+#
+# Release flow: bump VERSION + every manifest, commit, then publish a GitHub
+# Release tagged `vX.Y.Z`. `workflow_dispatch` runs the gates WITHOUT
+# publishing — use it as a dry run.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# Required for OIDC. This is what replaces stored tokens.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # ── The lockstep gate ──────────────────────────────────────────────────────
+  # One version, ten places it is written down. This job is the reason a human
+  # only ever types the new number into VERSION: everything else is compared
+  # against it, and a release stops here rather than shipping a set that
+  # disagrees with itself.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: VERSION, the release tag and every manifest must agree
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, re, sys
+
+          root = pathlib.Path(".")
+          shared = (root / "VERSION").read_text().strip()
+
+          def from_json(path, *keys):
+              data = json.loads((root / path).read_text())
+              for key in keys:
+                  data = data[key]
+              return data
+
+          def from_regex(path, pattern):
+              text = (root / path).read_text()
+              match = re.search(pattern, text, re.M)
+              if not match:
+                  sys.exit(f"::error::no version literal matched in {path}")
+              return match.group(1)
+
+          found = {
+              "VERSION": shared,
+              "node/package.json": from_json("node/package.json", "version"),
+              "node/deno.json": from_json("node/deno.json", "version"),
+              "node/src/version.ts": from_regex(
+                  "node/src/version.ts", r'VERSION:\s*string\s*=\s*"([^"]+)"'),
+              "cli/package.json": from_json("cli/package.json", "version"),
+              "cli/deno.json": from_json("cli/deno.json", "version"),
+              "cli/mod.ts": from_regex(
+                  "cli/mod.ts", r'VERSION:\s*string\s*=\s*"([^"]+)"'),
+              "python/pyproject.toml": from_regex(
+                  "python/pyproject.toml", r'^version\s*=\s*"([^"]+)"'),
+              "python/src/w6w/_version.py": from_regex(
+                  "python/src/w6w/_version.py", r'__version__:\s*str\s*=\s*"([^"]+)"'),
+          }
+
+          tag = os.environ.get("TAG", "").strip()
+          if tag:
+              found["release tag"] = tag[1:] if tag.startswith("v") else tag
+
+          # Echo everything BEFORE deciding: when this fails, the log should
+          # already answer "which one disagreed" without a re-run.
+          width = max(len(name) for name in found)
+          for name, value in found.items():
+              print(f"  {name:<{width}}  {value}")
+
+          wrong = {n: v for n, v in found.items() if v != shared}
+          if wrong:
+              for name, value in wrong.items():
+                  print(f"::error::{name} is {value}, but VERSION is {shared}")
+              sys.exit(1)
+          print(f"\nall {len(found)} agree on {shared}")
+          PY
+
+  # ── Every lane's suite, including its conformance test ─────────────────────
+  # The conformance runners live inside these suites (python/tests/test_surface.py,
+  # cli/tests/help_test.ts, and each lane's version guard), and they read
+  # endpoints.json and VERSION from THIS checkout as siblings. That is the whole
+  # reason the wrappers share a repo: an operation added to two lanes and
+  # forgotten in a third fails here, before anything is uploaded.
+  test:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: python — unittest (no install step, no third-party runner)
+        working-directory: python
+        run: PYTHONPATH=src python3 -m unittest discover -s tests -t .
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: node — deno test
+        working-directory: node
+        run: deno task test
+      - name: cli — deno test
+        working-directory: cli
+        run: deno task test
+
+  # ── PyPI ───────────────────────────────────────────────────────────────────
+  pypi:
+    needs: [verify, test]
+    # Never on a dry run: workflow_dispatch stops after the gates above.
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    # MUST match the environment named in the PyPI publisher registration —
+    # it travels in the OIDC claim, and a mismatch is rejected at upload.
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      # `build` is the only tool this needs, and it is a CI-only dependency:
+      # the package itself has zero runtime dependencies and its suite runs on
+      # the standard library alone.
+      - run: python -m pip install --upgrade build
+      - name: Build sdist + wheel
+        working-directory: python
+        run: python -m build --outdir dist
+
+      # No token, no `twine`, no password. The action exchanges this job's OIDC
+      # identity for a short-lived upload credential.
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Relative to the workspace root: this step does not inherit the
+          # working-directory above, because it runs as a container action.
+          packages-dir: python/dist

@@ -117,27 +117,66 @@ human again, and is not optional.
 4. **Tag** `v0.2.0`. (For a dry run, invoke `release.yml` via
    `workflow_dispatch` with an explicit `version` input — it verifies and runs
    conformance without publishing.)
-5. **`verify`** reads `VERSION` and compares it against the tag and every
-   manifest, echoing each value before deciding and failing with `::error::`
-   naming the manifest that disagreed. This mirrors `publish-types.yml:33-48`.
-6. **`conformance`** (`needs: verify`) runs every lane's conformance test
-   against this repo's own [`../endpoints.json`](../endpoints.json). If any lane
-   is missing an operation — or has grown one the contract does not have — the
-   release stops here and nothing is uploaded. This is the whole lockstep bet:
-   *an operation added to two wrappers and forgotten in a third must block the
-   release, not ship.*
-7. **`test`** (`needs: verify`) runs all three suites: `deno test` for `node`
-   and `cli`, `unittest` for `python`, plus the coverage gate.
-8. **`publish`** (`needs: [verify, conformance, test]`) builds and uploads all
-   five artifacts over OIDC: `@w6w/sdk` → npm + JSR, `@w6w/cli` → npm + JSR,
-   `w6w` → PyPI. `permissions: {contents: read, id-token: write}`; the
-   `id-token` is what replaces every token.
-9. **Confirm all five landed**, then bump the monorepo's submodule pointer in a
-   `chore(wrappers): bump submodule` commit.
+5. **`verify`** reads `VERSION` and compares it against the tag and all eight
+   version literals — three manifests and a source constant per TypeScript lane,
+   `pyproject.toml` and `_version.py` for python — echoing every value *before*
+   deciding, so a failing log already answers "which one disagreed". Fails with
+   `::error::` naming it. This mirrors `publish-types.yml:33-48` in the core repo.
+6. **`test`** (`needs: verify`) runs every lane's suite: `unittest` for python,
+   `deno task test` for `node` and `cli`. **The conformance runners live inside
+   those suites** — `python/tests/test_surface.py`, `cli/tests/help_test.ts`, and
+   each lane's version guard — and they read `endpoints.json` and `VERSION` from
+   the same checkout as siblings. So the lockstep bet is enforced here: *an
+   operation added to two wrappers and forgotten in a third fails this job, and
+   nothing is uploaded.* It is not a separate job because it is not separate
+   work; a standalone `conformance` job would re-run the same assertions.
+7. **`publish`** (`needs: [verify, test]`) builds and uploads over OIDC, with
+   `permissions: {id-token: write}` — the `id-token` is what replaces every
+   token. The PyPI job additionally declares `environment: pypi`, which **must**
+   match the environment named in the publisher registration: it travels in the
+   OIDC claim and a mismatch is rejected at upload.
+8. **Confirm every artifact landed**, then bump the monorepo's submodule pointer
+   in a `chore(wrappers): bump submodule` commit.
+
+> **`release.yml` is not complete yet.** It implements steps 5–7 for **PyPI
+> only**. Publishing `w6w` while `@w6w/sdk` and `@w6w/cli` stay at `0.1.1` is
+> exactly the divergence this document exists to prevent, so **do not publish a
+> GitHub Release until the npm and JSR jobs land** — use `workflow_dispatch`,
+> which runs the gates and stops. What those jobs need is written down in
+> [§What the npm and JSR lanes still need](#what-the-npm-and-jsr-lanes-still-need).
 
 Build before uploading. npm, JSR and PyPI releases cannot be unpublished in any
 way that helps — a version that exists on npm but failed to build for PyPI is a
 permanent inconsistency, and the only fix is burning a version number.
+
+## What the npm and JSR lanes still need
+
+Four jobs, and the shape is already proven in the house — `w6w-core`'s
+`publish-types.yml` ships `@w6w/types` to npm and JSR over OIDC with no stored
+credential, and these follow it. What is *not* copyable is written out here,
+because each item is a thing that would otherwise be discovered at upload time:
+
+- **`npm publish --provenance` cannot be used while this repo is private.**
+  [GitHub retired provenance for private source repositories](https://github.blog/changelog/2023-07-26-publishing-with-npm-provenance-from-private-source-repositories-is-no-longer-supported/),
+  and it is not generated even under trusted publishing. So the npm jobs omit
+  the flag for now; when the repo goes public (which is gated on stripping the
+  internal citations — [implementation.md](./implementation.md)), modern npm
+  emits provenance **automatically** under trusted publishing and the flag is
+  still not needed. This is one of the concrete costs of staying private.
+- **`@w6w/cli` must publish *after* `@w6w/sdk`.** It declares a real npm
+  dependency on it, so `needs: npm-sdk` — otherwise there is a window in which
+  `npm i -g @w6w/cli` resolves to a version of the SDK that does not exist yet.
+- **Both npm builds need `npm ci` first.** Their `dist/` is produced by
+  `tsc -p tsconfig.build.json` (the CLI additionally runs
+  `scripts/fix-shebang.mjs`), and the CLI's sources import the bare specifier
+  `@w6w/sdk`, which resolves from `node_modules` — not through the Deno import
+  map, which points at `../node/mod.ts` and is a *development* convenience.
+- **JSR needs the `@w6w` scope to exist and each package linked to this repo**
+  before OIDC publishing works; the publish step itself is `npx --yes jsr publish`
+  from the lane directory.
+- **The trusted publishers for all four artifacts register against
+  `w6w-io/w6w-wrappers` + `release.yml`**, exactly as PyPI's does. Registering
+  them against the archived `w6w-node` / `w6w-cli` repos would have to be undone.
 
 ## Partial-failure reality
 
