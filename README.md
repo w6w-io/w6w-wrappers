@@ -8,6 +8,19 @@ Open-source client libraries that wrap the w6w HTTP API.
 | CLI  | [`cli/`](./cli)       | `@w6w/cli` (npm), binary `w6w` | TypeScript |
 | SDK  | [`python/`](./python) | `w6w` (PyPI) | Python |
 
+## Install
+
+```bash
+npm install @w6w/sdk        # or: deno add jsr:@w6w/sdk
+npm install -g @w6w/cli
+pip install w6w
+```
+
+Each install is a normal, tokenless publish from this repo's own CI, over OIDC —
+see [docs/release.md](./docs/release.md). Full client docs, per language, live
+in [`node/README.md`](./node/README.md), [`cli/README.md`](./cli/README.md) and
+[`python/README.md`](./python/README.md).
+
 **One repo, one directory per language, one version.** The wrappers live here
 together with the contract they implement (`endpoints.json`, `VERSION`, these
 docs), which is what lets a surface change touch every language in a single
