@@ -56,11 +56,22 @@ Outward-facing, one-time, and human:
 
 1. **Register a trusted publisher for each artifact**, against `w6w-io/w6w-wrappers`
    and workflow `release.yml`:
-   - npm: `@w6w/sdk`, `@w6w/cli`
-   - JSR: `@w6w/sdk`, `@w6w/cli`
+   - npm: `@w6w/sdk` and `@w6w/cli` already exist (published `0.1.1` from the
+     archived per-language repos) — on npmjs.com, open each package → Settings →
+     Trusted Publisher → add a GitHub Actions publisher for
+     `w6w-io/w6w-wrappers`, workflow `release.yml`. Not "pending"; the project
+     already exists, this just adds OIDC as a second way to publish it.
+   - JSR: the `@w6w` scope already exists (`@w6w/types` is on it). `@w6w/sdk`
+     and `@w6w/cli` are not yet — create each package under the scope on
+     jsr.io and link it to the `w6w-io/w6w-wrappers` GitHub repo (Settings →
+     GitHub Actions on the package). Unlinked, `npx jsr publish` has no OIDC
+     binding to use.
    - PyPI: `w6w` — as a **pending publisher**, since the project does not exist
      yet. The first upload creates it.
-2. Nothing else. There is no repo to create, no token to mint, no secret to
+2. **Create the `pypi` GitHub environment** (Settings → Environments) on
+   `w6w-io/w6w-wrappers`, named to match the PyPI registration exactly. npm and
+   JSR bind on repo + workflow only, no environment involved.
+3. Nothing else. There is no repo to create, no token to mint, no secret to
    store.
 
 The registration is the **one-way step**: it hard-binds to whichever repo
@@ -138,23 +149,17 @@ human again, and is not optional.
 8. **Confirm every artifact landed**, then bump the monorepo's submodule pointer
    in a `chore(wrappers): bump submodule` commit.
 
-> **`release.yml` is not complete yet.** It implements steps 5–7 for **PyPI
-> only**. Publishing `w6w` while `@w6w/sdk` and `@w6w/cli` stay at `0.1.1` is
-> exactly the divergence this document exists to prevent, so **do not publish a
-> GitHub Release until the npm and JSR jobs land** — use `workflow_dispatch`,
-> which runs the gates and stops. What those jobs need is written down in
-> [§What the npm and JSR lanes still need](#what-the-npm-and-jsr-lanes-still-need).
-
 Build before uploading. npm, JSR and PyPI releases cannot be unpublished in any
 way that helps — a version that exists on npm but failed to build for PyPI is a
 permanent inconsistency, and the only fix is burning a version number.
 
-## What the npm and JSR lanes still need
+## Notes on the npm and JSR lanes
 
-Four jobs, and the shape is already proven in the house — `w6w-core`'s
-`publish-types.yml` ships `@w6w/types` to npm and JSR over OIDC with no stored
-credential, and these follow it. What is *not* copyable is written out here,
-because each item is a thing that would otherwise be discovered at upload time:
+Four jobs (`npm-sdk`, `npm-cli`, `jsr-sdk`, `jsr-cli`), and the shape is copied
+from the house pattern — `w6w-core`'s `publish-types.yml` ships `@w6w/types`
+to npm and JSR over OIDC with no stored credential. What was *not* copyable is
+written out here, because each item is a thing that would otherwise be
+discovered at upload time:
 
 - **`npm publish --provenance` cannot be used while this repo is private.**
   [GitHub retired provenance for private source repositories](https://github.blog/changelog/2023-07-26-publishing-with-npm-provenance-from-private-source-repositories-is-no-longer-supported/),
@@ -163,17 +168,21 @@ because each item is a thing that would otherwise be discovered at upload time:
   internal citations — [implementation.md](./implementation.md)), modern npm
   emits provenance **automatically** under trusted publishing and the flag is
   still not needed. This is one of the concrete costs of staying private.
-- **`@w6w/cli` must publish *after* `@w6w/sdk`.** It declares a real npm
-  dependency on it, so `needs: npm-sdk` — otherwise there is a window in which
-  `npm i -g @w6w/cli` resolves to a version of the SDK that does not exist yet.
-- **Both npm builds need `npm ci` first.** Their `dist/` is produced by
-  `tsc -p tsconfig.build.json` (the CLI additionally runs
+- **`@w6w/cli` publishes *after* `@w6w/sdk`** — `needs: [verify, test, npm-sdk]`,
+  not just the shared gate — because it declares a real npm dependency on it,
+  and its `npm install` step needs `^0.2.0` already live on the registry.
+  Otherwise there is a window in which that install resolves to nothing.
+- **Both npm jobs use `npm install`, not `npm ci`.** There is no committed
+  `package-lock.json` for either lane — dev and CI both run on the Deno tasks
+  in `deno.json`, and the npm manifests exist only to build and publish. `dist/`
+  is produced by `tsc -p tsconfig.build.json` (the CLI additionally runs
   `scripts/fix-shebang.mjs`), and the CLI's sources import the bare specifier
   `@w6w/sdk`, which resolves from `node_modules` — not through the Deno import
   map, which points at `../node/mod.ts` and is a *development* convenience.
 - **JSR needs the `@w6w` scope to exist and each package linked to this repo**
-  before OIDC publishing works; the publish step itself is `npx --yes jsr publish`
-  from the lane directory.
+  before OIDC publishing works; confirmed with `deno publish --dry-run` for
+  both lanes, including the CLI's cross-package `@w6w/sdk` import. The publish
+  step itself is `npx --yes jsr publish` from the lane directory, no build.
 - **The trusted publishers for all four artifacts register against
   `w6w-io/w6w-wrappers` + `release.yml`**, exactly as PyPI's does. Registering
   them against the archived `w6w-node` / `w6w-cli` repos would have to be undone.

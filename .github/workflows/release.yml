@@ -159,3 +159,90 @@ jobs:
           # Relative to the workspace root: this step does not inherit the
           # working-directory above, because it runs as a container action.
           packages-dir: python/dist
+
+  # ── npm ────────────────────────────────────────────────────────────────────
+  # Same OIDC posture as PyPI: npm >= 11.5.1 detects the trusted publisher
+  # itself, no NODE_AUTH_TOKEN anywhere. `--provenance` stays off — GitHub
+  # doesn't generate provenance attestations for private source repos, and
+  # this one is private until docs/implementation.md's citations are stripped.
+  npm-sdk:
+    needs: [verify, test]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm install --global npm@latest
+      - name: Install + build
+        working-directory: node
+        run: |
+          npm install
+          npm run build
+      - name: Publish @w6w/sdk
+        working-directory: node
+        run: npm publish --access public
+
+  npm-cli:
+    # After npm-sdk, not just verify+test: cli declares a real npm dependency
+    # on "@w6w/sdk": "^0.2.0", so its `npm install` below needs that version
+    # already live on the registry — otherwise it resolves to nothing (there is
+    # no 0.2.0 yet) and the install fails.
+    needs: [verify, test, npm-sdk]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm install --global npm@latest
+      - name: Install + build
+        working-directory: cli
+        run: |
+          npm install
+          npm run build
+      - name: Publish @w6w/cli
+        working-directory: cli
+        run: npm publish --access public
+
+  # ── JSR ────────────────────────────────────────────────────────────────────
+  # No build step: JSR publishes the authored .ts source verbatim (D7), the
+  # same files `deno task check`/`test` already run against. `npx jsr publish`
+  # picks up the OIDC token from `id-token: write` with no login step.
+  jsr-sdk:
+    needs: [verify, test]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Publish @w6w/sdk to JSR
+        working-directory: node
+        run: npx --yes jsr publish
+
+  jsr-cli:
+    needs: [verify, test]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Publish @w6w/cli to JSR
+        working-directory: cli
+        run: npx --yes jsr publish
