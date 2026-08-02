@@ -1,9 +1,10 @@
 # Releasing the wrappers
 
 Every wrapper publishes together, at one version, from one workflow in this
-repo. One actor decides, gates and uploads; **no publishing credential exists
-anywhere**, because every upload is trusted publishing over OIDC minted inside
-this repo.
+repo. One actor decides, gates and uploads. PyPI uploads over OIDC with no
+stored credential; npm and JSR upload with a stored token each
+(`NPM_TOKEN`, `JSR_TOKEN`) — see [§Required secrets](#required-secrets) for
+why those two aren't OIDC too.
 
 > **This replaces a three-repo dispatch architecture** that existed only because
 > the wrappers used to be three separate repos with the contract in a private
@@ -17,7 +18,7 @@ this repo.
 
 | Owner | Does | Does not |
 |---|---|---|
-| **this repo** (`w6w-io/w6w-wrappers`) | owns [`../VERSION`](../VERSION); verifies every manifest agrees with it; runs conformance across every lane; tags; builds and publishes all five artifacts over OIDC | hold any registry credential |
+| **this repo** (`w6w-io/w6w-wrappers`) | owns [`../VERSION`](../VERSION); verifies every manifest agrees with it; runs conformance across every lane; tags; builds and publishes all five artifacts | hold a PyPI credential — that one's OIDC only |
 | **the monorepo** (`segevsh/w6w`) | consumes this repo as a submodule at `packages/wrappers` and bumps its pointer after a release | decide, gate, or trigger a release |
 
 One workflow file, `.github/workflows/release.yml`, does the whole thing. It
@@ -52,32 +53,31 @@ Lockstep needed one actor that *decides*. It turns out one repo that decides
 
 ## Before any of this can run
 
-Outward-facing, one-time, and human:
+Outward-facing, one-time, and human — but shorter than it was, because npm and
+JSR moved off OIDC:
 
-1. **Register a trusted publisher for each artifact**, against `w6w-io/w6w-wrappers`
-   and workflow `release.yml`:
-   - npm: `@w6w/sdk` and `@w6w/cli` already exist (published `0.1.1` from the
-     archived per-language repos) — on npmjs.com, open each package → Settings →
-     Trusted Publisher → add a GitHub Actions publisher for
-     `w6w-io/w6w-wrappers`, workflow `release.yml`. Not "pending"; the project
-     already exists, this just adds OIDC as a second way to publish it.
-   - JSR: the `@w6w` scope already exists (`@w6w/types` is on it). `@w6w/sdk`
-     and `@w6w/cli` are not yet — create each package under the scope on
-     jsr.io and link it to the `w6w-io/w6w-wrappers` GitHub repo (Settings →
-     GitHub Actions on the package). Unlinked, `npx jsr publish` has no OIDC
-     binding to use.
-   - PyPI: `w6w` — as a **pending publisher**, since the project does not exist
-     yet. The first upload creates it.
+1. **PyPI: register a pending publisher** for `w6w` against
+   `w6w-io/w6w-wrappers`, workflow `release.yml`, environment `pypi` — the
+   project doesn't exist yet, the first upload creates it. This is the one
+   registry where OIDC is worth the one-time setup: PyPI's is a single form,
+   no per-package pre-creation step.
 2. **Create the `pypi` GitHub environment** (Settings → Environments) on
-   `w6w-io/w6w-wrappers`, named to match the PyPI registration exactly. npm and
-   JSR bind on repo + workflow only, no environment involved.
-3. Nothing else. There is no repo to create, no token to mint, no secret to
-   store.
+   `w6w-io/w6w-wrappers`, named to match the PyPI registration exactly.
+3. **npm and JSR: add repo secrets instead.** `NPM_TOKEN` (an npm automation
+   token with publish rights on `@w6w/sdk` and `@w6w/cli`) and `JSR_TOKEN` (a
+   JSR personal access token with Publish permission on the `@w6w` scope) —
+   both under Settings → Secrets and variables → Actions on
+   `w6w-io/w6w-wrappers`. Neither registry's OIDC path was worth taking: npm's
+   Trusted Publisher is a per-package web form with no bulk/API equivalent,
+   and JSR's OIDC additionally requires creating and linking each package by
+   hand on jsr.io before a CI run can use it. A token sidesteps both, at the
+   cost documented in [§Required secrets](#required-secrets).
 
-The registration is the **one-way step**: it hard-binds to whichever repo
-publishes. It has not happened yet, which is fortunate timing — registering it
-against the now-archived `w6w-io/w6w-node` and `w6w-io/w6w-cli` would have had
-to be undone by hand.
+The PyPI registration is the **one-way step** among these: it hard-binds to
+whichever repo publishes. It has not happened against the archived
+`w6w-io/w6w-node` / `w6w-io/w6w-cli` repos, which is fortunate timing — that
+would have had to be undone by hand. Tokens carry no such binding; rotating
+`NPM_TOKEN`/`JSR_TOKEN` is just re-pasting a repo secret.
 
 ### The PyPI name is not reserved until the first upload
 
@@ -141,11 +141,12 @@ human again, and is not optional.
    operation added to two wrappers and forgotten in a third fails this job, and
    nothing is uploaded.* It is not a separate job because it is not separate
    work; a standalone `conformance` job would re-run the same assertions.
-7. **`publish`** (`needs: [verify, test]`) builds and uploads over OIDC, with
-   `permissions: {id-token: write}` — the `id-token` is what replaces every
-   token. The PyPI job additionally declares `environment: pypi`, which **must**
-   match the environment named in the publisher registration: it travels in the
-   OIDC claim and a mismatch is rejected at upload.
+7. **The five publish jobs** (`needs: [verify, test]`, `npm-cli` additionally
+   needs `npm-sdk`) build and upload. `pypi` uses OIDC — `permissions:
+   {id-token: write}` and `environment: pypi`, which **must** match the
+   environment named in the publisher registration: it travels in the OIDC
+   claim and a mismatch is rejected at upload. `npm-sdk`/`npm-cli`/`jsr-sdk`/
+   `jsr-cli` use `secrets.NPM_TOKEN`/`secrets.JSR_TOKEN` instead.
 8. **Confirm every artifact landed**, then bump the monorepo's submodule pointer
    in a `chore(wrappers): bump submodule` commit.
 
@@ -155,19 +156,19 @@ permanent inconsistency, and the only fix is burning a version number.
 
 ## Notes on the npm and JSR lanes
 
-Four jobs (`npm-sdk`, `npm-cli`, `jsr-sdk`, `jsr-cli`), and the shape is copied
-from the house pattern — `w6w-core`'s `publish-types.yml` ships `@w6w/types`
-to npm and JSR over OIDC with no stored credential. What was *not* copyable is
-written out here, because each item is a thing that would otherwise be
+Four jobs: `npm-sdk`, `npm-cli`, `jsr-sdk`, `jsr-cli`. Unlike `w6w-core`'s
+`publish-types.yml` (which ships `@w6w/types` to npm and JSR over OIDC), these
+authenticate with `secrets.NPM_TOKEN` / `secrets.JSR_TOKEN` — see
+[§Required secrets](#required-secrets) for why. What's specific to these four
+jobs, written out here because each item is a thing that would otherwise be
 discovered at upload time:
 
-- **`npm publish --provenance` cannot be used while this repo is private.**
-  [GitHub retired provenance for private source repositories](https://github.blog/changelog/2023-07-26-publishing-with-npm-provenance-from-private-source-repositories-is-no-longer-supported/),
-  and it is not generated even under trusted publishing. So the npm jobs omit
-  the flag for now; when the repo goes public (which is gated on stripping the
-  internal citations — [implementation.md](./implementation.md)), modern npm
-  emits provenance **automatically** under trusted publishing and the flag is
-  still not needed. This is one of the concrete costs of staying private.
+- **`npm publish --provenance` cannot be used while this repo is private**,
+  independent of the token-vs-OIDC choice —
+  [GitHub retired provenance for private source repositories](https://github.blog/changelog/2023-07-26-publishing-with-npm-provenance-from-private-source-repositories-is-no-longer-supported/).
+  Token-based publishing was never going to get provenance anyway (npm only
+  attaches it under OIDC), so this repo going public later doesn't change
+  anything here unless the npm jobs are migrated to OIDC at the same time.
 - **`@w6w/cli` publishes *after* `@w6w/sdk`** — `needs: [verify, test, npm-sdk]`,
   not just the shared gate — because it declares a real npm dependency on it,
   and its `npm install` step needs `^0.2.0` already live on the registry.
@@ -179,13 +180,12 @@ discovered at upload time:
   `scripts/fix-shebang.mjs`), and the CLI's sources import the bare specifier
   `@w6w/sdk`, which resolves from `node_modules` — not through the Deno import
   map, which points at `../node/mod.ts` and is a *development* convenience.
-- **JSR needs the `@w6w` scope to exist and each package linked to this repo**
-  before OIDC publishing works; confirmed with `deno publish --dry-run` for
-  both lanes, including the CLI's cross-package `@w6w/sdk` import. The publish
-  step itself is `npx --yes jsr publish` from the lane directory, no build.
-- **The trusted publishers for all four artifacts register against
-  `w6w-io/w6w-wrappers` + `release.yml`**, exactly as PyPI's does. Registering
-  them against the archived `w6w-node` / `w6w-cli` repos would have to be undone.
+- **JSR's `--token` flag needs no scope/package pre-creation** — that
+  requirement (`@w6w` scope existing, each package linked to a repo) is
+  specific to JSR's OIDC path. Confirmed the source itself is publishable with
+  `deno publish --dry-run` for both lanes, including the CLI's cross-package
+  `@w6w/sdk` import. The publish step is `npx --yes jsr publish --token
+  "$JSR_TOKEN"` from the lane directory, no build.
 
 ## Partial-failure reality
 
@@ -220,18 +220,35 @@ to prereleases exactly as it does to finals.
 
 ## Required secrets
 
-**None.**
+**`NPM_TOKEN` and `JSR_TOKEN`. Not PyPI, and not a cross-repo dispatch PAT.**
 
-Not a stored npm token, not a PyPI token, not a `twine` password, not a
-cross-repo dispatch PAT. Every upload is trusted publishing over OIDC, the same
-mechanism `packages/core/.github/workflows/publish-types.yml` already uses to
-ship `@w6w/types` to npm and JSR.
+This is a deliberate departure from the original all-OIDC design (`w6w-core`'s
+`publish-types.yml` is still all-OIDC, and PyPI in this same workflow still is
+too). The reason is asymmetric setup cost, not a change of principle:
+
+- **PyPI's OIDC path is a single form** — register a pending publisher once,
+  done. Worth it, so it stays OIDC.
+- **npm's Trusted Publisher is a per-package web form** with no CLI/API way to
+  register it, and **JSR's OIDC additionally requires creating and linking
+  each package on jsr.io before a CI run can use it** — two more manual,
+  per-package, web-only steps than PyPI needed, for two artifacts each (sdk,
+  cli). A token collapses all four of those into one secret per registry,
+  pasted once.
+
+What this costs: `npm publish --provenance` is unavailable either way (see
+[§Notes on the npm and JSR lanes](#notes-on-the-npm-and-jsr-lanes)), and the
+tokens are long-lived credentials sitting in GitHub Actions secrets rather
+than short-lived OIDC exchanges — rotate them the same way any other repo
+secret gets rotated. If npm/JSR later grow a bulk or API way to register
+Trusted Publishers, revisit; until then a token is the pragmatic choice, not
+an oversight.
 
 The `WRAPPER_DISPATCH_TOKEN` the previous architecture needed — a fine-grained
 PAT with write access to four repos, whose only job was firing a
 `repository_dispatch` and pushing to a contract mirror — **does not exist and
 must not be reintroduced.** It was a consequence of the split, and the split is
-gone.
+gone. `NPM_TOKEN`/`JSR_TOKEN` are a different thing: registry credentials
+scoped to this repo's own publish jobs, not cross-repo automation.
 
 `SIBLING_REPO_PAT` (`.github/workflows/server-deploy.yml:11-14` in the monorepo)
 is unrelated: the server image is assembled from several *private* repos. This
