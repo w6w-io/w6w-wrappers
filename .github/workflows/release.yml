@@ -1,16 +1,12 @@
 name: Release
 
-# Publishes the wrappers. PyPI is tokenless over OIDC; npm and JSR use stored
-# tokens (`secrets.NPM_TOKEN`, `secrets.JSR_TOKEN`) instead — both registries'
-# OIDC paths need a one-time per-package web-UI step with no CLI/API
-# equivalent (npm: Trusted Publisher per package; JSR: create + link each
-# package on jsr.io), and a token sidesteps that entirely. See docs/release.md
-# §Required secrets for the tradeoff this makes.
+# Publishes the wrappers — tokenless, over OIDC. No stored registry credential
+# exists in this repo, and none should ever be added: every upload mints a
+# short-lived one from the workflow's own identity.
 #
-# THE FILENAME IS PART OF THE CREDENTIAL for PyPI's OIDC binding. Trusted
-# publishing binds to `owner/repo` PLUS this file's name (and the
-# environment). Renaming `release.yml` silently invalidates that registration.
-# Don't.
+# THE FILENAME IS PART OF THE CREDENTIAL. Trusted publishing binds to
+# `owner/repo` PLUS this file's name (and, for PyPI, the environment). Renaming
+# `release.yml` silently invalidates every publisher registration. Don't.
 #
 # One-time setup (docs/release.md §Before any of this can run):
 #   PyPI — pypi.org → Your projects → Publishing → add a GitHub "pending"
@@ -20,8 +16,6 @@ name: Release
 #          this workflow creates it. The name is NOT reserved until then.
 #   The `pypi` GitHub environment must exist (Settings → Environments) and its
 #   name must match the publisher registration exactly.
-#   npm/JSR — add `NPM_TOKEN` and `JSR_TOKEN` as repo secrets (Settings →
-#          Secrets and variables → Actions). No web-UI registration needed.
 #
 # Release flow: bump VERSION + every manifest, commit, then publish a GitHub
 # Release tagged `vX.Y.Z`. `workflow_dispatch` runs the gates WITHOUT
@@ -32,7 +26,7 @@ on:
     types: [published]
   workflow_dispatch:
 
-# id-token: write is only for the PyPI job's OIDC exchange.
+# Required for OIDC. This is what replaces stored tokens.
 permissions:
   contents: read
   id-token: write
@@ -167,21 +161,23 @@ jobs:
           packages-dir: python/dist
 
   # ── npm ────────────────────────────────────────────────────────────────────
-  # Token-based, not OIDC: npm's Trusted Publisher needs a one-time per-package
-  # web-UI registration with no CLI/API equivalent. `secrets.NPM_TOKEN` is a
-  # classic automation token instead — the one tradeoff this buys is losing
-  # `--provenance` (npm only generates it under OIDC), which this repo can't
-  # produce yet anyway (GitHub doesn't emit provenance for private source repos).
+  # Same OIDC posture as PyPI: npm >= 11.5.1 detects the trusted publisher
+  # itself, no NODE_AUTH_TOKEN anywhere. `--provenance` stays off — GitHub
+  # doesn't generate provenance attestations for private source repos, and
+  # this one is private until docs/implementation.md's citations are stripped.
   npm-sdk:
     needs: [verify, test]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+      - run: npm install --global npm@latest
       - name: Install + build
         working-directory: node
         run: |
@@ -190,8 +186,6 @@ jobs:
       - name: Publish @w6w/sdk
         working-directory: node
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   npm-cli:
     # After npm-sdk, not just verify+test: cli declares a real npm dependency
@@ -201,12 +195,15 @@ jobs:
     needs: [verify, test, npm-sdk]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+      - run: npm install --global npm@latest
       - name: Install + build
         working-directory: cli
         run: |
@@ -215,19 +212,17 @@ jobs:
       - name: Publish @w6w/cli
         working-directory: cli
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ── JSR ────────────────────────────────────────────────────────────────────
-  # Also token-based: `secrets.JSR_TOKEN` is a personal access token with
-  # Publish permission on the @w6w scope, passed with --token. This is JSR's
-  # own documented alternative to the OIDC+linked-repo path (which needs each
-  # package created and linked by hand on jsr.io first) — no build step either
-  # way, JSR publishes the authored .ts source verbatim (D7).
+  # No build step: JSR publishes the authored .ts source verbatim (D7), the
+  # same files `deno task check`/`test` already run against. `npx jsr publish`
+  # picks up the OIDC token from `id-token: write` with no login step.
   jsr-sdk:
     needs: [verify, test]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
@@ -235,12 +230,14 @@ jobs:
           node-version: "24"
       - name: Publish @w6w/sdk to JSR
         working-directory: node
-        run: npx --yes jsr publish --token "${{ secrets.JSR_TOKEN }}"
+        run: npx --yes jsr publish
 
   jsr-cli:
     needs: [verify, test]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
@@ -248,4 +245,4 @@ jobs:
           node-version: "24"
       - name: Publish @w6w/cli to JSR
         working-directory: cli
-        run: npx --yes jsr publish --token "${{ secrets.JSR_TOKEN }}"
+        run: npx --yes jsr publish
