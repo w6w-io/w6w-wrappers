@@ -233,6 +233,41 @@ Deno.test("workflows run: a failed run with --wait is exit 3, and nothing raised
   );
 });
 
+Deno.test("workflows run: --input reaches the request body, distinct from variables", async () => {
+  const result = await w6w(
+    ["workflows", "run", "wf_01HQ8N", "--input", '{"email":"a@example.com"}'],
+    (call) => {
+      assertEquals(call.body, { input: { email: "a@example.com" } });
+      return json(202, { runId: "run_1", status: "queued" });
+    },
+  );
+  assertEquals(result.code, 0, result.stderr);
+  assertEquals(result.calls.length, 1);
+});
+
+Deno.test("workflows run: no --input sends no `input` key at all", async () => {
+  const result = await w6w(["workflows", "run", "wf_01HQ8N"], (call) => {
+    assertEquals(call.body, {});
+    return json(202, { runId: "run_1", status: "queued" });
+  });
+  assertEquals(result.code, 0, result.stderr);
+});
+
+Deno.test(
+  "workflows run: --input that is not valid JSON, or not an object, is a usage error — never a guess",
+  async () => {
+    const badJson = await w6w(["workflows", "run", "wf_01HQ8N", "--input", "{not json"]);
+    assertEquals(badJson.code, 1, badJson.stderr);
+    assertStringIncludes(badJson.stderr, "must be valid JSON");
+    assertEquals(badJson.calls.length, 0, "an invalid --input must never reach the wire");
+
+    const array = await w6w(["workflows", "run", "wf_01HQ8N", "--input", "[1,2]"]);
+    assertEquals(array.code, 1, array.stderr);
+    assertStringIncludes(array.stderr, "must be a JSON object");
+    assertEquals(array.calls.length, 0, "a non-object --input must never reach the wire");
+  },
+);
+
 // ---------------------------------------------------------------------------
 // `w6w run <urn>` — the unified dispatcher.
 // ---------------------------------------------------------------------------

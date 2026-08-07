@@ -183,6 +183,30 @@ Deno.test("workflows.run: variables and trigger reach the request body", async (
   assertEquals(off.calls[0].url, "https://api.example.com/workflows/wf_01HQ/run");
 });
 
+Deno.test("workflows.run: input reaches the request body, distinct from variables", async () => {
+  // `input` is delivered to the entry trigger node's own recorded output
+  // (`steps.<triggerId>.output.<key>`), not the run's variable scope
+  // (`vars.*`, which is what `variables` seeds) — they are separate body
+  // fields and must both be sent when both are given.
+  const c = client(() => json({ runId: "run_01HQ", status: "queued" }, 202));
+
+  await c.client.workflows.run("wf_01HQ", {
+    variables: { count: 2 },
+    input: { email: "a@example.com", plan: "pro" },
+  });
+
+  assertEquals(sentBody(c.calls[0]), {
+    variables: { count: 2 },
+    input: { email: "a@example.com", plan: "pro" },
+  });
+
+  // Omitted means omitted, not `null` or `{}` — no `input` key at all when the
+  // caller does not pass one.
+  const off = client(() => json({ runId: "run_2", status: "queued" }, 202));
+  await off.client.workflows.run("wf_01HQ", { variables: { count: 1 } });
+  assertEquals(sentBody(off.calls[0]), { variables: { count: 1 } });
+});
+
 Deno.test("workflows.run: a 404 unknown_workflow reaches the caller as an ApiError", async () => {
   const c = client(() =>
     json({ error: { code: "unknown_workflow", message: "Not registered." } }, 404, "Not Found")

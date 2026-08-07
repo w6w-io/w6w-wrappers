@@ -287,7 +287,7 @@ export const HELP_TREE: HelpTree = {
           "short": "Enqueue a workflow run; optionally wait for a terminal state",
           "headline": "enqueue a workflow run; optionally wait for a terminal state",
           "usage": "w6w workflows run <id> [options]",
-          "naming": "w6w workflows run <id> [--wait]",
+          "naming": "w6w workflows run <id> [--wait] [--input <json>]",
           "status": "required",
           "params": [
             {
@@ -319,6 +319,13 @@ export const HELP_TREE: HelpTree = {
               "required": false,
             },
             {
+              "name": "input",
+              "kind": "flag",
+              "display": "--input <json>",
+              "description": "Run input, as a JSON string",
+              "required": false,
+            },
+            {
               "name": "json",
               "kind": "flag",
               "display": "--json",
@@ -329,6 +336,7 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w workflows run wf_01HQ8N --var email=a@b.com",
             "w6w workflows run wf_01HQ8N --wait --json",
+            'w6w workflows run wf_01HQ --input \'{"email":"a@b.com"}\'',
           ],
           "notes": [
             'Without --wait the run is queued and the command returns immediately with a run id and status "queued". With --wait the CLI returns when the run finishes or the server\'s wait window expires — a run still in progress is reported as "running", which is not an error.',
