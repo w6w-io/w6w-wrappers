@@ -336,7 +336,7 @@ export const HELP_TREE: HelpTree = {
           "examples": [
             "w6w workflows run wf_01HQ8N --var email=a@b.com",
             "w6w workflows run wf_01HQ8N --wait --json",
-            'w6w workflows run wf_01HQ --input \'{"email":"a@b.com"}\'',
+            'w6w workflows run wf_01HQ8N --input \'{"email":"a@b.com"}\'',
           ],
           "notes": [
             'Without --wait the run is queued and the command returns immediately with a run id and status "queued". With --wait the CLI returns when the run finishes or the server\'s wait window expires — a run still in progress is reported as "running", which is not an error.',

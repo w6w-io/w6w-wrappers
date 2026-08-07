@@ -611,7 +611,7 @@ the source, this table is the transcription.
 | `me` | `GET /auth/me` | *(none — flat body)* | `Me` | `client.me()` | `client.me()` | `w6w me` |
 | `connections.list` | `GET /connections` | `{connections:[…]}` | `ConnectionSummary[]` | `client.connections.list()` | `client.connections.list()` | `w6w connections list` |
 | `workflows.list` | `GET /workflows` | `{workflows:[…]}` | `WorkflowSummary[]` | `client.workflows.list(opts?)` | `client.workflows.list(project=None)` | `w6w workflows list [--project <id>]` |
-| `workflows.run` | `POST /workflows/{id}/run` | *(none — flat body)* | `RunResult` | `client.workflows.run(id, opts?)` | `client.workflows.run(id, wait=False, variables=None, trigger=None)` | `w6w workflows run <id> [--wait]` |
+| `workflows.run` | `POST /workflows/{id}/run` | *(none — flat body)* | `RunResult` | `client.workflows.run(id, opts?)` | `client.workflows.run(id, wait=False, variables=None, trigger=None, input=None)` | `w6w workflows run <id> [--wait] [--input <json>]` |
 | `documents.list` | `GET /documents` | `{documents:[…]}` | `Doc[]` | `client.documents.list(opts?)` | `client.documents.list(project=None)` | `w6w documents list [--project <id>]` |
 | `documents.get` | `GET /documents/{id}` | `{document:…}` | `Doc` | `client.documents.get(id, opts?)` | `client.documents.get(id, project=None)` | `w6w documents get <id> [--project <id>]` |
 | `documents.getByKey` | `GET /documents/by-key/{key}` | `{document:…}` | `Doc` | `client.documents.getByKey(key, opts?)` | `client.documents.get_by_key(key, project=None)` | `w6w documents get-by-key <key> [--project <id>]` |

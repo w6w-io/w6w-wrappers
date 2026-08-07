@@ -159,7 +159,7 @@ OPTIONS
 EXAMPLES
   w6w workflows run wf_01HQ8N --var email=a@b.com
   w6w workflows run wf_01HQ8N --wait --json
-  w6w workflows run wf_01HQ --input '{"email":"a@b.com"}'
+  w6w workflows run wf_01HQ8N --input '{"email":"a@b.com"}'
 
 NOTES
   Without --wait the run is queued and the command returns immediately with a

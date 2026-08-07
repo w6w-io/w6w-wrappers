@@ -82,7 +82,11 @@ export class W6wClient {
   /**
    * Workflows: `list` and `run`. `list` is project-scoped and accepts an
    * optional `project` that overrides this client's default; `run` is addressed
-   * by `wf_…` id and takes `wait`, `variables` and `trigger`.
+   * by `wf_…` id and takes `wait`, `variables`, `trigger` and `input`.
+   *
+   * `variables` and `input` are not interchangeable: `variables` lands as
+   * `vars.*` in the run scope, while `input` is delivered to the entry
+   * `@w6w/trigger` step and read downstream as `steps.<triggerId>.output.<key>`.
    */
   readonly workflows: WorkflowsApi;
 
