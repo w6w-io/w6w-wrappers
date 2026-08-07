@@ -136,7 +136,7 @@ class QueuedTest(unittest.TestCase):
 
     def test_run_sends_no_project_parameter_even_with_a_client_default(self) -> None:
         # A `wf_…` id is unambiguous on its own and the route reads no
-        # `?project=`; `endpoints.json` gives this operation exactly four
+        # `?project=`; `endpoints.json` gives this operation exactly five
         # parameters. This asserts on the WIRE, so a scope added later fails
         # here however it was obtained.
         instance, calls = client(
@@ -246,6 +246,32 @@ class BodyTest(unittest.TestCase):
         self.assertEqual(calls[0].get_header("Content-type"), "application/json")
         # They are body fields, not query parameters.
         self.assertEqual(calls[0].full_url, RUN_URL)
+
+    def test_input_reaches_the_request_body_distinct_from_variables(self) -> None:
+        # `input` is delivered to the entry trigger node's own recorded output
+        # (`steps.<triggerId>.output.<key>`), not the run's variable scope
+        # (`vars.*`, which is what `variables` seeds) — separate body fields,
+        # both sent when both are given.
+        instance, calls = client(responding({"runId": "run_01HQ", "status": "queued"}, 202))
+
+        instance.workflows.run(
+            "wf_01HQ",
+            variables={"count": 2},
+            input={"email": "a@example.com", "plan": "pro"},
+        )
+
+        self.assertEqual(
+            sent_body(calls[0]),
+            {"variables": {"count": 2}, "input": {"email": "a@example.com", "plan": "pro"}},
+        )
+
+        # Omitted means omitted, not `null` or `{}` — no `input` key at all when
+        # the caller does not pass one.
+        instance2, calls2 = client(responding({"runId": "run_2", "status": "queued"}, 202))
+
+        instance2.workflows.run("wf_01HQ", variables={"count": 1})
+
+        self.assertEqual(sent_body(calls2[0]), {"variables": {"count": 1}})
 
     def test_an_unknown_trigger_value_is_sent_never_validated(self) -> None:
         # `endpoints.json` declares `trigger` as an open string with

@@ -126,6 +126,7 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   "workflows.run": [
     "w6w workflows run wf_01HQ8N --var email=a@b.com",
     "w6w workflows run wf_01HQ8N --wait --json",
+    `w6w workflows run wf_01HQ --input '{"email":"a@b.com"}'`,
   ],
   "documents.list": ["w6w documents list", "w6w documents list --project prj_01HQ8N"],
   "documents.get": ["w6w documents get doc_01HQ8N"],
@@ -188,6 +189,7 @@ const PARAM_HELP: Record<string, string> = {
   "workflows.run.wait": "Wait for the run to reach a terminal state",
   "workflows.run.variables": "Set a run variable (repeatable)",
   "workflows.run.trigger": "Trigger payload, as a JSON string",
+  "workflows.run.input": "Run input, as a JSON string",
   "documents.get.id": "Document id (see: w6w documents list)",
   "documents.update.id": "Document id (see: w6w documents list)",
   "documents.delete.id": "Document id (see: w6w documents list)",

@@ -83,9 +83,9 @@ export interface WorkflowListOptions {
  * Per-call options for `workflows.run`.
  *
  * **No `project` here, on purpose.** A `wf_…` id is unambiguous on its own, and
- * `endpoints.json` gives this operation exactly four parameters — `id`, `wait`,
- * `variables`, `trigger`. Sending a `?project=` the route does not read would be
- * inventing a parameter.
+ * `endpoints.json` gives this operation exactly five parameters — `id`, `wait`,
+ * `variables`, `trigger`, `input`. Sending a `?project=` the route does not read
+ * would be inventing a parameter.
  */
 export interface WorkflowRunOptions {
   /**
@@ -111,6 +111,13 @@ export interface WorkflowRunOptions {
    * reject a value a newer server accepts.
    */
   trigger?: string;
+  /**
+   * Delivered to the entry trigger node's own recorded output, read downstream
+   * as `steps.<triggerId>.output.<key>` — the shape a trigger's declared fields
+   * actually arrive in. Not the same slot as {@linkcode variables}, which seeds
+   * the run's variable scope (`vars.*`) instead.
+   */
+  input?: Record<string, unknown>;
 }
 
 /**
@@ -195,7 +202,7 @@ export class WorkflowsApi {
    * token, a transport failure.
    *
    * @param id - The `wf_…` id, percent-encoded into the path.
-   * @param options - `wait`, plus the `variables` and `trigger` that go in the body.
+   * @param options - `wait`, plus the `variables`, `trigger` and `input` that go in the body.
    * @returns The run handle, its status, and the result when the run has one.
    * @throws {ApiError} `404 unknown_workflow` when there is no such workflow.
    * @throws {ApiError} `bad_response` when a success body is not a run object.
@@ -210,9 +217,9 @@ export class WorkflowsApi {
       query: { wait: options?.wait ? true : undefined },
       // Always a body, even when empty: the route parses one when the text is
       // non-empty and defaults to `{}` otherwise, so `{}` and no body are the
-      // same request — and sending the object keeps the two optional fields at
+      // same request — and sending the object keeps the three optional fields at
       // one place instead of behind a conditional.
-      body: { variables: options?.variables, trigger: options?.trigger },
+      body: { variables: options?.variables, trigger: options?.trigger, input: options?.input },
     });
 
     const body = res.body;

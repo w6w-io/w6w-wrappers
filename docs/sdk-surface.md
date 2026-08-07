@@ -155,7 +155,7 @@ no client-side paging loop.
 | TS | Python | Returns |
 |---|---|---|
 | `client.run(input)` | `client.run(urn, action=None, payload=None)` | `RunEnvelope` |
-| `client.workflows.run(id, opts?)` | `client.workflows.run(id, wait=False, variables=None, trigger=None)` | `WorkflowRunResult` |
+| `client.workflows.run(id, opts?)` | `client.workflows.run(id, wait=False, variables=None, trigger=None, input=None)` | `WorkflowRunResult` |
 
 `run` dispatches on a URN over four runnable arms (`conn_`, `wf_`, `fn_`, `ep_`)
 and returns the `kind`-tagged envelope **exactly as it arrived**. `action` is
@@ -164,9 +164,13 @@ omitted. A body with no string `kind` is `bad_response`.
 
 `workflows.run` is the typed path and the only one that can wait. `wait` is sent
 as `?wait=true` **only when true** — never `?wait=false`, which the server reads
-as no-wait anyway. `variables` and `trigger` are body fields; `trigger` is an
+as no-wait anyway. `variables`, `trigger` and `input` are body fields; `trigger` is an
 **open string**, passed through unvalidated, so a sixth server-side value needs
-no wrapper release. It returns the wire body plus two derived signals:
+no wrapper release. `variables` and `input` are not the same slot: `variables`
+seeds the run's variable scope (`vars.*`); `input` is delivered to the entry
+trigger node's own recorded output (`steps.<triggerId>.output.<key>`) — the
+shape a trigger's declared fields actually arrive in. It returns the wire body
+plus two derived signals:
 `terminal` (from the run's own status) and `httpStatus` (`200` finished, `202`
 still going) — the body alone cannot tell a `?wait=` timeout from a run that was
 never waited on.
