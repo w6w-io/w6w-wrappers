@@ -56,7 +56,7 @@ class RunRequest(Protocol):
 
     A callable rather than an object with a `request` method, for the same
     reason `vars` takes one: there is nothing else this operation may reach.
-    `W6wClient.request` satisfies it as a bound method, and so does a three-line
+    `Client.request` satisfies it as a bound method, and so does a three-line
     fake in a test.
     """
 

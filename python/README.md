@@ -44,11 +44,11 @@ The package is fully annotated and ships a [PEP 561](https://peps.python.org/pep
 ## Usage
 
 ```python
-from w6w import W6wClient, ApiError
+from w6w import Client, ApiError
 
-client = W6wClient()                      # from the environment
+client = Client()                         # from the environment
 # …or explicitly, which always wins over the environment:
-client = W6wClient(base_url="https://api.example.com", token="tok_…")
+client = Client(base_url="https://api.example.com", token="tok_…")
 
 try:
     identity = client.me()                # who am I, and what answered?
@@ -152,7 +152,7 @@ These variables are part of the published contract and are identical across all
 three wrappers.
 
 **Explicit constructor arguments always win over the environment.**
-`W6wClient(base_url=…, token=…)` overrides `W6W_BASE_URL` / `W6W_TOKEN`, and an
+`Client(base_url=…, token=…)` overrides `W6W_BASE_URL` / `W6W_TOKEN`, and an
 argument you pass explicitly — including an empty string — is never quietly
 replaced by an environment variable behind your back.
 

@@ -21,7 +21,7 @@ from typing import Any, Callable, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request
 
-from w6w import ApiError, ConfigError, HttpResponse, W6wClient, path
+from w6w import ApiError, Client, ConfigError, HttpResponse, path
 from w6w._config import resolve_config
 from w6w._http import _request, build_url, default_transport
 
@@ -472,11 +472,11 @@ class QueryTest(unittest.TestCase):
 
 
 class ClientTest(unittest.TestCase):
-    """`W6wClient` holds instance state and defaults its transport to `urllib`."""
+    """`Client` holds instance state and defaults its transport to `urllib`."""
 
     def test_the_client_routes_requests_through_its_injected_transport(self) -> None:
         transport = responding({"tenant": "t_1"})
-        client = W6wClient(base_url="https://api.example.com/", token="tok_c", transport=transport)
+        client = Client(base_url="https://api.example.com/", token="tok_c", transport=transport)
 
         response = client.request("GET", "/me")
 
@@ -487,7 +487,7 @@ class ClientTest(unittest.TestCase):
 
     def test_the_transport_defaults_to_urllib(self) -> None:
         # Asserted by identity, never by calling it: this suite opens no socket.
-        client = W6wClient(base_url="https://api.example.com", token="tok_c")
+        client = Client(base_url="https://api.example.com", token="tok_c")
         self.assertIs(client.transport, default_transport)
 
     def test_two_clients_in_one_process_hold_different_credentials(self) -> None:
@@ -495,12 +495,12 @@ class ClientTest(unittest.TestCase):
         # the module-global-credential regression the browser client has.
         first_transport = responding({"tenant": "t_1"})
         second_transport = responding({"tenant": "t_2"})
-        first = W6wClient(
+        first = Client(
             base_url="https://one.example.com",
             token="tok_1",
             transport=first_transport,
         )
-        second = W6wClient(
+        second = Client(
             base_url="https://two.example.com",
             token="tok_2",
             transport=second_transport,
@@ -526,7 +526,7 @@ class ClientTest(unittest.TestCase):
         # failure happens at construction, before a transport is even stored.
         transport = responding({})
         with self.assertRaises(ConfigError) as caught:
-            W6wClient(base_url="", transport=transport)
+            Client(base_url="", transport=transport)
         self.assertIn("W6W_BASE_URL", str(caught.exception))
         self.assertEqual(transport.calls, [])
 

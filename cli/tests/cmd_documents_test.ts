@@ -124,6 +124,15 @@ Deno.test("documents list: one GET, a readable table, and --json prints the payl
   assertStringIncludes(empty.stdout, "No documents.");
 });
 
+Deno.test("`docs ls` and `documents ls` reach the same route as `documents list`", async () => {
+  for (const argv of [["docs", "list"], ["documents", "ls"], ["docs", "ls"]]) {
+    const result = await w6w(argv, () => json(200, { documents: [DOC] }));
+    assertEquals(result.code, 0, result.stderr);
+    assertEquals(result.calls[0].url, `${BASE}/documents`);
+    assertStringIncludes(result.stdout, "onboarding-email");
+  }
+});
+
 Deno.test("documents get: addressed by the server-issued id, and the content is shown", async () => {
   const result = await w6w(["documents", "get", "doc_01HQ8N"], () => json(200, { document: DOC }));
 

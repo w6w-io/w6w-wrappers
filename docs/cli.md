@@ -71,6 +71,12 @@ EXAMPLES
   w6w vars create greeting --type string --value hello
   w6w run conn_01H… --action send_email --payload '{"to":"a@b.com"}'
 
+ALIASES
+  conn                   same as `connections`
+  wf                     same as `workflows`
+  docs                   same as `documents`
+  ls                     same as `list`, inside any group
+
   Docs: https://w6w.dev/docs/cli
 ```
 
@@ -80,6 +86,17 @@ they are talking to. The operation is named `me` everywhere else (`endpoints.jso
 `naming.cli`, the SDK method); the alias exists only at the CLI, is declared as
 `cliAlias` in `endpoints.json`, and `w6w info --help` prints `w6w me`'s help.
 Aliases are not listed as separate `COMMANDS` entries — one command, one line.
+
+`conn`/`wf`/`docs`/`ls` are a second, narrower kind of alias: short spellings
+for the two tokens that name a command path, substituted for their canonical
+spelling before the command is even resolved — `w6w conn ls` and
+`w6w connections list` parse to the exact same command. Unlike `w6w info`,
+these are **not** declared in `endpoints.json`: they are pure CLI typing
+convenience with nothing for a node or python caller to mirror, so they are
+hand-declared in `src/args.ts` instead of generated. `conn`/`wf`/`docs` stand
+for a group name; `ls` stands for `list` and applies inside *any* group
+(`w6w vars ls`, `w6w docs ls`, …), never outside one — `w6w run ls` leaves
+`ls` as `run`'s positional argument, untouched.
 
 ## Group help
 
@@ -194,6 +211,7 @@ OPTIONS
 EXAMPLES
   w6w run conn_01HQ8N --action send_email --payload '{"to":"a@b.com"}'
   w6w run wf_01HQ8N --payload '{"email":"a@b.com"}'
+  w6w run --app sendgrid --action send_email --payload '{"to":"a@b.com"}'
 
 NOTES
   The result is tagged by kind. A connection action and a function return their
@@ -201,7 +219,23 @@ NOTES
   waited on — use "w6w workflows run <id> --wait" when you need to wait, set
   variables, or pass a trigger. Documents and variables are not URNs: address
   them with "w6w documents" and "w6w vars".
+
+  --app <id> addresses a connection URN by its app instead of a conn_… id —
+  "w6w run --app sendgrid --action send_email" in place of "w6w run
+  conn_01HQ8N --action send_email". It resolves against `w6w connections
+  list`: one matching connection is used outright, and none or several is a
+  usage error (several lists every candidate with the exact command to run
+  against it). It cannot be combined with a URN argument, and it is CLI-only —
+  there is no equivalent in the node or python wrapper.
 ```
+
+Like the group aliases above, `--app` is **not** in `endpoints.json`: `run`'s
+wire shape is exactly `{urn, action, payload}`, and `--app` never reaches it —
+`src/commands/run.ts` resolves it to a connection's `conn_…` id itself, via
+`connections.list()`, before the request is built. It is the one hand-declared
+flag in this CLI that does not come from the generated help tree
+(`mod.ts`'s `commandFlagSpecs`), for exactly the same reason the token aliases
+are hand-declared rather than contract-driven.
 
 ## Exit codes
 

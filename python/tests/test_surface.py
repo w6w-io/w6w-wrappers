@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
 import w6w
-from w6w import W6wClient
+from w6w import Client
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 #: The shared contract, beside this repo — `packages/wrappers/endpoints.json`.
@@ -55,7 +55,7 @@ PUBLIC_SURFACE = {
     # The version, in lockstep across all three wrappers.
     "__version__",
     # Transport core: the client, its configuration, its seams, the errors.
-    "W6wClient",
+    "Client",
     "ApiError",
     "ConfigError",
     "BASE_PATH",
@@ -170,9 +170,9 @@ def _public_callables(namespace: Any) -> Set[str]:
     }
 
 
-def _client() -> W6wClient:
+def _client() -> Client:
     """A client built from dummy configuration. No request is ever made."""
-    return W6wClient(base_url="https://api.example.com", token="tok_conformance")
+    return Client(base_url="https://api.example.com", token="tok_conformance")
 
 
 class ContractTest(unittest.TestCase):

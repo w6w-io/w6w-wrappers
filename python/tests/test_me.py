@@ -37,7 +37,7 @@ from typing import Any, Callable, List, Tuple
 from urllib.error import HTTPError
 from urllib.request import Request
 
-from w6w import ApiError, Me, W6wClient, __version__
+from w6w import ApiError, Client, Me, __version__
 
 #: The full URL `me` must request. One constant, so a lane that moved the route
 #: fails on the assertion rather than on a fixture that moved with it.
@@ -95,11 +95,11 @@ def http_error(status: int, body: Any, reason: str = "") -> HTTPError:
     )
 
 
-def client(respond: Callable[[Request], Any]) -> Tuple[W6wClient, List[Request]]:
+def client(respond: Callable[[Request], Any]) -> Tuple[Client, List[Request]]:
     """A client wired to a fake transport."""
     transport = Recorder(respond)
     return (
-        W6wClient(base_url="https://api.example.com", token="tok_1", transport=transport),
+        Client(base_url="https://api.example.com", token="tok_1", transport=transport),
         transport.calls,
     )
 
@@ -127,7 +127,7 @@ class SurfaceTest(unittest.TestCase):
         # class would make it `client.me.me()`, which would still typecheck and
         # would still pass every OTHER case in this file — so the shape is
         # asserted directly.
-        instance = W6wClient(base_url="https://api.example.com", token="t")
+        instance = Client(base_url="https://api.example.com", token="t")
 
         self.assertTrue(callable(instance.me))
         self.assertFalse(hasattr(instance.me, "me"), "client.me must not be a namespace")

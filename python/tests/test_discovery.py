@@ -22,7 +22,7 @@ from typing import Any, Callable, List, Optional, Tuple
 from urllib.error import HTTPError
 from urllib.request import Request
 
-from w6w import ApiError, ConnectionSummary, W6wClient, WorkflowSummary
+from w6w import ApiError, Client, ConnectionSummary, WorkflowSummary
 
 #: One connection, as the server sends it — **including the `tenant` the exposed
 #: type deliberately omits**. This is not a synthetic extra key: the server's own
@@ -121,11 +121,11 @@ def http_error(status: int, body: Any, reason: str = "") -> HTTPError:
 def client(
     respond: Callable[[Request], Any],
     project: Optional[str] = None,
-) -> Tuple[W6wClient, List[Request]]:
+) -> Tuple[Client, List[Request]]:
     """A client wired to a fake transport. `project` seeds the client default."""
     transport = Recorder(respond)
     return (
-        W6wClient(
+        Client(
             base_url="https://api.example.com",
             token="tok_1",
             project=project,
@@ -154,7 +154,7 @@ class SurfaceTest(unittest.TestCase):
     """Both namespaces exist, and neither has grown an operation it must not have."""
 
     def test_both_list_operations_are_callable_on_a_constructed_client(self) -> None:
-        instance = W6wClient(base_url="https://api.example.com", token="t")
+        instance = Client(base_url="https://api.example.com", token="t")
 
         self.assertTrue(callable(instance.connections.list))
         self.assertTrue(callable(instance.workflows.list))
@@ -165,7 +165,7 @@ class SurfaceTest(unittest.TestCase):
         # half of one in an SDK is worse than none. `workflows.run` is not a
         # write in that sense — it triggers a definition rather than editing one
         # — so it is contracted, present, and covered by `test_workflows_run.py`.
-        instance = W6wClient(base_url="https://api.example.com", token="t")
+        instance = Client(base_url="https://api.example.com", token="t")
 
         for name in ("create", "update", "delete", "test"):
             with self.subTest(operation=name):

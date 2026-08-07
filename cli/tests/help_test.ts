@@ -144,6 +144,19 @@ Deno.test("command help names every parameter the contract gives the command", a
   }
 });
 
+Deno.test("root help lists the short command aliases", () => {
+  const help = renderRootHelp();
+  assertStringIncludes(help, "ALIASES");
+  assertStringIncludes(help, "conn");
+  assertStringIncludes(help, "same as `connections`");
+  assertStringIncludes(help, "wf");
+  assertStringIncludes(help, "same as `workflows`");
+  assertStringIncludes(help, "docs");
+  assertStringIncludes(help, "same as `documents`");
+  assertStringIncludes(help, "ls");
+  assertStringIncludes(help, "same as `list`, inside any group");
+});
+
 Deno.test("`w6w info` resolves to the `me` command", () => {
   const alias = resolve(["info"]);
   const canonical = resolve(["me"]);

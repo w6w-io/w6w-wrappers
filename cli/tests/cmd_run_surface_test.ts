@@ -170,6 +170,14 @@ Deno.test("connections list: one GET, a readable table, and --json prints the pa
   assertStringIncludes(empty.stdout, "No connections.");
 });
 
+Deno.test("`conn ls`/`conn list` reach the same route as `connections list`", async () => {
+  for (const argv of [["conn", "list"], ["connections", "ls"], ["conn", "ls"]]) {
+    const result = await w6w(argv, () => json(200, { connections: [CONNECTION] }));
+    assertEquals(result.code, 0, result.stderr);
+    assertEquals(result.calls[0].url, `${BASE}/connections`);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // `w6w workflows list` / `w6w workflows run`.
 // ---------------------------------------------------------------------------
@@ -199,6 +207,14 @@ Deno.test("workflows list: --project reaches the query string, and only when giv
     "an omitted --project must send no ?project= at all",
   );
   assertStringIncludes(unscoped.stdout, "welcome-email");
+});
+
+Deno.test("`wf ls`/`wf list` reach the same route as `workflows list`", async () => {
+  for (const argv of [["wf", "list"], ["workflows", "ls"], ["wf", "ls"]]) {
+    const result = await w6w(argv, () => json(200, { workflows: [WORKFLOW] }));
+    assertEquals(result.code, 0, result.stderr);
+    assertStringIncludes(result.calls[0].url, `${BASE}/workflows`);
+  }
 });
 
 Deno.test("workflows run: a queued run is exit 0, and --wait is sent only when asked", async () => {
@@ -334,6 +350,73 @@ Deno.test("run: --payload that is not valid JSON, or not an object, is a usage e
   const array = await w6w(["run", "wf_1", "--payload", "[1,2,3]"]);
   assertEquals(array.code, 1, array.stderr);
   assertEquals(array.calls.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// `w6w run --app <id>` — addressing a connection by app instead of by URN.
+// ---------------------------------------------------------------------------
+
+const SECOND_CONNECTION = {
+  ...CONNECTION,
+  id: "conn_01HQ9Z",
+  displayName: "Transactional SendGrid",
+};
+
+Deno.test("run --app: a single matching connection is resolved and run outright", async () => {
+  const result = await w6w(
+    ["run", "--action", "send_email", "--app", "sendgrid"],
+    (call) => {
+      if (call.url.endsWith("/connections")) return json(200, { connections: [CONNECTION] });
+      assertEquals((call.body as { urn: string }).urn, "conn_01HQ8N");
+      assertEquals((call.body as { action: string }).action, "send_email");
+      return json(200, { kind: "action", value: { ok: true } });
+    },
+  );
+  assertEquals(result.code, 0, result.stderr);
+  assertEquals(result.calls.length, 2, "a connections lookup, then the run itself");
+  assertEquals(result.calls[0].url, `${BASE}/connections`);
+  assertEquals(result.calls[1].url, `${BASE}/run`);
+});
+
+Deno.test("run --app: no matching connection is a usage error naming the app", async () => {
+  const result = await w6w(
+    ["run", "--action", "send_email", "--app", "unknownapp"],
+    () => json(200, { connections: [CONNECTION] }),
+  );
+  assertEquals(result.code, 1);
+  assertEquals(result.calls.length, 1, "never reaches /run without a resolved urn");
+  assertStringIncludes(result.stderr, "No connection found for app `unknownapp`");
+  assertStringIncludes(result.stderr, "w6w connections list");
+});
+
+Deno.test("run --app: several matching connections is a usage error listing each, with a ready-to-run suggestion", async () => {
+  const result = await w6w(
+    ["run", "--action", "send_email", "--app", "sendgrid", "--payload", '{"to":"a@b.com"}'],
+    () => json(200, { connections: [CONNECTION, SECOND_CONNECTION] }),
+  );
+  assertEquals(result.code, 1);
+  assertEquals(result.calls.length, 1, "never reaches /run when the app is ambiguous");
+  assertStringIncludes(result.stderr, "Multiple connections found for app `sendgrid`");
+  assertStringIncludes(result.stderr, "conn_01HQ8N");
+  assertStringIncludes(result.stderr, "Marketing SendGrid");
+  assertStringIncludes(result.stderr, "conn_01HQ9Z");
+  assertStringIncludes(result.stderr, "Transactional SendGrid");
+  // The suggested command is complete and runnable, action and payload intact.
+  assertStringIncludes(
+    result.stderr,
+    `w6w run conn_01HQ8N --action send_email --payload '{"to":"a@b.com"}'`,
+  );
+  assertStringIncludes(
+    result.stderr,
+    `w6w run conn_01HQ9Z --action send_email --payload '{"to":"a@b.com"}'`,
+  );
+});
+
+Deno.test("run --app: a URN and --app together is a usage error, and no request is made", async () => {
+  const result = await w6w(["run", "conn_01HQ8N", "--app", "sendgrid"]);
+  assertEquals(result.code, 1);
+  assertEquals(result.calls.length, 0);
+  assertStringIncludes(result.stderr, "takes a URN or `--app <id>`, not both");
 });
 
 // ---------------------------------------------------------------------------

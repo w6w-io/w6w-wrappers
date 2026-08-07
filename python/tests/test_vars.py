@@ -22,7 +22,7 @@ from typing import Any, Callable, List, Tuple
 from urllib.error import HTTPError
 from urllib.request import Request
 
-from w6w import UNSET, ApiError, HttpResponse, ResolvedConfig, Var, VarsApi, W6wClient
+from w6w import UNSET, ApiError, Client, HttpResponse, ResolvedConfig, Var, VarsApi
 
 #: One variable, as the server sends it — the singular envelope key is `var`.
 VAR_BODY = {
@@ -83,7 +83,7 @@ def http_error(status: int, body: Any, reason: str = "") -> HTTPError:
     )
 
 
-def client(respond: Callable[[Request], Any]) -> Tuple[W6wClient, List[Request]]:
+def client(respond: Callable[[Request], Any]) -> Tuple[Client, List[Request]]:
     """A client wired to a fake transport.
 
     A **default scope is deliberately configured** on every client built here.
@@ -93,7 +93,7 @@ def client(respond: Callable[[Request], Any]) -> Tuple[W6wClient, List[Request]]
     """
     transport = Recorder(respond)
     return (
-        W6wClient(
+        Client(
             base_url="https://api.example.com",
             token="tok_1",
             project="prj_default",
@@ -131,7 +131,7 @@ class SurfaceTest(unittest.TestCase):
         # A runtime assertion, not a type-level one: a namespace that silently
         # lost a method would still typecheck in every other case in this file.
         # The names are `naming.python`'s, character for character.
-        instance = W6wClient(base_url="https://api.example.com", token="t")
+        instance = Client(base_url="https://api.example.com", token="t")
 
         for name in ("list", "get", "get_by_name", "create", "update", "delete"):
             with self.subTest(operation=name):

@@ -10,7 +10,7 @@ here ever will — see README "Zero runtime dependencies".
 THE BARREL RULE
 ---------------
 **Every public symbol of this package must be re-exported from this module and
-listed in `__all__`.** `w6w.ApiError`, `w6w.W6wClient`, `w6w.Doc`, … are the
+listed in `__all__`.** `w6w.ApiError`, `w6w.Client`, `w6w.Doc`, … are the
 only import paths users are promised; anything reachable only as
 `w6w._http.something` is private and may move without a major bump.
 Modules whose names start with an underscore (`_version`, `_config`, `_vars`,
@@ -31,7 +31,7 @@ from ._config import BASE_PATH, ResolvedConfig, join_base_url
 from ._http import HttpResponse, Transport, path
 from ._vars import VarsApi, VarsRequest
 from ._version import __version__
-from .client import W6wClient
+from .client import Client
 from .connections import ConnectionsApi, ConnectionsRequest
 from .documents import DocumentsApi, DocumentsHost
 from .errors import ApiError, ConfigError
@@ -65,6 +65,7 @@ from .workflows import WorkflowsApi, WorkflowsHost
 __all__ = [
     "ApiError",
     "BASE_PATH",
+    "Client",
     "ConfigError",
     # Identity and discovery (T2.3.4). `connections.list` and `workflows.list`
     # are how a caller finds a URN to hand to `run` (D4); `me` is what makes a
@@ -105,7 +106,6 @@ __all__ = [
     "VarType",
     "VarsApi",
     "VarsRequest",
-    "W6wClient",
     "WorkflowRunResult",
     "WorkflowStatus",
     "WorkflowSummary",
@@ -121,7 +121,7 @@ __all__ = [
     "is_terminal_run_status",
     "is_workflow_run",
     "join_base_url",
-    # Exported because `W6wClient.request` is public: a host reaching an
+    # Exported because `Client.request` is public: a host reaching an
     # endpoint this version does not model yet must have the same
     # encoding-at-interpolation primitive the operation modules use, or it will
     # concatenate a caller value into a path by hand — the one bug the encoding

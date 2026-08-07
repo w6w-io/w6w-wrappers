@@ -148,6 +148,45 @@ Deno.test("an empty argv parses to no command at all — the caller prints root 
   });
 });
 
+// ---------------------------------------------------------------------------
+// Short spellings — `conn`/`wf`/`docs` for a group, `ls` for `list`.
+// ---------------------------------------------------------------------------
+
+Deno.test("group aliases resolve to the same command path as the full spelling", () => {
+  assertEquals(ok(["conn", "list"]).command, ["connections", "list"]);
+  assertEquals(ok(["wf", "list"]).command, ["workflows", "list"]);
+  assertEquals(ok(["docs", "list"]).command, ["documents", "list"]);
+  // A bare group alias resolves to the same one-token group path too.
+  assertEquals(ok(["conn"]).command, ["connections"]);
+});
+
+Deno.test("`ls` aliases `list` inside any group, alone or combined with a group alias", () => {
+  assertEquals(ok(["documents", "ls"]).command, ["documents", "list"]);
+  assertEquals(ok(["vars", "ls"]).command, ["vars", "list"]);
+  assertEquals(ok(["conn", "ls"]).command, ["connections", "list"]);
+  assertEquals(ok(["wf", "ls"]).command, ["workflows", "list"]);
+  assertEquals(ok(["docs", "ls"]).command, ["documents", "list"]);
+});
+
+Deno.test("`ls` is left alone outside a group, where it is a positional, not a subcommand", () => {
+  // `run` has no subcommands, so its argument is untouched by the `list` alias.
+  const rootLevel = ok(["run", "ls"]);
+  assertEquals(rootLevel.command, ["run"]);
+  assertEquals(rootLevel.positionals, ["ls"]);
+
+  // Only the subcommand slot (index 1) is a candidate — a document key of
+  // `ls` at index 2 is never touched.
+  const key = ok(["documents", "create", "ls"]);
+  assertEquals(key.command, ["documents", "create"]);
+  assertEquals(key.positionals, ["ls"]);
+});
+
+Deno.test("an alias-prefixed invocation that fails still resolves its command for the error message", () => {
+  const result = parse(["conn", "list", "--bogus"]);
+  assert(!result.ok);
+  assertEquals(result.command, ["connections", "list"]);
+});
+
 Deno.test("command-specific flags can be added without touching the parser", () => {
   const parsed = parse(["workflows", "run", "wf_1", "--wait"], {
     flags: [{ name: "--wait", alias: null, type: "boolean" }],

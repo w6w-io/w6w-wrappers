@@ -1,4 +1,4 @@
-"""`W6wClient` — the object every operation hangs off.
+"""`Client` — the object every operation hangs off.
 
 It holds three things and no behaviour of its own: the resolved configuration,
 the transport, and (from T2.3.3 onward) the operation namespaces. All of it is
@@ -27,7 +27,7 @@ from .types import Me, RunEnvelope
 from .workflows import WorkflowsApi
 
 
-class W6wClient:
+class Client:
     """A client for the w6w HTTP API.
 
     Construction resolves configuration once — explicit arguments first, then
@@ -38,11 +38,11 @@ class W6wClient:
     Example::
 
         # From the environment.
-        client = W6wClient()
+        client = Client()
 
         # Explicit, overriding the environment. Two clients, two credentials,
         # one process — no interference.
-        other = W6wClient(base_url="https://api.example.com", token="t_2")
+        other = Client(base_url="https://api.example.com", token="t_2")
 
     :ivar config: The resolved base URL, credential and default project.
         Exposed so a host can log *which* server it is talking to without

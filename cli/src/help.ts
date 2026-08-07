@@ -17,6 +17,7 @@
 
 import { HELP_TREE } from "./help.generated.ts";
 import type { HelpCommand, HelpGroup, HelpParam, HelpTree } from "./help.generated.ts";
+import { GROUP_ALIASES, SUBCOMMAND_ALIASES } from "./args.ts";
 
 /** Where a command path landed in the tree. */
 export type Resolution =
@@ -101,6 +102,12 @@ export function renderRootHelp(tree: HelpTree = HELP_TREE): string {
     lines,
   );
   section("EXAMPLES", tree.examples.map((example) => `  ${example}`), lines);
+  section("ALIASES", [
+    ...Object.entries(GROUP_ALIASES).map(([short, full]) => row(short, `same as \`${full}\``)),
+    ...Object.entries(SUBCOMMAND_ALIASES).map((
+      [short, full],
+    ) => (row(short, `same as \`${full}\`, inside any group`))),
+  ], lines);
   lines.push("", `  Docs: ${tree.docsUrl}`);
   return lines.join("\n");
 }

@@ -29,7 +29,7 @@ from urllib.request import Request
 
 from w6w import (
     ApiError,
-    W6wClient,
+    Client,
     is_action_run,
     is_function_run,
     is_workflow_run,
@@ -77,11 +77,11 @@ def http_error(status: int, body: Any, reason: str = "") -> HTTPError:
     )
 
 
-def client(respond: Callable[[Request], Any]) -> Tuple[W6wClient, List[Request]]:
+def client(respond: Callable[[Request], Any]) -> Tuple[Client, List[Request]]:
     """A client wired to a fake transport."""
     transport = Recorder(respond)
     return (
-        W6wClient(base_url="https://api.example.com", token="tok_1", transport=transport),
+        Client(base_url="https://api.example.com", token="tok_1", transport=transport),
         transport.calls,
     )
 
@@ -113,7 +113,7 @@ class SurfaceTest(unittest.TestCase):
         # `naming.python` is `client.run(urn, action=None, payload=None)`,
         # character for character up to the parenthesis. A namespace class would
         # make it `client.run.run()`, which would pass every OTHER case here.
-        instance = W6wClient(base_url="https://api.example.com", token="t")
+        instance = Client(base_url="https://api.example.com", token="t")
 
         self.assertTrue(callable(instance.run))
         self.assertFalse(hasattr(instance.run, "run"), "client.run must not be a namespace")

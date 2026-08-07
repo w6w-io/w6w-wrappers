@@ -21,7 +21,7 @@ from typing import Any, Callable, List, Optional, Tuple
 from urllib.error import HTTPError
 from urllib.request import Request
 
-from w6w import ApiError, StepError, W6wClient, is_terminal_run_status
+from w6w import ApiError, Client, StepError, is_terminal_run_status
 
 #: The URL a run of `wf_01HQ` must POST to, with no query string.
 RUN_URL = "https://api.example.com/workflows/wf_01HQ/run"
@@ -67,11 +67,11 @@ def http_error(status: int, body: Any, reason: str = "") -> HTTPError:
 def client(
     respond: Callable[[Request], Any],
     project: Optional[str] = None,
-) -> Tuple[W6wClient, List[Request]]:
+) -> Tuple[Client, List[Request]]:
     """A client wired to a fake transport. `project` seeds the client default."""
     transport = Recorder(respond)
     return (
-        W6wClient(
+        Client(
             base_url="https://api.example.com",
             token="tok_1",
             project=project,

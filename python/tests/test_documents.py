@@ -20,7 +20,7 @@ from typing import Any, Callable, List, Optional, Tuple
 from urllib.error import HTTPError
 from urllib.request import Request
 
-from w6w import UNSET, ApiError, Doc, W6wClient
+from w6w import UNSET, ApiError, Client, Doc
 
 #: One document, as the server sends it — camelCase timestamps included.
 DOC_BODY = {
@@ -89,11 +89,11 @@ def http_error(status: int, body: Any, reason: str = "") -> HTTPError:
 def client(
     respond: Callable[[Request], Any],
     project: Optional[str] = None,
-) -> Tuple[W6wClient, List[Request]]:
+) -> Tuple[Client, List[Request]]:
     """A client wired to a fake transport. `project` seeds the client default."""
     transport = Recorder(respond)
     return (
-        W6wClient(
+        Client(
             base_url="https://api.example.com",
             token="tok_1",
             project=project,
@@ -132,7 +132,7 @@ class SurfaceTest(unittest.TestCase):
         # that silently lost a method would still typecheck in every OTHER case
         # in this file (they all call through the same object), so the suite has
         # to look. The names are `naming.python`'s, character for character.
-        instance = W6wClient(base_url="https://api.example.com", token="t")
+        instance = Client(base_url="https://api.example.com", token="t")
 
         for name in ("list", "get", "get_by_key", "create", "update", "delete"):
             with self.subTest(operation=name):

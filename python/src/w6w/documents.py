@@ -42,7 +42,7 @@ from .types import (
 
 
 class DocumentsHost(Protocol):
-    """The slice of `W6wClient` this namespace needs.
+    """The slice of `Client` this namespace needs.
 
     Structural rather than a concrete client type, so the namespace stays
     independently constructible in a test and this module never imports the
@@ -76,7 +76,7 @@ class DocumentsHost(Protocol):
 
 
 class DocumentsApi:
-    """The `documents` namespace on a `W6wClient`.
+    """The `documents` namespace on a `Client`.
 
     Reached as `client.documents`; never constructed directly by a caller.
 

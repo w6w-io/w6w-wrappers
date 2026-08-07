@@ -17,11 +17,20 @@
  * else falls to a plain `kind: …` line plus the raw JSON, exactly as the SDK
  * handed it back.
  *
+ * **`--app <id>` is a second, CLI-only way to address a connection** — used in
+ * place of the positional URN, never alongside it. It resolves to a `conn_…`
+ * id by matching `connections.list()`'s `appId`, so `w6w run --app sendgrid
+ * --action send_email` needs no id looked up first. It is not in
+ * `endpoints.json`: the resolution happens entirely client-side, before the
+ * request is built, so `run`'s wire shape is untouched and no other wrapper
+ * needs an equivalent. See `resolveAppUrn` below.
+ *
  * @module
  */
 
 import type { CommandContext, CommandHandler, CommandRegistry } from "../../mod.ts";
 import { isActionRun, isFunctionRun, isWorkflowRun, type RunEnvelope } from "@w6w/sdk";
+import type { ConnectionSummary } from "@w6w/sdk";
 import type { Styles } from "../output.ts";
 import { argument, noExtraArguments, textFlag, usageError } from "./shared.ts";
 
@@ -66,13 +75,75 @@ function renderResult(env: RunEnvelope, styles: Styles): string {
     JSON.stringify(env, null, 2);
 }
 
+/**
+ * The several-connections error for `--app`: every candidate, and the exact
+ * command to run against each — `action` and `--payload` preserved verbatim,
+ * since retyping the whole invocation just to add a URN is the friction
+ * `--app` exists to remove in the first place.
+ */
+function tooManyConnectionsMessage(
+  context: CommandContext,
+  appId: string,
+  matches: ConnectionSummary[],
+): string {
+  const action = textFlag(context, "action");
+  const payloadText = textFlag(context, "payload");
+  const suggest = (id: string) => {
+    const parts = [`w6w run ${id}`];
+    if (action !== undefined) parts.push(`--action ${action}`);
+    if (payloadText !== undefined) parts.push(`--payload '${payloadText}'`);
+    return parts.join(" ");
+  };
+  return [
+    `Multiple connections found for app \`${appId}\` — a connection id is required to pick one:`,
+    "",
+    ...matches.map((connection) => `  ${connection.id}  ${connection.displayName}`),
+    "",
+    "Try, e.g.:",
+    ...matches.map((connection) => `  ${suggest(connection.id)}`),
+  ].join("\n");
+}
+
+/**
+ * `--app <id>` resolves to a connection's URN by matching `appId`, so
+ * `w6w run --app sendgrid --action send_email` needs no `conn_…` typed or
+ * looked up first.
+ *
+ * One match is unambiguous and used outright. Zero or several is a usage error
+ * rather than a guess — the same rule `payload()` above follows for
+ * `--payload` — and the several-match error is deliberately expensive to
+ * produce (a full `connections.list()` render, not just a count), because it
+ * is the one error message in this command a user is expected to copy from.
+ */
+async function resolveAppUrn(context: CommandContext, appId: string): Promise<string> {
+  const connections = await context.client().connections.list();
+  const matches = connections.filter((connection) => connection.appId === appId);
+
+  if (matches.length === 1) return matches[0].id;
+  if (matches.length === 0) {
+    throw usageError(
+      context,
+      `No connection found for app \`${appId}\`. See \`w6w connections list\` for what is connected.`,
+    );
+  }
+  throw usageError(context, tooManyConnectionsMessage(context, appId, matches));
+}
+
 const run: CommandHandler = async (context) => {
-  const urn = argument(
+  const appId = textFlag(context, "app");
+  if (appId !== undefined && context.invocation.positionals.length > 0) {
+    throw usageError(
+      context,
+      "`w6w run` takes a URN or `--app <id>`, not both — drop whichever one you didn't mean.",
+    );
+  }
+  const urn = appId !== undefined ? await resolveAppUrn(context, appId) : argument(
     context,
     0,
-    "a URN — conn_…, wf_…, fn_… or ep_… (see: `w6w connections list`, `w6w workflows list`)",
+    "a URN — conn_…, wf_…, fn_… or ep_… (see: `w6w connections list`, `w6w workflows list`), " +
+      "or use `--app <id>` to address a connection by its app instead",
   );
-  noExtraArguments(context, 1);
+  noExtraArguments(context, appId !== undefined ? 0 : 1);
   const result = await context.client().run({
     urn,
     action: textFlag(context, "action"),

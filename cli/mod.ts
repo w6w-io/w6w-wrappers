@@ -164,6 +164,19 @@ interface RunRoute {
 type Routed = { kind: "done"; code: number } | RunRoute;
 
 /**
+ * `run`'s one flag that is not in `endpoints.json`.
+ *
+ * `run`'s wire shape is exactly `{urn, action, payload}` (the contract's own
+ * `params`), and `--app` never joins it — `src/commands/run.ts` resolves it to
+ * a connection's URN itself, client-side, before the request is built. A node
+ * or python caller has no equivalent and needs none, so there is nothing for
+ * `endpoints.json` to declare and nothing to regenerate. It is hand-declared
+ * here instead, the one exception to "every flag comes from the generated
+ * tree" that {@linkcode commandFlagSpecs} otherwise is.
+ */
+const RUN_APP_FLAG: FlagSpec = { name: "--app", alias: null, type: "string" };
+
+/**
  * The flags a command declares for itself, lifted out of the generated help
  * tree so the parser and the help text cannot disagree about them.
  *
@@ -181,6 +194,7 @@ function commandFlagSpecs(command: HelpCommand): FlagSpec[] {
     if (globals.has(name)) continue;
     specs.push({ name, alias: null, type: rest.length > 0 ? "string" : "boolean" });
   }
+  if (command.path.length === 1 && command.path[0] === "run") specs.push(RUN_APP_FLAG);
   return specs;
 }
 

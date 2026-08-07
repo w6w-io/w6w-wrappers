@@ -20,7 +20,7 @@
  * @module
  */
 
-import { COMMAND_PATHS, GLOBAL_FLAGS } from "./help.generated.ts";
+import { COMMAND_PATHS, GLOBAL_FLAGS, HELP_TREE } from "./help.generated.ts";
 
 /** A flag the parser will accept. */
 export interface FlagSpec {
@@ -105,6 +105,53 @@ function splitCommand(
   return { command: operands.slice(0, 1), positionals: operands.slice(1) };
 }
 
+/** Every command group's real name, for scoping {@linkcode normalizeAliases}. */
+const GROUP_NAMES = new Set(HELP_TREE.groups.map((group) => group.name));
+
+/**
+ * Short spellings for a group name — pure typing convenience, not a second
+ * command. `w6w conn list` and `w6w connections list` resolve to the exact same
+ * `HelpCommand`; the alias is substituted away before {@linkcode splitCommand}
+ * ever sees it, so nothing downstream needs to know it exists.
+ *
+ * Exported so `src/help.ts` can list these in root help from the one place
+ * they are declared, rather than a second copy going stale beside it.
+ */
+export const GROUP_ALIASES: Record<string, string> = {
+  conn: "connections",
+  wf: "workflows",
+  docs: "documents",
+};
+
+/**
+ * Short spelling for `list`, inside any group. Kept separate from
+ * {@linkcode GROUP_ALIASES} because it aliases a *subcommand* slot, not a group.
+ */
+export const SUBCOMMAND_ALIASES: Record<string, string> = {
+  ls: "list",
+};
+
+/**
+ * Expands `conn`/`wf`/`docs`/`ls` to their canonical spelling, in place of the
+ * two tokens that name a command path — never touching anything after them.
+ *
+ * The subcommand alias only fires once the (possibly just-expanded) first token
+ * names a **real group** — `GROUP_NAMES.has(...)`, not merely "is present". That
+ * is what keeps `w6w run ls` alone: `run` is a root command with no subcommands,
+ * so its positional argument is left exactly as typed, and `w6w documents create
+ * ls` keeps `ls` as the document key it is, since only `operands[1]` — the
+ * subcommand slot — is ever a candidate for this substitution.
+ */
+function normalizeAliases(operands: string[]): string[] {
+  if (operands.length === 0) return operands;
+  const normalized = [...operands];
+  normalized[0] = GROUP_ALIASES[normalized[0]] ?? normalized[0];
+  if (normalized.length > 1 && GROUP_NAMES.has(normalized[0])) {
+    normalized[1] = SUBCOMMAND_ALIASES[normalized[1]] ?? normalized[1];
+  }
+  return normalized;
+}
+
 /**
  * Parses an argument vector.
  *
@@ -126,7 +173,7 @@ export function parse(argv: string[], options: ParseOptions = {}): ParseResult {
   const fail = (message: string): ParseResult => ({
     ok: false,
     message,
-    command: splitCommand(operands, commands).command,
+    command: splitCommand(normalizeAliases(operands), commands).command,
   });
 
   for (let i = 0; i < argv.length; i++) {
@@ -167,7 +214,7 @@ export function parse(argv: string[], options: ParseOptions = {}): ParseResult {
     i++;
   }
 
-  const { command, positionals } = splitCommand(operands, commands);
+  const { command, positionals } = splitCommand(normalizeAliases(operands), commands);
   const globalKeys = new Set(GLOBAL_FLAG_SPECS.map((spec) => optionKey(spec.name)));
   const extras: Record<string, string | boolean> = {};
   for (const [key, value] of Object.entries(values)) {

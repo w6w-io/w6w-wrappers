@@ -145,6 +145,7 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   "run": [
     `w6w run conn_01HQ8N --action send_email --payload '{"to":"a@b.com"}'`,
     `w6w run wf_01HQ8N --payload '{"email":"a@b.com"}'`,
+    `w6w run --app sendgrid --action send_email --payload '{"to":"a@b.com"}'`,
   ],
 };
 
@@ -167,6 +168,12 @@ const COMMAND_NOTES: Record<string, string[]> = {
     'directly; a workflow returns a run id and status "queued" and is not waited on — use ' +
     '"w6w workflows run <id> --wait" when you need to wait, set variables, or pass a trigger. ' +
     'Documents and variables are not URNs: address them with "w6w documents" and "w6w vars".',
+    "--app <id> addresses a connection URN by its app instead of a conn_… id — " +
+    '"w6w run --app sendgrid --action send_email" in place of "w6w run conn_01HQ8N ' +
+    '--action send_email". It resolves against `w6w connections list`: one matching ' +
+    "connection is used outright, and none or several is a usage error (several lists every " +
+    "candidate with the exact command to run against it). It cannot be combined with a URN " +
+    "argument, and it is CLI-only — there is no equivalent in the node or python wrapper.",
   ],
 };
 

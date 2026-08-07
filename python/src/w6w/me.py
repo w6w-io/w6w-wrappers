@@ -15,7 +15,7 @@ absent entirely.
 
 It is deliberately **not a namespace class**. `endpoints.json` names this
 operation `client.me()` — a method on the client itself — so this module exports
-a function over a narrow request seam and `W6wClient` delegates to it, rather
+a function over a narrow request seam and `Client` delegates to it, rather
 than inventing a `client.me.me()`.
 
 ── The one value this module adds, and the one it must not ──
@@ -49,7 +49,7 @@ class MeRequest(Protocol):
 
     A callable rather than an object with a `request` method, for the same
     reason `vars` takes one: there is nothing else this operation may reach.
-    `W6wClient.request` satisfies it as a bound method, and so does a three-line
+    `Client.request` satisfies it as a bound method, and so does a three-line
     fake in a test.
     """
 

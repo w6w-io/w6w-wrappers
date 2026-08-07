@@ -51,7 +51,7 @@ class ConnectionsRequest(Protocol):
     """The single capability this namespace is given: send one request.
 
     A callable, not an object with a `request` method — see the module
-    docstring. `W6wClient.request` satisfies it as a bound method, and so does a
+    docstring. `Client.request` satisfies it as a bound method, and so does a
     three-line fake in a test.
     """
 
@@ -74,7 +74,7 @@ class ConnectionsRequest(Protocol):
 
 
 class ConnectionsApi:
-    """The `connections` namespace on a `W6wClient`.
+    """The `connections` namespace on a `Client`.
 
     Reached as `client.connections`; never constructed directly by a caller.
 

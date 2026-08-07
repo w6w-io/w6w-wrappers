@@ -104,7 +104,7 @@ def join_base_url(origin: str) -> str:
     if not trimmed:
         raise ConfigError(
             "No w6w base URL is configured. Pass one to the client "
-            '(W6wClient(base_url="https://api.example.com")) or set the '
+            '(Client(base_url="https://api.example.com")) or set the '
             "{env} environment variable. It holds the server's origin, e.g. "
             '"https://api.example.com" — the API is served at its root, so no '
             "path is appended.".format(env=ENV_BASE_URL),
@@ -205,7 +205,7 @@ def require_token(config: ResolvedConfig) -> str:
     if config.token is None or not config.token.strip():
         raise ConfigError(
             "No w6w API token is configured. Pass one to the client "
-            '(W6wClient(token="...")) or set the {env} environment variable. '
+            '(Client(token="...")) or set the {env} environment variable. '
             "Every w6w API operation is authenticated.".format(env=ENV_TOKEN),
         )
 
