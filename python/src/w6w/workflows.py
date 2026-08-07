@@ -156,6 +156,7 @@ class WorkflowsApi:
         wait: bool = False,
         variables: Optional[Mapping[str, Any]] = None,
         trigger: Optional[str] = None,
+        input: Optional[Mapping[str, Any]] = None,
     ) -> WorkflowRunResult:
         """Start a run of one workflow, optionally waiting for it to finish.
 
@@ -176,7 +177,7 @@ class WorkflowsApi:
 
         There is **no `project` argument**, on purpose: a `wf_…` id is
         unambiguous on its own, and `endpoints.json` gives this operation exactly
-        four parameters. Sending a `?project=` the route does not read would be
+        five parameters. Sending a `?project=` the route does not read would be
         inventing one.
 
         :param id: The `wf_…` id, percent-encoded into the path by
@@ -188,12 +189,17 @@ class WorkflowsApi:
             something else. The wait happens **server-side**, bounded by the
             server's own timeout.
         :param variables: Variables handed to the run, merged into its scope by
-            the engine. Opaque pass-through.
+            the engine. Opaque pass-through. Read downstream as `vars.*` —
+            **not** the slot that reaches a trigger's declared fields.
         :param trigger: What triggered the run; defaults to `"manual"`
             server-side. A plain string rather than a closed enum: the value is a
             server-owned set (`manual`, `schedule`, `webhook`, `event`, `replay`
             today) that the server may extend, and a wrapper that froze it would
             reject a value a newer server accepts.
+        :param input: Delivered to the entry trigger node's own recorded output,
+            read downstream as `steps.<triggerId>.output.<key>` — the shape a
+            trigger's declared fields actually arrive in. Not the same slot as
+            `variables`.
         :returns: The run handle, its status, and the result when the run has
             one.
         :raises ConfigError: When no token is configured.
@@ -209,9 +215,9 @@ class WorkflowsApi:
             query={"wait": True} if wait else None,
             # Always a body, even when empty: the route parses one when the text
             # is non-empty and defaults to `{}` otherwise, so `{}` and no body
-            # are the same request — and sending the object keeps the two
+            # are the same request — and sending the object keeps the three
             # optional fields in one place instead of behind a conditional.
-            body=_run_body(variables, trigger),
+            body=_run_body(variables, trigger, input),
         )
 
         # The `runId` and `status` checks are the guard, not decoration. An
@@ -239,22 +245,26 @@ class WorkflowsApi:
 def _run_body(
     variables: Optional[Mapping[str, Any]],
     trigger: Optional[str],
+    input: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Assemble the request body of a run, dropping what was not supplied.
 
-    `None` means *omitted* for both fields, not JSON `null`: neither has a prior
-    value to preserve (this is a trigger, not a patch), the server defaults
-    `trigger` itself, and a `null` would be a value the route would have to
-    reject. The omit-vs-null distinction that :data:`w6w.UNSET` exists for
-    belongs to the PATCH operations.
+    `None` means *omitted* for all three fields, not JSON `null`: none has a
+    prior value to preserve (this is a trigger, not a patch), the server
+    defaults `trigger` itself, and a `null` would be a value the route would
+    have to reject. The omit-vs-null distinction that :data:`w6w.UNSET` exists
+    for belongs to the PATCH operations.
 
     :param variables: Run variables, if any.
     :param trigger: Trigger name, if any.
-    :returns: The body — `{}` when the caller supplied neither.
+    :param input: Run input delivered to the entry trigger node, if any.
+    :returns: The body — `{}` when the caller supplied none of the three.
     """
     body: Dict[str, Any] = {}
     if variables is not None:
         body["variables"] = dict(variables)
     if trigger is not None:
         body["trigger"] = trigger
+    if input is not None:
+        body["input"] = dict(input)
     return body

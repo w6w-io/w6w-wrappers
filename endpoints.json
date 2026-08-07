@@ -107,6 +107,12 @@
           ],
           "closedEnum": false,
           "$comment": "`knownValues` is DOCUMENTATION, not a constraint. `closedEnum: false` \u2014 wrappers type this as a plain string and must NOT validate against the list; the server may add a sixth value and a wrapper that hard-codes the enum would reject a request the server accepts."
+        },
+        {
+          "name": "input",
+          "in": "body",
+          "type": "object",
+          "required": false
         }
       ],
       "returns": "RunResult",
@@ -116,10 +122,10 @@
       ],
       "naming": {
         "ts": "client.workflows.run(id, opts?)",
-        "python": "client.workflows.run(id, wait=False, variables=None, trigger=None)",
-        "cli": "w6w workflows run <id> [--wait]"
+        "python": "client.workflows.run(id, wait=False, variables=None, trigger=None, input=None)",
+        "cli": "w6w workflows run <id> [--wait] [--input <json>]"
       },
-      "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. `trigger` is a STRING, not an object: the server reads it as a `RunTrigger` (`\"manual\" | \"schedule\" | \"webhook\" | \"event\" | \"replay\"` today), and it defaults to 'manual' server-side when omitted. The five values are recorded in `knownValues` as documentation only \u2014 every wrapper types the param as an open string (`trigger?: string` / `trigger: str | None`) and passes it through unvalidated, so a sixth server value needs no wrapper release. D4 \u2014 kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape. Verified live."
+      "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. `trigger` is a STRING, not an object: the server reads it as a `RunTrigger` (`\"manual\" | \"schedule\" | \"webhook\" | \"event\" | \"replay\"` today), and it defaults to 'manual' server-side when omitted. The five values are recorded in `knownValues` as documentation only \u2014 every wrapper types the param as an open string (`trigger?: string` / `trigger: str | None`) and passes it through unvalidated, so a sixth server value needs no wrapper release. `variables` and `input` are NOT interchangeable: `variables` seeds the run's variable scope, read downstream as `vars.*`; `input` is delivered to the entry trigger node's own recorded output, read downstream as `steps.<triggerId>.output.<key>` \u2014 the shape a trigger's declared fields actually arrive in. D4 \u2014 kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables`, `trigger` and `input` have no slot in the three-field `{urn, action, payload}` shape. Verified live."
     },
     {
       "name": "documents.list",

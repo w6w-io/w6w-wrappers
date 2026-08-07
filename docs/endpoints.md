@@ -65,7 +65,7 @@ character-for-character:
 | `me` | `client.me()` | `client.me()` | `w6w me` |
 | `connections.list` | `client.connections.list()` | `client.connections.list()` | `w6w connections list` |
 | `workflows.list` | `client.workflows.list(opts?)` | `client.workflows.list(project=None)` | `w6w workflows list [--project <id>]` |
-| `workflows.run` | `client.workflows.run(id, opts?)` | `client.workflows.run(id, wait=False, variables=None, trigger=None)` | `w6w workflows run <id> [--wait]` |
+| `workflows.run` | `client.workflows.run(id, opts?)` | `client.workflows.run(id, wait=False, variables=None, trigger=None, input=None)` | `w6w workflows run <id> [--wait] [--input <json>]` |
 | `documents.list` | `client.documents.list(opts?)` | `client.documents.list(project=None)` | `w6w documents list [--project <id>]` |
 | `documents.get` | `client.documents.get(id, opts?)` | `client.documents.get(id, project=None)` | `w6w documents get <id> [--project <id>]` |
 | `documents.getByKey` | `client.documents.getByKey(key, opts?)` | `client.documents.get_by_key(key, project=None)` | `w6w documents get-by-key <key> [--project <id>]` |
@@ -291,14 +291,22 @@ and the run queue executes it.
 ```json
 {
   "variables": { "email": "a@b.com" },
-  "trigger": "manual"
+  "trigger": "manual",
+  "input": { "email": "a@b.com" }
 }
 ```
 
 | Field | Required | Notes |
 |---|---|---|
-| `variables` | no | Object of run inputs, passed through to the graph. |
+| `variables` | no | Object merged into the run's **variable scope**, read by downstream expressions as `vars.*`. |
 | `trigger` | no | A **string**, not an object. Defaults to `manual` server-side when omitted. |
+| `input` | no | Object delivered to the **entry trigger node's own recorded output**, read by downstream steps as `steps.<triggerId>.output.<key>` — this is the field that reaches a trigger's declared fields. |
+
+**`variables` and `input` are not interchangeable, and reach the workflow differently.** `variables`
+seeds the run's variable scope; a step reads it as `vars.email`. `input` is injected into the entry
+trigger node's own output; a step reads it as `steps.<triggerId>.output.email`. A trigger's declared
+fields are only ever reachable through `input` — passing them as `variables` puts them in the wrong
+scope and they never arrive where the workflow expects them.
 
 **`trigger` is a plain string.** The server reads it as `RunTrigger`, whose known values today are
 `manual`, `schedule`, `webhook`, `event` and `replay`. Those five are recorded in
@@ -360,7 +368,7 @@ duplication this contract exists to prevent
 ([implementation.md §8](./implementation.md#8-do-not-carry-over)).
 
 Kept alongside the unified `run` (D4), which is deliberately narrower: `?wait=`,
-`variables` and `trigger` have no slot in the three-field `{urn, action, payload}`
+`variables`, `trigger` and `input` have no slot in the three-field `{urn, action, payload}`
 shape.
 
 ### Companion: fetching a run
@@ -759,8 +767,8 @@ and `runId` is how the caller follows it.
 Wrappers must **switch on `kind`** and must **tolerate an unknown future `kind`**
 rather than crashing.
 
-Unlike `workflows.run`, this operation has no `?wait=`, no `variables` and no
-`trigger` — they have no slot in the three-field `{urn, action, payload}` shape
+Unlike `workflows.run`, this operation has no `?wait=`, no `variables`, no
+`trigger` and no `input` — they have no slot in the three-field `{urn, action, payload}` shape
 (D4). Use `workflows.run` when you need them.
 
 **Errors** — the usual envelope. Note `424` in particular: an execute-phase
