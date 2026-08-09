@@ -95,11 +95,12 @@ export class W6wClient {
    * Console-only namespaces: `console.reliability.list`, `console.auth.*`
    * (`login`, `signup`, `checkAccountSlug`, `createAccount`),
    * `console.dashboard.stats`, `console.projects.*` (`list`, `create`,
-   * `delete`), `console.schedules.*` (`get`, `upsert`, `delete`) and
+   * `delete`), `console.schedules.*` (`get`, `upsert`, `delete`),
    * `console.apps.*` (`list`, `get`, `getAuth`, `getActions`, `getTriggers`,
    * `getHealth`, `getHealthStatus`, `listOAuthConfig`, `upsertOAuthConfig`,
    * `deleteOAuthConfig`, `startOAuthFlow`, `preview`, `import`, `refresh`,
-   * `invoke`, `delete`).
+   * `invoke`, `delete`) and `console.connections.*` (`listForApp`, `get`,
+   * `create`, `update`, `test`, `delete`).
    * Studio-internal and unstable — not part of the published partner
    * contract, excluded from `endpoints.json` and from this package's root
    * barrel (`docs/console.md`, HITL-1). Reached only through
