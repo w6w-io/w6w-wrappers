@@ -147,8 +147,10 @@ const _notAFormat: DocFormat = "pdf";
 const _notAVarType: VarType = "date";
 // @ts-expect-error — "expired" is not a ConnectionState.
 const _notAState: ConnectionState = "expired";
-// @ts-expect-error — "archived" is not a WorkflowStatus.
-const _notAWorkflowStatus: WorkflowStatus = "archived";
+// @ts-expect-error — "deleted" is not a WorkflowStatus. (T2.5.1/BLK-4 widened this union to
+// include "archived" — a real, pre-existing type gap that task fixes — so the pin swaps to a
+// still-invalid value; the closed-union check itself is unaffected.)
+const _notAWorkflowStatus: WorkflowStatus = "deleted";
 // @ts-expect-error — "expired" is not a RunStatus; this is the one a widened alias would unpin.
 const _notARunStatus: RunStatus = "expired";
 // @ts-expect-error — `kind` is the literal "action", not any string.

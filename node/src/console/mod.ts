@@ -26,6 +26,7 @@ import { DashboardApi } from "./dashboard.ts";
 import { ReliabilityApi } from "./reliability.ts";
 import { ProjectsApi } from "./projects.ts";
 import { SchedulesApi } from "./schedules.ts";
+import { WorkflowsApi } from "./workflows.ts";
 
 export { AuthApi } from "./auth.ts";
 export type {
@@ -86,6 +87,8 @@ export type {
 } from "./apps.ts";
 export { ConnectionsApi } from "./connections.ts";
 export type { ConnectionsHost, ConnectionTestResult } from "./connections.ts";
+export { WorkflowsApi } from "./workflows.ts";
+export type { RunState, RunSummary, WorkflowsHost } from "./workflows.ts";
 
 /**
  * The slice of `W6wClient` the console namespace group needs: the transport,
@@ -122,6 +125,8 @@ export class ConsoleApi {
   readonly apps: AppsApi;
   /** `console.connections.*`. */
   readonly connections: ConnectionsApi;
+  /** `console.workflows.*`. */
+  readonly workflows: WorkflowsApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
@@ -134,5 +139,6 @@ export class ConsoleApi {
     this.schedules = new SchedulesApi(host);
     this.apps = new AppsApi(host);
     this.connections = new ConnectionsApi(host);
+    this.workflows = new WorkflowsApi(host);
   }
 }
