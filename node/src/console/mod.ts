@@ -23,6 +23,8 @@ import { AppsApi } from "./apps.ts";
 import { AuthApi } from "./auth.ts";
 import { ConnectionsApi } from "./connections.ts";
 import { DashboardApi } from "./dashboard.ts";
+import { EndpointsApi } from "./endpoints.ts";
+import { FunctionsApi } from "./functions.ts";
 import { ReliabilityApi } from "./reliability.ts";
 import { ProjectsApi } from "./projects.ts";
 import { SavedTestsApi } from "./saved-tests.ts";
@@ -101,6 +103,29 @@ export { VaultApi } from "./vault.ts";
 export type { SecretValue, VaultHost, VaultSecretSummary } from "./vault.ts";
 export { TokensApi } from "./tokens.ts";
 export type { ApiToken, ApiTokenStatus, CreateTokenResponse, TokensHost } from "./tokens.ts";
+export { FunctionsApi } from "./functions.ts";
+export type {
+  FunctionDef,
+  FunctionImpl,
+  FunctionInput,
+  FunctionOutputField,
+  FunctionsHost,
+  FunctionSummary,
+} from "./functions.ts";
+export { EndpointsApi, SECRET_MASK } from "./endpoints.ts";
+export type {
+  ActionTarget,
+  Callable,
+  EndpointAuthMode,
+  EndpointDef,
+  EndpointInput,
+  EndpointInvokeResult,
+  EndpointsHost,
+  EndpointSecurity,
+  EndpointSummary,
+  EndpointTarget,
+  Exposure,
+} from "./endpoints.ts";
 
 /**
  * The slice of `W6wClient` the console namespace group needs: the transport,
@@ -147,6 +172,10 @@ export class ConsoleApi {
   readonly vault: VaultApi;
   /** `console.tokens.*`. */
   readonly tokens: TokensApi;
+  /** `console.functions.*`. */
+  readonly functions: FunctionsApi;
+  /** `console.endpoints.*`. */
+  readonly endpoints: EndpointsApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
@@ -164,5 +193,7 @@ export class ConsoleApi {
     this.stepTests = new StepTestsApi(host);
     this.vault = new VaultApi(host);
     this.tokens = new TokensApi(host);
+    this.functions = new FunctionsApi(host);
+    this.endpoints = new EndpointsApi(host);
   }
 }

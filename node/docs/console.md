@@ -638,3 +638,102 @@ top-level keys.
 None of these five methods take a `project` scoping parameter — tokens are account-scoped via the
 credential alone — so `TokensHost` needs only the transport, mirroring `console.connections`'s own
 host shape.
+
+## `console.functions.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const fns = await client.console.functions.list();
+const fn = await client.console.functions.get(fns[0].id);
+await client.console.functions.upsert({ ...fn, description: "Send an email" });
+```
+
+Three methods, relocated from `packages/studio/src/api/client.ts:255-268`'s single `// Functions`
+comment block — field-for-field, not redesigned: `listFunctions` → `list`, `getFunction` → `get`,
+`saveFunction` → `upsert`.
+
+| Method               | Route                | Notes                                                                                                                |
+| -------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `list()`             | `GET /functions`     | `unwrap<FunctionSummary[]>(res, "functions")`. Each row already carries `valid` — server-computed, nothing to merge. |
+| `get(id)`            | `GET /functions/:id` | **The pinned `valid`-splice merge — see below.**                                                                     |
+| `upsert(definition)` | `POST /functions`    | Body is the whole `FunctionDef`, forwarded verbatim. `unwrap<{id,key}>(res, "function")` (`201`).                    |
+
+**`get`'s `valid`-splice is a deliberate, behavior-preserving relocation, not a redesign.** On the
+wire, `valid` is a TOP-LEVEL SIBLING of `function`, never part of the stored definition itself
+(`admin/functions.ts:82-93` answers `{function, valid}`). This method DOES merge it into its return
+value — `{...body.function, valid: body.valid}` — matching studio's own current `getFunction`
+(`client.ts:259-262`) exactly, so `FunctionsPage.tsx:173`'s `setDraft(fn)` needs zero adaptation. A
+raw `{function, valid}` return would be a regression, not a cleanup.
+
+**`invoke` is deliberately NOT modeled here.** The base `client.run({urn, payload})`
+(already-published surface, `endpoints.json`-named, exported from the root `mod.ts`) dispatches a
+`fn_…` URN through the exact same `InvokeFunctionService` the dedicated `/functions/:id/invoke`
+route uses, returning `{kind:"function", output}` — field-for-field identical to what the dedicated
+route returns. Adding a duplicate `console.functions.invoke` would give a caller two ways to reach
+the same route, mirroring `console.workflows`'s established precedent of NOT re-wrapping base
+`list`/`run`. Studio composes `client.run()` + `isFunctionRun` itself; no invoke method lives here.
+
+None of these three methods take a `project` scoping parameter — neither is reachable via either
+HTTP route — so `FunctionsHost` needs only the transport, mirroring `console.workflows`'s/
+`console.schedules`'s own host shape.
+
+## `console.endpoints.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const endpoints = await client.console.endpoints.list();
+const { endpoint, invokeUrl } = await client.console.endpoints.get(endpoints[0].id);
+const result = await client.console.endpoints.invoke(endpoint.id, { to: "a@b.com" });
+```
+
+Four methods, relocated from `packages/studio/src/api/client.ts:281-314`'s single `// Endpoints`
+comment block — field-for-field, not redesigned: `listEndpoints` → `list`, `getEndpoint` → `get`,
+`saveEndpoint` → `upsert`, `invokeEndpoint` → `invoke`.
+
+| Method               | Route                        | Notes                                                                                               |
+| -------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| `list()`             | `GET /endpoints`             | `unwrap<EndpointSummary[]>(res, "endpoints")`. Each row already carries its own `invokeUrl`.        |
+| `get(id)`            | `GET /endpoints/:id`         | **Returns the raw three-key body VERBATIM — see below.**                                            |
+| `upsert(definition)` | `POST /endpoints`            | Body is the whole `EndpointDef`, forwarded verbatim. **Returns the same three-key shape VERBATIM.** |
+| `invoke(id, input)`  | `POST /endpoints/:id/invoke` | **The pinned invoke-path mechanism — see below.**                                                   |
+
+**`get`/`upsert` return `{endpoint, invokeUrl, invokeUrlByKey?}` VERBATIM — never merged, never
+`unwrap()`ed.** `invokeUrl`/`invokeUrlByKey` are never spliced into `endpoint`; this mirrors
+`console.workflows.get`'s "no envelope key to peel, multiple top-level siblings" precedent,
+deliberately NOT `console.functions.get`'s merge above — these are two different,
+individually-verified, individually-pinned shapes; they are not made uniform. `invokeUrl` is ALWAYS
+present; `invokeUrlByKey` is present only when the owning account has a slug — genuinely absent from
+the body otherwise, never an `undefined`-valued key.
+
+**`key` is immutable after first save — it is a public URL segment.** A save that changes `key` on
+an already-stored Endpoint answers `409 key_immutable`; a first save with a malformed `key` answers
+`400 invalid_endpoint`. None of `upsert`'s four possible error codes (`400 invalid_endpoint`,
+`409 key_immutable`, `409 endpoint_conflict`, `409 endpoint_key_conflict`) need special client-side
+handling — they propagate as an ordinary `ApiError` with the server's own `.message`, exactly like
+every other write in this package; `upsert` does not branch on any of them.
+
+**`invoke`'s wire path is a PINNED mechanism, not a choice.** `invoke` MUST call the DEDICATED
+`POST /endpoints/:id/invoke` route directly — it must NEVER be implemented by delegating to
+`client.run()`/`runUrn()`/`POST /run`, even though that dispatcher can also resolve an `ep_…` URN.
+Verified directly against the server: `packages/server/packages/bll/resolve-run.ts`'s `ep_` arm
+(`:198-207`) delegates to `InvokeEndpointService.invoke()` but then **remaps** the action-kind
+result's field from `output` to `value` (`return { kind: "action", value: result.output };`) to
+match `run()`'s own `ActionRunEnvelope` shape. The dedicated `/endpoints/:id/invoke` route
+(`admin/endpoints.ts:319-360`) does NOT do this remap — it returns `InvokeEndpointResult` VERBATIM
+(`{kind:"action", output}` for an action target). Studio's `EndpointsPage.tsx` renders the raw
+envelope it gets back directly (`JSON.stringify(result, null, 2)`), so this field name is
+user-visible. Routing `invoke` through `/run` instead of the dedicated route would silently rename
+`output` to `value` and break that page. `invoke`'s response body is returned VERBATIM, field names
+untouched: an `action`/`function` target answers `200` with `{kind, output}`; a `workflow` target
+answers `202` with `{kind:"workflow", runId}` — both are success on this API, mirroring
+`console.workflows`'s/base `run()`'s own "202 is success" convention.
+
+None of these four methods take a `project` scoping parameter — neither is reachable via any HTTP
+route on this domain — so `EndpointsHost` needs only the transport, mirroring
+`console.workflows`'s/`console.schedules`'s own host shape.
