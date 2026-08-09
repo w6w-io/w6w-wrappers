@@ -269,6 +269,50 @@ Deno.test("query parameters are encoded, and undefined ones are dropped", () => 
   );
 });
 
+Deno.test(
+  "options.headers is the BASE the transport builds on — it can never override authorization or content-type",
+  async () => {
+    const fake = fakeFetch(() => json({ ok: true }));
+
+    const res = await request<{ ok: boolean }>(CONFIG, fake.fetch, {
+      method: "POST",
+      path: "/vars",
+      body: { a: 1 },
+      headers: {
+        "x-w6w-if-unmodified-since": "abc",
+        authorization: "Bearer evil",
+        "content-type": "text/plain",
+      },
+    });
+
+    assertEquals(res.body, { ok: true });
+    // The caller-supplied header passes through untouched…
+    assertEquals(fake.calls[0].headers.get("x-w6w-if-unmodified-since"), "abc");
+    // …but never shadows what this transport itself sets. `CONFIG` is built
+    // with token "tok_1" (see above), so the real bearer must win.
+    assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_1");
+    assertEquals(fake.calls[0].headers.get("content-type"), "application/json");
+  },
+);
+
+Deno.test(
+  "options.headers passes an arbitrary header through untouched when the transport sets nothing to conflict with it",
+  async () => {
+    const fake = fakeFetch(() => json({ ok: true }));
+
+    // No body on this request, so the transport's own conditional
+    // `content-type` set never runs — a caller-supplied content-type here is
+    // not shadowing anything and passes through as ordinary base content.
+    await request(CONFIG, fake.fetch, {
+      method: "GET",
+      path: "/vars",
+      headers: { "content-type": "text/plain" },
+    });
+
+    assertEquals(fake.calls[0].headers.get("content-type"), "text/plain");
+  },
+);
+
 Deno.test("the client defaults to globalThis.fetch, and says so when there is none", async () => {
   const original = globalThis.fetch;
   try {
