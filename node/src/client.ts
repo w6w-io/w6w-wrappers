@@ -100,8 +100,11 @@ export class W6wClient {
    * `getHealth`, `getHealthStatus`, `listOAuthConfig`, `upsertOAuthConfig`,
    * `deleteOAuthConfig`, `startOAuthFlow`, `preview`, `import`, `refresh`,
    * `invoke`, `delete`), `console.connections.*` (`listForApp`, `get`,
-   * `create`, `update`, `test`, `delete`) and `console.workflows.*` (`get`,
-   * `upsert`, `archive`, `delete`, `listRuns`, `getRun`).
+   * `create`, `update`, `test`, `delete`), `console.workflows.*` (`get`,
+   * `upsert`, `archive`, `delete`, `listRuns`, `getRun`),
+   * `console.savedTests.*` (`list`, `create`, `update`, `delete`,
+   * `recordTestRun`, `listTestRuns`) and `console.stepTests.*` (`save`,
+   * `list`, `recordRun`).
    * Studio-internal and unstable — not part of the published partner
    * contract, excluded from `endpoints.json` and from this package's root
    * barrel (`docs/console.md`, HITL-1). Reached only through

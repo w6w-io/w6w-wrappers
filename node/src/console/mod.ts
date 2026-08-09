@@ -25,7 +25,9 @@ import { ConnectionsApi } from "./connections.ts";
 import { DashboardApi } from "./dashboard.ts";
 import { ReliabilityApi } from "./reliability.ts";
 import { ProjectsApi } from "./projects.ts";
+import { SavedTestsApi } from "./saved-tests.ts";
 import { SchedulesApi } from "./schedules.ts";
+import { StepTestsApi } from "./step-tests.ts";
 import { WorkflowsApi } from "./workflows.ts";
 
 export { AuthApi } from "./auth.ts";
@@ -89,6 +91,10 @@ export { ConnectionsApi } from "./connections.ts";
 export type { ConnectionsHost, ConnectionTestResult } from "./connections.ts";
 export { WorkflowsApi } from "./workflows.ts";
 export type { RunState, RunSummary, WorkflowsHost } from "./workflows.ts";
+export { SavedTestsApi } from "./saved-tests.ts";
+export type { SavedTest, SavedTestRun, SavedTestsHost, TestRunSummary } from "./saved-tests.ts";
+export { StepTestsApi } from "./step-tests.ts";
+export type { StepTest, StepTestRun, StepTestsHost } from "./step-tests.ts";
 
 /**
  * The slice of `W6wClient` the console namespace group needs: the transport,
@@ -127,6 +133,10 @@ export class ConsoleApi {
   readonly connections: ConnectionsApi;
   /** `console.workflows.*`. */
   readonly workflows: WorkflowsApi;
+  /** `console.savedTests.*`. */
+  readonly savedTests: SavedTestsApi;
+  /** `console.stepTests.*`. */
+  readonly stepTests: StepTestsApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
@@ -140,5 +150,7 @@ export class ConsoleApi {
     this.apps = new AppsApi(host);
     this.connections = new ConnectionsApi(host);
     this.workflows = new WorkflowsApi(host);
+    this.savedTests = new SavedTestsApi(host);
+    this.stepTests = new StepTestsApi(host);
   }
 }

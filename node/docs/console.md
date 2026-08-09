@@ -441,3 +441,95 @@ stateless handlers over an already-resolved request body/precondition header —
 the SDK method itself would need to conduct. HITL-10's resolution transfers directly: console
 placement is safe for studio's own use; it does not by itself justify promotion to the partner
 surface (still needs cli/python parity + a documented partner story, neither of which exists today).
+
+## `console.savedTests.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const tests = await client.console.savedTests.list("conn_1");
+const created = await client.console.savedTests.create("conn_1", {
+  actionKey: "send",
+  name: "Happy path",
+  values: { to: "a@b.com" },
+});
+const run = await client.console.savedTests.recordTestRun("conn_1", {
+  savedTestId: created.id,
+  actionKey: "send",
+  ok: true,
+});
+console.log(run.id); // the real created SavedTestRun row
+await client.console.savedTests.delete("conn_1", created.id);
+```
+
+Six methods, relocated from `packages/studio/src/api/client.ts:259-315`'s single `// Saved tests`
+comment block — field-for-field, not redesigned.
+
+| Method                              | Route                                     | Notes                                                                                                              |
+| ----------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `list(connectionId)`                | `GET /connections/:id/saved-tests`        | `unwrap<SavedTest[]>(res, "savedTests")`.                                                                          |
+| `create(connectionId, body)`        | `POST /connections/:id/saved-tests`       | Body `{actionKey, name, values}` forwarded verbatim. `unwrap<SavedTest>(res, "savedTest")` (`201`).                |
+| `update(connectionId, id, patch)`   | `PATCH /connections/:id/saved-tests/:id`  | Body `{name?, values?}` forwarded verbatim. `unwrap<SavedTest>(res, "savedTest")`.                                 |
+| `delete(connectionId, id)`          | `DELETE /connections/:id/saved-tests/:id` | Returns nothing; discards `{ok: true}`, same convention as `console.projects.delete`/`console.schedules.delete`.   |
+| `recordTestRun(connectionId, body)` | `POST /connections/:id/test-runs`         | Body `{savedTestId?, actionKey, ok, summary?, result?}` forwarded verbatim. **Returns the REAL row — see below.**  |
+| `listTestRuns(connectionId)`        | `GET /connections/:id/test-runs`          | `unwrap<TestRunSummary[]>(res, "runs")` — a thin, most-recent-first projection, NOT the full `SavedTestRun` shape. |
+
+**`recordTestRun` returns the real created `SavedTestRun` row, unwrapped from `{run}` — it does NOT
+discard to `void`.** Studio's own `client.ts` currently discards this call's result
+(`.then(() => {})`) only so its `api` object stays assignable to `@w6w/ui`'s `W6wApi.recordTestRun`,
+which that facade types `Promise<void>` — that is studio's constraint, not this package's. A caller
+wanting the studio-facade `void` shape adapts it themselves (this is what studio's own
+`src/repos/saved-tests.ts` does, at the repo layer, not here).
+
+None of these six methods take a `project` scoping parameter — saved tests carry no `?project=`, the
+server scopes by connection/tenant — so `SavedTestsHost` needs only the transport, mirroring
+`console.connections`'s own host shape.
+
+## `console.stepTests.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const fixture = await client.console.stepTests.save("wf_1", "nd_1", {
+  input: { foo: "bar" },
+  with: { to: "a@b.com" },
+});
+const fixtures = await client.console.stepTests.list("wf_1", "nd_1");
+const run = await client.console.stepTests.recordRun("wf_1", "nd_1", {
+  stepTestId: fixture.id,
+  status: "succeeded",
+  output: { ok: true },
+});
+console.log(run.id); // the real created StepTestRun row
+```
+
+Three methods, relocated from `packages/studio/src/api/client.ts:317-351`'s single
+`// Saved per-step tests` comment block — field-for-field, not redesigned. Method names here are
+SHORTENED versus `client.ts`'s flat names (`saveStepTest` → `save`, `listStepTests` → `list`,
+`recordStepTestRun` → `recordRun`), mirroring `console.connections.listForApp`'s/
+`console.workflows.get`'s own convention — the domain prefix already disambiguates.
+
+| Method                                | Route                                         | Notes                                                                                                           |
+| ------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `save(workflowId, stepId, body)`      | `POST /workflows/:id/steps/:stepId/tests`     | Body `{name?, input, with}` forwarded verbatim. `unwrap<StepTest>(res, "stepTest")` (`201`).                    |
+| `list(workflowId, stepId)`            | `GET /workflows/:id/steps/:stepId/tests`      | `unwrap<StepTest[]>(res, "stepTests")`.                                                                         |
+| `recordRun(workflowId, stepId, body)` | `POST /workflows/:id/steps/:stepId/test-runs` | Body `{stepTestId?, status, input?, output?, error?}` forwarded verbatim. **Returns the REAL row — see below.** |
+
+**`recordRun` returns the real created `StepTestRun` row, unwrapped from `{run}` — it does NOT
+discard to `void`.** Same rule as `console.savedTests.recordTestRun` above: studio's own `client.ts`
+discards this call's result only so its `api` object stays assignable to `@w6w/ui`'s
+`W6wApi.recordStepTestRun` (`Promise<void>`) — studio's constraint, not this package's. A caller
+wanting the studio-facade `void` shape adapts it themselves.
+
+**`PATCH`/`DELETE /workflows/:workflowId/steps/:stepId/tests/:id` also exist server-side but are
+deliberately NOT wrapped here** — zero client-side coverage anywhere (studio or `@w6w/ui`), the same
+disposition prior console domains already established for their own orphan routes (HITL-4's
+philosophy applied one step further).
+
+None of these three methods take a `project` scoping parameter — step tests carry no `?project=`,
+the server scopes by workflow/tenant — so `StepTestsHost` needs only the transport, mirroring
+`console.connections`'s own host shape.
