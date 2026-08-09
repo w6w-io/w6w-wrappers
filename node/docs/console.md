@@ -254,3 +254,53 @@ is relocated verbatim from `client.ts:535-542`'s own behavior, not a new design 
 **`GET /schedules` (list-schedules across a workflow's or account's schedules) is deliberately NOT
 covered here** — the same "studio never wrapped it" reasoning as `console.projects.*` above; see
 `plan.md`'s FINDINGS DISPOSITION.
+
+## `console.apps.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const apps = await client.console.apps.list();
+const detail = await client.console.apps.get(apps[0].id);
+const result = await client.console.apps.invoke(detail.app.id as string, "send", { to: "a@b.com" });
+```
+
+The largest console domain — 16 methods, relocated from `packages/studio/src/api/client.ts:235-393`.
+Method names are SHORTENED versus `client.ts`'s flat names (`listApps` → `list`, `getAppAuth` →
+`getAuth`, …), matching `console.projects`'s/`console.schedules`'s own short-verb convention; every
+wire call (method/path/body/query) is unchanged from `client.ts`.
+
+| Method                                    | Route                                                | Notes                                                                                                                                                                                                                                         |
+| ----------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list()`                                  | `GET /apps` (paginated)                              | Custom loop, no `unwrap()` — accumulates `apps` across pages, forwarding `nextCursor` as the next page's `cursor`; capped at 20 pages.                                                                                                        |
+| `get(id)`                                 | `GET /apps/:id`                                      | Whole body IS `AppDetail` — no envelope.                                                                                                                                                                                                      |
+| `getAuth(id)`                             | `GET /apps/:id/auths`                                | `unwrap<AuthDef[]>(res, "auths")`.                                                                                                                                                                                                            |
+| `getActions(id)`                          | `GET /apps/:id` (own call)                           | Reads `(body as AppDetail).actions ?? []` — a separate call from `get`, not a refactor onto it.                                                                                                                                               |
+| `getTriggers(id)`                         | `GET /apps/:id/triggers`                             | `unwrap<TriggerDef[]>(res, "triggers")`.                                                                                                                                                                                                      |
+| `getHealth(id)`                           | `GET /apps/:id` (own call)                           | Reads `(body as AppDetail).health ?? []`. **Dead code (HITL-4).**                                                                                                                                                                             |
+| `getHealthStatus(id)`                     | `GET /apps/:id/health`                               | Whole body IS `AppHealthStatus` — no envelope.                                                                                                                                                                                                |
+| `listOAuthConfig(appId)`                  | `GET /apps/:id/oauth-config`                         | `unwrap<OAuthConfigSummary[]>(res, "configs")`. **Dead code (HITL-4).**                                                                                                                                                                       |
+| `upsertOAuthConfig(appId, authKey, body)` | `PUT /apps/:id/oauth-config/:authKey`                | `unwrap<OAuthConfigSummary>(res, "config")` (server answers `201`). Body forwarded verbatim. **Dead code (HITL-4).**                                                                                                                          |
+| `deleteOAuthConfig(appId, authKey)`       | `DELETE /apps/:id/oauth-config/:authKey`             | Returns nothing; discards `{ok:true}`. **Dead code (HITL-4).**                                                                                                                                                                                |
+| `startOAuthFlow(appId, authKey, body?)`   | `POST /apps/:id/oauth-config/:authKey/authorize-url` | Whole body IS `{authorizationUrl, state, expiresIn}` — no envelope. No studio-page caller, but called via `@w6w/ui`'s `W6wApi.startAppOAuthFlow` facade.                                                                                      |
+| `preview(source, opts?)`                  | `POST /apps/preview`                                 | Whole body IS the `kind`-discriminated union — no envelope.                                                                                                                                                                                   |
+| `import(source, opts?)`                   | `POST /apps/import`                                  | Whole body IS the `kind`-discriminated union — no envelope.                                                                                                                                                                                   |
+| `refresh(id, opts?)`                      | `POST /apps/:id/refresh`                             | Whole body IS `RefreshAppResponse` — no envelope.                                                                                                                                                                                             |
+| `invoke(appId, actionKey, params, opts?)` | `POST /apps/:id/actions/:key/invoke`                 | Whole body IS `{value, logs?, apiCalls?}` — no envelope. No studio-page caller, but called heavily via `@w6w/ui`'s `W6wApi.invokeAction` facade (that facade's `opts` also carries `project`/`state`, a superset this method does not model). |
+| `delete(appId)`                           | `DELETE /apps/:id`                                   | Whole body IS `{removed: number}` — **returned, not discarded to `void`**, the one deliberate asymmetry vs. `console.projects.delete`/`console.schedules.delete`.                                                                             |
+
+Relocated verbatim from `packages/studio/src/api/client.ts:235-393`, which the field-for-field
+`AppSummary`, `ActionDef`, `AuthDef`, `TriggerDef`, `HealthCheckMeta`, `AppHealthStatus`,
+`AppDetail`, `PreviewSourceResponse`, `ImportResponse`, `RefreshAppResponse` and
+`OAuthConfigSummary` shapes are still pinned by `packages/studio/src/api/types.ts`.
+
+**`listApiCalls` is deliberately NOT covered here** — it lives under the same `client.ts` comment
+block but has no named apps-domain consumer (its only caller is reliability's drill-down page); it
+groups with a future `reliability`+`api-calls` sub-project instead.
+**`DELETE
+/apps/:id/versions/:version` (delete a version) and `PATCH /apps/:id/lifecycle` are also
+deliberately NOT covered** — both are live, `requireOperator`-gated routes with zero client-side
+coverage ever (not just zero callers). See `plan.md`'s FINDINGS DISPOSITION for the full reasoning
+behind all three exclusions.
