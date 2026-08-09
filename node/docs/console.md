@@ -533,3 +533,108 @@ philosophy applied one step further).
 None of these three methods take a `project` scoping parameter — step tests carry no `?project=`,
 the server scopes by workflow/tenant — so `StepTestsHost` needs only the transport, mirroring
 `console.connections`'s own host shape.
+
+## `console.vault.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const secrets = await client.console.vault.list();
+const created = await client.console.vault.create({ name: "openai_key", value: "sk-…" });
+await client.console.vault.update(created.id, { description: "Prod key" });
+const sealed = await client.console.vault.seal("sk-live-…");
+await client.console.vault.delete(created.id);
+```
+
+Six methods, relocated from `packages/studio/src/api/client.ts`'s single `// Vault` comment block —
+field-for-field, not redesigned.
+
+| Method             | Route               | Notes                                                                                                                                                                                           |
+| ------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list()`           | `GET /vault`        | `unwrap<VaultSecretSummary[]>(res, "secrets")`.                                                                                                                                                 |
+| `get(id)`          | `GET /vault/:id`    | `unwrap<VaultSecretSummary>(res, "secret")`. **Zero studio callers today** — built for SDK completeness only. No 404 special-casing — propagates as `ApiError`, unlike `console.schedules.get`. |
+| `create(body)`     | `POST /vault`       | Body `{name, value, description?}` forwarded verbatim. `unwrap<VaultSecretSummary>(res, "secret")` (`201`).                                                                                     |
+| `update(id, body)` | `PATCH /vault/:id`  | Body `{value?, description?}` forwarded verbatim. `unwrap<VaultSecretSummary>(res, "secret")`.                                                                                                  |
+| `delete(id)`       | `DELETE /vault/:id` | Returns nothing; discards `{ok: true}`, same convention as `console.projects.delete`/`console.schedules.delete`/`console.connections.delete`.                                                   |
+| `seal(value)`      | `POST /vault/seal`  | Body `{value}`. `unwrap<SecretValue>(res, "sealed")`. **Encrypt-only oracle — see below.**                                                                                                      |
+
+**Write-only, no-plaintext-in-GET-responses is the invariant this whole domain rests on.** The
+server's own module header states it directly: "plaintext values NEVER appear in a response"
+(`packages/server/packages/api/admin/vault.ts`). `VaultSecretSummary` — the return type of `list`,
+`get`, `create` and `update` alike — has **no `value` field at all**, so a secret's plaintext is
+structurally unreachable through any of those four methods, not merely omitted by convention.
+`create`/`update` still forward `value` in the _request_ body (that is how a secret's plaintext is
+written), it is simply never echoed back.
+
+`seal` is the one deliberate exception, and even it never returns plaintext: it answers with a
+ciphertext envelope (`SecretValue = {type: "secret", ciphertext, iv}`), encrypting an ad-hoc value
+into an at-rest envelope **without persisting it**, so a caller (the workflow editor) can seal a
+secret-typed field the moment it's typed and never hold clear text in a config JSON. It is an
+**encrypt-only oracle — there is no matching decrypt route** — the server's own header comment says
+so explicitly: "an authed caller learns nothing they didn't provide." `seal`'s response IS enveloped
+under `sealed`, unlike `console.connections.test`'s/`console.reliability.list`'s whole-body
+responses.
+
+`value` (on `create`/`update`/`seal`) is opaque — forwarded verbatim, never inspected, logged, or
+transformed by this method. That is a security-adjacent discipline, not a style note: the whole
+point of this field is a caller-opaque secret payload.
+
+`SecretValue` is defined **locally** in `src/console/vault.ts`, field-for-field identical to
+`packages/ui/src/types.ts`'s `SecretValue` shape — not imported from `@w6w/ui`, which this SDK has
+no dependency on and must not gain one. TypeScript's structural typing makes this value satisfy
+`@w6w/ui`'s `ExpressionOptions.sealSecret` prop shape at a studio call site with no shared import
+needed, the same pattern this package's `SavedTest`/`StepTest` types already established.
+
+None of these six methods take a `project` scoping parameter — vault secrets are subject-scoped like
+`vars`, not project-scoped — so `VaultHost` needs only the transport, mirroring
+`console.connections`'s own host shape.
+
+## `console.tokens.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const tokens = await client.console.tokens.list();
+const { token, secret } = await client.console.tokens.create("ci-deploy");
+console.log(secret); // shown exactly once — capture it now or it is gone
+await client.console.tokens.disable(token.id);
+await client.console.tokens.enable(token.id);
+await client.console.tokens.revoke(token.id);
+```
+
+Five methods, relocated from `packages/studio/src/api/client.ts`'s single `// API tokens` comment
+block — field-for-field, not redesigned. Studio never sends `account` or `includeRevoked` on
+`list()` (the server's list default already excludes revoked) — per HITL-4's own philosophy ("SDK
+completeness tracks studio's actual call surface, not the server's full route surface"), neither
+parameter is added here.
+
+| Method         | Route                      | Notes                                                                                                                 |
+| -------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `list()`       | `GET /tokens`              | `unwrap<ApiToken[]>(res, "tokens")`.                                                                                  |
+| `create(name)` | `POST /tokens`             | Body `{name}`. **No envelope key — see below.**                                                                       |
+| `disable(id)`  | `POST /tokens/:id/disable` | Body `{}` (sent verbatim, matching studio's own shape). `unwrap<ApiToken>(res, "token")`.                             |
+| `enable(id)`   | `POST /tokens/:id/enable`  | Body `{}`. `unwrap<ApiToken>(res, "token")`. `409 invalid_transition` when the token is revoked (revoke is terminal). |
+| `revoke(id)`   | `POST /tokens/:id/revoke`  | Body `{}`. `unwrap<ApiToken>(res, "token")`.                                                                          |
+
+**`create`'s plaintext-once return is the invariant this whole domain rests on.** `POST /tokens` is
+the ONLY response in this entire package that returns a token's plaintext — there is no reveal-later
+route. Its result type, `CreateTokenResponse = {token: ApiToken, secret: string}`, is defined as a
+**separate** type from `ApiToken`, never as an optional `secret?` field bolted onto it: `ApiToken` —
+the return type of every other method here (`list`/`disable`/`enable`/`revoke`) — structurally
+cannot carry a `secret`, which makes "nothing reachable through those four methods can ever carry a
+secret" a compile-time fact, not a runtime convention. The server's own `toWire()` doc comment
+states the identical invariant server-side: "never carries the secret, the hash, or internals."
+
+`create` has **no envelope key to peel — the whole body IS `{token, secret}`**. It is typed directly
+as `request<CreateTokenResponse>(...)`, returning `res.body`, mirroring
+`console.connections.test`'s/ `console.reliability.list`'s established "no envelope key" pattern —
+`unwrap()` is deliberately not called, since there is no single key to unwrap; the body has two
+top-level keys.
+
+None of these five methods take a `project` scoping parameter — tokens are account-scoped via the
+credential alone — so `TokensHost` needs only the transport, mirroring `console.connections`'s own
+host shape.

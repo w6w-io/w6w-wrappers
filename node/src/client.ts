@@ -103,8 +103,10 @@ export class W6wClient {
    * `create`, `update`, `test`, `delete`), `console.workflows.*` (`get`,
    * `upsert`, `archive`, `delete`, `listRuns`, `getRun`),
    * `console.savedTests.*` (`list`, `create`, `update`, `delete`,
-   * `recordTestRun`, `listTestRuns`) and `console.stepTests.*` (`save`,
-   * `list`, `recordRun`).
+   * `recordTestRun`, `listTestRuns`), `console.stepTests.*` (`save`,
+   * `list`, `recordRun`), `console.vault.*` (`list`, `get`, `create`,
+   * `update`, `delete`, `seal`) and `console.tokens.*` (`list`, `create`,
+   * `disable`, `enable`, `revoke`).
    * Studio-internal and unstable — not part of the published partner
    * contract, excluded from `endpoints.json` and from this package's root
    * barrel (`docs/console.md`, HITL-1). Reached only through
