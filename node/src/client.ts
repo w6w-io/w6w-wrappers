@@ -99,8 +99,9 @@ export class W6wClient {
    * `console.apps.*` (`list`, `get`, `getAuth`, `getActions`, `getTriggers`,
    * `getHealth`, `getHealthStatus`, `listOAuthConfig`, `upsertOAuthConfig`,
    * `deleteOAuthConfig`, `startOAuthFlow`, `preview`, `import`, `refresh`,
-   * `invoke`, `delete`) and `console.connections.*` (`listForApp`, `get`,
-   * `create`, `update`, `test`, `delete`).
+   * `invoke`, `delete`), `console.connections.*` (`listForApp`, `get`,
+   * `create`, `update`, `test`, `delete`) and `console.workflows.*` (`get`,
+   * `upsert`, `archive`, `delete`, `listRuns`, `getRun`).
    * Studio-internal and unstable — not part of the published partner
    * contract, excluded from `endpoints.json` and from this package's root
    * barrel (`docs/console.md`, HITL-1). Reached only through
