@@ -107,7 +107,9 @@ export class W6wClient {
    * `list`, `recordRun`), `console.vault.*` (`list`, `get`, `create`,
    * `update`, `delete`, `seal`), `console.tokens.*` (`list`, `create`,
    * `disable`, `enable`, `revoke`), `console.functions.*` (`list`, `get`,
-   * `upsert`) and `console.endpoints.*` (`list`, `get`, `upsert`, `invoke`).
+   * `upsert`), `console.endpoints.*` (`list`, `get`, `upsert`, `invoke`),
+   * `console.subscriptions.*` (`list`, `listForWorkflow`, `get`, `create`,
+   * `delete`, `listEvents`, `requeueEvent`) and `console.apiCalls.*` (`list`).
    * Studio-internal and unstable — not part of the published partner
    * contract, excluded from `endpoints.json` and from this package's root
    * barrel (`docs/console.md`, HITL-1). Reached only through
