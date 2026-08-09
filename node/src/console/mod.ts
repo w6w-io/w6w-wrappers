@@ -19,6 +19,7 @@
  */
 
 import type { HttpResponse, RequestOptions } from "../http.ts";
+import { AppsApi } from "./apps.ts";
 import { AuthApi } from "./auth.ts";
 import { DashboardApi } from "./dashboard.ts";
 import { ReliabilityApi } from "./reliability.ts";
@@ -53,6 +54,35 @@ export { ProjectsApi } from "./projects.ts";
 export type { Project, ProjectsHost } from "./projects.ts";
 export { SchedulesApi } from "./schedules.ts";
 export type { Schedule, SchedulesHost, ScheduleUpsertInput } from "./schedules.ts";
+export { AppsApi } from "./apps.ts";
+export type {
+  ActionDef,
+  ActionParam,
+  ApiCallRecord,
+  AppDetail,
+  AppHealthStatus,
+  AppsHost,
+  AppSummary,
+  AuthDef,
+  AuthField,
+  CredentialPosture,
+  HealthCheckMeta,
+  HealthKind,
+  HealthQuota,
+  HealthReport,
+  HealthResult,
+  HealthScope,
+  HealthSeverity,
+  HealthState,
+  ImportResponse,
+  OAuthConfigSummary,
+  PackEntryPreview,
+  PackPreviewInfo,
+  PreviewSourceResponse,
+  RefreshAppResponse,
+  TriggerDef,
+  UpsertOAuthConfigInput,
+} from "./apps.ts";
 
 /**
  * The slice of `W6wClient` the console namespace group needs: the transport,
@@ -85,6 +115,8 @@ export class ConsoleApi {
   readonly projects: ProjectsApi;
   /** `console.schedules.*`. */
   readonly schedules: SchedulesApi;
+  /** `console.apps.*`. */
+  readonly apps: AppsApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
@@ -95,5 +127,6 @@ export class ConsoleApi {
     this.dashboard = new DashboardApi(host);
     this.projects = new ProjectsApi(host);
     this.schedules = new SchedulesApi(host);
+    this.apps = new AppsApi(host);
   }
 }
