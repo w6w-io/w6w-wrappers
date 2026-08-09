@@ -189,3 +189,68 @@ client could never call `login`, since `requireToken` would raise before the req
 This field is **node-only** for now, for the same reason `RequestOptions.headers` is; the equivalent
 gap in `cli`/`python` is filed separately in this project's `FOLLOWUPS.md` and is not part of this
 change.
+
+## `console.projects.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const projects = await client.console.projects.list();
+const created = await client.console.projects.create("Acme");
+await client.console.projects.delete(created.id);
+```
+
+| Method         | Route                  | Notes                                                                                                             |
+| -------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `list()`       | `GET /projects`        | No query parameter — excludes archived. `unwrap<Project[]>(res, "projects")`.                                     |
+| `create(name)` | `POST /projects`       | Body `{ name }`. `unwrap<Project>(res, "project")` (server answers `201`).                                        |
+| `delete(id)`   | `DELETE /projects/:id` | Returns nothing; `404 unknown_project` covers both "no such id" and "is the default project" — not discriminated. |
+
+Relocated verbatim from `packages/studio/src/api/client.ts:447-454`, which the field-for-field
+`Project` shape (`id`, `account`, `name`, `isDefault: boolean`, `status: "active" | "archived"`,
+`createdAt`, `updatedAt`) is still pinned by (`packages/studio/src/api/types.ts:308-317`).
+
+**`PATCH /projects/:id` (rename), `POST /projects/:id/archive`, `POST /projects/:id/unarchive` and
+`GET /schedules` (list-schedules) are deliberately NOT covered here** — studio's own `api/client.ts`
+never wrapped any of the four (zero client-side coverage, not just zero callers), confirmed by
+`GeneralPage.tsx`'s own header comment ("no rename/archive/unarchive/view-archived here"). See this
+project's `plan.md` FINDINGS DISPOSITION for the full reasoning behind the scope line.
+
+## `console.schedules.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const schedule = await client.console.schedules.get("wf_1");
+if (schedule === null) {
+  await client.console.schedules.upsert("wf_1", { cron: "0 * * * *" });
+}
+await client.console.schedules.delete("wf_1");
+```
+
+| Method                     | Route                            | Notes                                                                                                          |
+| -------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `get(workflowId)`          | `GET /workflows/:id/schedule`    | `unwrap<Schedule>(res, "schedule")` on success. See the 404 note below.                                        |
+| `upsert(workflowId, body)` | `POST /workflows/:id/schedule`   | Create-or-update, `200` either way (no distinct `201`). Body `{ cron, enabled?, variables? }` forwarded as-is. |
+| `delete(workflowId)`       | `DELETE /workflows/:id/schedule` | Returns nothing; `404 unknown_workflow` when there is no such workflow — NOT caught, unlike `get`.             |
+
+Relocated verbatim from `packages/studio/src/api/client.ts:535-554`, which the field-for-field
+`Schedule` shape (`workflowId`, `cron`, `enabled: boolean`, `variables: Record<string, unknown>`,
+`nextRunAt`, `lastRunAt: string | null`) is still pinned by
+(`packages/studio/src/api/types.ts:368-375`).
+
+**`get`'s 404→`null` asymmetry is intentional, not a bug to reconcile.** It is the one "get" method
+in this entire package that does not throw on a 404: it catches `ApiError` with `status === 404`
+(any error `code` — the server sends two different ones for "no schedule to show",
+`unknown_workflow` and `no_schedule`, and this method does not discriminate between them) and
+resolves `null` instead. Every other status (400, 500, …) still throws unchanged, and every other
+"get" in this package (`documents.get`, `vars.get`, …) throws on every non-2xx including 404. This
+is relocated verbatim from `client.ts:535-542`'s own behavior, not a new design decision made here.
+
+**`GET /schedules` (list-schedules across a workflow's or account's schedules) is deliberately NOT
+covered here** — the same "studio never wrapped it" reasoning as `console.projects.*` above; see
+`plan.md`'s FINDINGS DISPOSITION.
