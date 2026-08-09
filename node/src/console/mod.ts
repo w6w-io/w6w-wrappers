@@ -28,6 +28,8 @@ import { ProjectsApi } from "./projects.ts";
 import { SavedTestsApi } from "./saved-tests.ts";
 import { SchedulesApi } from "./schedules.ts";
 import { StepTestsApi } from "./step-tests.ts";
+import { TokensApi } from "./tokens.ts";
+import { VaultApi } from "./vault.ts";
 import { WorkflowsApi } from "./workflows.ts";
 
 export { AuthApi } from "./auth.ts";
@@ -95,6 +97,10 @@ export { SavedTestsApi } from "./saved-tests.ts";
 export type { SavedTest, SavedTestRun, SavedTestsHost, TestRunSummary } from "./saved-tests.ts";
 export { StepTestsApi } from "./step-tests.ts";
 export type { StepTest, StepTestRun, StepTestsHost } from "./step-tests.ts";
+export { VaultApi } from "./vault.ts";
+export type { SecretValue, VaultHost, VaultSecretSummary } from "./vault.ts";
+export { TokensApi } from "./tokens.ts";
+export type { ApiToken, ApiTokenStatus, CreateTokenResponse, TokensHost } from "./tokens.ts";
 
 /**
  * The slice of `W6wClient` the console namespace group needs: the transport,
@@ -137,6 +143,10 @@ export class ConsoleApi {
   readonly savedTests: SavedTestsApi;
   /** `console.stepTests.*`. */
   readonly stepTests: StepTestsApi;
+  /** `console.vault.*`. */
+  readonly vault: VaultApi;
+  /** `console.tokens.*`. */
+  readonly tokens: TokensApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
@@ -152,5 +162,7 @@ export class ConsoleApi {
     this.workflows = new WorkflowsApi(host);
     this.savedTests = new SavedTestsApi(host);
     this.stepTests = new StepTestsApi(host);
+    this.vault = new VaultApi(host);
+    this.tokens = new TokensApi(host);
   }
 }
