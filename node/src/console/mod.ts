@@ -19,6 +19,7 @@
  */
 
 import type { HttpResponse, RequestOptions } from "../http.ts";
+import { ApiCallsApi } from "./api-calls.ts";
 import { AppsApi } from "./apps.ts";
 import { AuthApi } from "./auth.ts";
 import { ConnectionsApi } from "./connections.ts";
@@ -30,6 +31,7 @@ import { ProjectsApi } from "./projects.ts";
 import { SavedTestsApi } from "./saved-tests.ts";
 import { SchedulesApi } from "./schedules.ts";
 import { StepTestsApi } from "./step-tests.ts";
+import { SubscriptionsApi } from "./subscriptions.ts";
 import { TokensApi } from "./tokens.ts";
 import { VaultApi } from "./vault.ts";
 import { WorkflowsApi } from "./workflows.ts";
@@ -120,12 +122,22 @@ export type {
   EndpointDef,
   EndpointInput,
   EndpointInvokeResult,
-  EndpointsHost,
   EndpointSecurity,
+  EndpointsHost,
   EndpointSummary,
   EndpointTarget,
   Exposure,
 } from "./endpoints.ts";
+export { SubscriptionsApi } from "./subscriptions.ts";
+export type {
+  Subscription,
+  SubscriptionCreateInput,
+  SubscriptionsHost,
+  TriggerEventStatus,
+  TriggerEventSummary,
+} from "./subscriptions.ts";
+export { ApiCallsApi } from "./api-calls.ts";
+export type { ApiCallsFilter, ApiCallsHost } from "./api-calls.ts";
 
 /**
  * The slice of `W6wClient` the console namespace group needs: the transport,
@@ -176,6 +188,10 @@ export class ConsoleApi {
   readonly functions: FunctionsApi;
   /** `console.endpoints.*`. */
   readonly endpoints: EndpointsApi;
+  /** `console.subscriptions.*`. */
+  readonly subscriptions: SubscriptionsApi;
+  /** `console.apiCalls.*`. */
+  readonly apiCalls: ApiCallsApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
@@ -195,5 +211,7 @@ export class ConsoleApi {
     this.tokens = new TokensApi(host);
     this.functions = new FunctionsApi(host);
     this.endpoints = new EndpointsApi(host);
+    this.subscriptions = new SubscriptionsApi(host);
+    this.apiCalls = new ApiCallsApi(host);
   }
 }
