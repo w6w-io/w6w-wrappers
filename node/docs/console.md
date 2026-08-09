@@ -95,3 +95,97 @@ uses. Every other header name passes through untouched.
 
 This field is **node-only** for now; the equivalent gap in `cli`/`python` is filed separately in
 this project's `FOLLOWUPS.md` and is not part of this change.
+
+## `console.auth.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient({ baseUrl: "https://api.example.com" }); // no token — see below
+const { token, user } = await client.console.auth.login("alice", "hunter2");
+```
+
+Four methods, relocated verbatim from the studio's own API client
+(`packages/studio/src/api/client.ts:249-291`), with the same field-for-field shapes it used
+(`packages/studio/src/api/types.ts:10-82`) — this module does not redesign them, only gives them a
+second home.
+
+| Method                      | Route                                   | Public/authenticated                                                                          |
+| --------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `login(username, password)` | `POST /auth/login`                      | **PUBLIC** — sends no bearer (`requireAuth: false`), even on a client already holding a token |
+| `signup(input)`             | `POST /auth/signup`                     | **PUBLIC** — sends no bearer (`requireAuth: false`)                                           |
+| `checkAccountSlug(name)`    | `GET /auth/signup/slug-available?name=` | **PUBLIC** — sends no bearer (`requireAuth: false`)                                           |
+| `createAccount(name, slug)` | `POST /accounts`                        | **AUTHENTICATED** — default `requireAuth`, re-issues the session with the new account's claim |
+
+The three public routes are registered server-side ABOVE `app.use("*", authGuard)`
+(`packages/server/packages/api/data/signup.ts:23-41`, `id/auth.ts:22-55`) and must never read a
+principal — `requireAuth: false` is the ONLY way `login` can work at all, since a client with no
+token configured (the normal case pre-login) would otherwise hit `requireToken`'s `ConfigError` on
+every request, and `login` is how a caller gets a token in the first place. `createAccount`'s
+returned token is minted `role: "user"` unconditionally, so adopting it downgrades an operator —
+this namespace never writes the session itself, the caller decides.
+
+**`getMe` is not part of this namespace.** `client.me()` already exists (`src/me.ts`, base surface)
+and covers `GET /auth/me` exactly — do not look for it under `console.auth`.
+
+None of these four call `unwrap()` — every response body is flat, no envelope key, exactly like
+`console.reliability.list`.
+
+## `console.dashboard.stats(params?)`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console";
+
+const client = new W6wClient();
+const rollup = await client.console.dashboard.stats({ bucket: "week" });
+```
+
+`GET /dashboard/stats`, AUTHENTICATED (default `requireAuth` — the account is derived server-side
+from the principal, `packages/server/packages/api/admin/dashboard.ts:44-96`, and the client never
+sends one). `from`, `to` and `bucket` are forwarded as query parameters when given, and dropped from
+the query string entirely when omitted (the server applies its own window and bucket defaults).
+Relocated verbatim from `packages/studio/src/api/client.ts:189-197`, which the field-for-field
+`DashboardStats` shape is still pinned by.
+
+**No envelope key**, like `console.reliability.list`: the server's `GET /dashboard/stats` answers
+`c.json({range, headline, series, recent})` (`admin/dashboard.ts:90-95`), so the `DashboardStats`-
+shaped object IS the top-level response body. `stats` returns `res.body` directly and never calls
+`unwrap()`.
+
+Return shape — `DashboardStats`:
+
+| Field      | Type                                                                                                        | Notes                                                                 |
+| ---------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `range`    | `{ from: string; to: string; bucket: "day" \| "week" }`                                                     | The resolved window actually applied.                                 |
+| `headline` | `{ workflowRuns: number; succeeded: number; failed: number }`                                               | Workflow runs only.                                                   |
+| `series`   | `Array<{ bucket: string; kind: string; ok: boolean \| null; count: number }>`                               | The charts-later seam — a flat payload the caller slices client-side. |
+| `recent`   | `Array<{ id, kind, ok: boolean \| null, summary: string \| null, occurredAt, workflowId: string \| null }>` | Most recent activity, `id`/`kind`/`occurredAt` always `string`.       |
+
+## `RequestOptions.requireAuth`
+
+`request()` (and therefore every namespace method built on it, in both the root export and
+`@w6w/sdk/console`) now accepts an optional `requireAuth?: boolean` on `RequestOptions`, defaulting
+to `true`:
+
+```ts
+await client.request({
+  method: "POST",
+  path: "/auth/login",
+  body: { username, password },
+  requireAuth: false,
+});
+```
+
+Set `false` for the handful of routes that are public server-side and must never carry a bearer.
+When `false`, `requireToken()` is never called and no `authorization` header is set — not even when
+the client happens to hold a token; the effect is not "an empty header" but "the header is absent
+entirely". Omitting the field behaves exactly as it always has. This is the mechanism
+`console.auth.login`/`signup`/`checkAccountSlug` are built on (see above) — without it, a tokenless
+client could never call `login`, since `requireToken` would raise before the request ever reached
+`fetch`.
+
+This field is **node-only** for now, for the same reason `RequestOptions.headers` is; the equivalent
+gap in `cli`/`python` is filed separately in this project's `FOLLOWUPS.md` and is not part of this
+change.

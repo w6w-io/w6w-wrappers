@@ -19,8 +19,24 @@
  */
 
 import type { HttpResponse, RequestOptions } from "../http.ts";
+import { AuthApi } from "./auth.ts";
+import { DashboardApi } from "./dashboard.ts";
 import { ReliabilityApi } from "./reliability.ts";
 
+export { AuthApi } from "./auth.ts";
+export type {
+  AccountWire,
+  AuthHost,
+  CreateAccountResponse,
+  LoginResponse,
+  SignupInput,
+  SignupResponse,
+  SignupUser,
+  SlugAvailabilityResponse,
+  User,
+} from "./auth.ts";
+export { DashboardApi } from "./dashboard.ts";
+export type { DashboardHost, DashboardStats, DashboardStatsParams } from "./dashboard.ts";
 export { ReliabilityApi } from "./reliability.ts";
 export type {
   ReliabilityErrorMix,
@@ -55,11 +71,17 @@ export interface ConsoleHost {
 export class ConsoleApi {
   /** `console.reliability.*`. */
   readonly reliability: ReliabilityApi;
+  /** `console.auth.*`. */
+  readonly auth: AuthApi;
+  /** `console.dashboard.*`. */
+  readonly dashboard: DashboardApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
    */
   constructor(host: ConsoleHost) {
     this.reliability = new ReliabilityApi(host);
+    this.auth = new AuthApi(host);
+    this.dashboard = new DashboardApi(host);
   }
 }
