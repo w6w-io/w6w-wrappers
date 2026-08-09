@@ -19,8 +19,15 @@
 import { type FetchLike, requireToken, type ResolvedConfig } from "./config.ts";
 import { ApiError } from "./errors.ts";
 
-/** HTTP methods this surface uses. */
-export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+/**
+ * HTTP methods this surface uses.
+ *
+ * `PUT` was added by T2.2.1 (BLK-3): `console.apps.upsertOAuthConfig` relocates
+ * `client.ts`'s `upsertAppOAuthConfig`, which sends `PUT
+ * /apps/:id/oauth-config/:authKey` — the first operation in this package to
+ * need it. Purely additive to the union; no existing caller's behavior changes.
+ */
+export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 /**
  * Query parameters. `undefined` values are dropped, so an optional argument
