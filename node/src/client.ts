@@ -92,11 +92,13 @@ export class W6wClient {
   readonly workflows: WorkflowsApi;
 
   /**
-   * Console-only namespaces: `console.reliability.list`. Studio-internal and
-   * unstable — not part of the published partner contract, excluded from
-   * `endpoints.json` and from this package's root barrel (`docs/console.md`,
-   * HITL-1). Reached only through `@w6w/sdk/console`'s re-exports, and
-   * constructed with the transport only, exactly like `vars` and `connections`.
+   * Console-only namespaces: `console.reliability.list`, `console.auth.*`
+   * (`login`, `signup`, `checkAccountSlug`, `createAccount`) and
+   * `console.dashboard.stats`. Studio-internal and unstable — not part of the
+   * published partner contract, excluded from `endpoints.json` and from this
+   * package's root barrel (`docs/console.md`, HITL-1). Reached only through
+   * `@w6w/sdk/console`'s re-exports, and constructed with the transport only,
+   * exactly like `vars` and `connections`.
    */
   readonly console: ConsoleApi;
 
