@@ -18,6 +18,10 @@
     ".": {
       "types": "./dist/mod.d.ts",
       "import": "./dist/mod.js"
+    },
+    "./console": {
+      "types": "./dist/src/console/mod.d.ts",
+      "import": "./dist/src/console/mod.js"
     }
   },
   "files": ["dist"],

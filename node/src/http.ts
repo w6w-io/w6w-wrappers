@@ -42,6 +42,15 @@ export interface RequestOptions {
   query?: QueryParams;
   /** Request body. Serialised as JSON when present; omit it for a bodiless request. */
   body?: unknown;
+  /**
+   * Extra headers to send with this request. Applied as the **base** the
+   * transport builds on, never the other way around: the bearer
+   * (`authorization`) and, when a body is present, `content-type` are set
+   * *after* this base, so a caller-supplied entry with either of those names
+   * can never override what this transport sets. Any other header name passes
+   * through untouched.
+   */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -154,7 +163,11 @@ export async function request<T>(
   options: RequestOptions,
 ): Promise<HttpResponse<T>> {
   const url = buildUrl(config, options);
-  const headers = new Headers();
+  // The caller-supplied headers are the BASE the transport builds on, never the
+  // reverse: `authorization` and `content-type` are set below, after this base,
+  // so nothing a caller passes here can shadow the bearer this transport
+  // attaches or the content-type it advertises for a JSON body.
+  const headers = new Headers(options.headers);
   // Resolved per request rather than at construction: a client with no token is
   // constructible (so a CLI's --help works offline) and fails here instead.
   headers.set("authorization", `Bearer ${requireToken(config)}`);
