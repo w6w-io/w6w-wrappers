@@ -737,3 +737,75 @@ answers `202` with `{kind:"workflow", runId}` — both are success on this API, 
 None of these four methods take a `project` scoping parameter — neither is reachable via any HTTP
 route on this domain — so `EndpointsHost` needs only the transport, mirroring
 `console.workflows`'s/`console.schedules`'s own host shape.
+
+## `console.subscriptions.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const subs = await client.console.subscriptions.list();
+const sub = await client.console.subscriptions.create("app_x", "new-message", {
+  workflowId: "wf_1",
+});
+await client.console.subscriptions.delete(sub.id);
+```
+
+Seven methods, relocated from `packages/studio/src/api/client.ts:253-286`'s single
+`// Subscriptions` comment block — field-for-field, not redesigned: `listSubscriptions` → `list`,
+`listSubscriptionsForWorkflow` → `listForWorkflow`, `getSubscription` → `get`, `createSubscription`
+→ `create`, `deleteSubscription` → `delete`, `listSubscriptionEvents` → `listEvents`,
+`requeueTriggerEvent` → `requeueEvent`.
+
+| Method                             | Route                                                  | Notes                                                                                                                                |
+| ---------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `list()`                           | `GET /subscriptions`                                   | `unwrap<Subscription[]>(res, "subscriptions")`.                                                                                      |
+| `listForWorkflow(workflowId)`      | `GET /workflows/:id/subscriptions`                     | **Dead code (HITL-4).** `unwrap<Subscription[]>(res, "subscriptions")`.                                                              |
+| `get(id)`                          | `GET /subscriptions/:id`                               | **Dead code (HITL-4).** Throws `ApiError` on 404 — no null-coalescing, unlike `schedules.get`.                                       |
+| `create(appId, triggerKey, input)` | `POST /apps/:appId/triggers/:triggerKey/subscriptions` | Body is `input` verbatim. `unwrap<Subscription>(res, "subscription")` (`201`).                                                       |
+| `delete(id)`                       | `DELETE /subscriptions/:id`                            | Discards `{ok: true}`, resolves `void`.                                                                                              |
+| `listEvents(id)`                   | `GET /subscriptions/:id/events`                        | **Dead code (HITL-4).** `unwrap<TriggerEventSummary[]>(res, "events")`. No `limit` param — the server applies its own default of 50. |
+| `requeueEvent(eventId)`            | `POST /trigger-events/:eventId/requeue`                | **Dead code (HITL-4).** Discards `{ok: true}`, resolves `void`. `404 requeue_failed` when the event doesn't exist or isn't `failed`. |
+
+**Four of these seven methods are HITL-4 dead code** — `listForWorkflow`, `get`, `listEvents`, and
+`requeueEvent` have zero call sites anywhere in studio or `@w6w/ui` (re-confirmed this pass, see
+`plan.md`'s SP2.9 section). They are still built to full type fidelity for SDK/wrapper coverage;
+only their test bar is deliberately lighter (structural presence + wire-shape only).
+
+**`webhookUrl` is a real server-side field this namespace deliberately does NOT model.** For a
+subscription whose `appId === "@w6w/webhook"`, the server enriches the response with a `webhookUrl`
+field computed from a config value distinct from studio's own `apiBaseUrl()`. Studio's
+`Subscription` type never modeled this and no in-boundary code reads it (`SubscriptionsPage.tsx`
+computes its own webhook URL client-side independently) — this is a deliberate, verified omission,
+not an oversight.
+
+None of these seven methods take a `project` scoping parameter — subscriptions are account-level —
+so `SubscriptionsHost` needs only the transport, mirroring `VarsHost`/`ProjectsHost`, not
+`DocumentsHost`.
+
+## `console.apiCalls.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const calls = await client.console.apiCalls.list({ appId: "app_x", limit: 50 });
+```
+
+One method, relocated from `client.ts:214-231`'s `listApiCalls` — which lived under the `client.ts`
+`// Apps` comment block despite having no apps-domain consumer (its only caller is reliability's
+drill-down page).
+
+| Method          | Route            | Notes                                                                                                                                          |
+| --------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list(filter?)` | `GET /api-calls` | Only DEFINED `filter` fields are sent as query params; omitted entirely, no query params are sent. `unwrap<ApiCallRecord[]>(res, "apiCalls")`. |
+
+**`ApiCallRecord` is REUSED from `console.apps`, never redefined.** `console/apps.ts` already
+declares it (used internally by `AppsApi.invoke`'s result type) and `console/mod.ts` already
+re-exports it — this module imports it as a type and uses it verbatim as `list`'s return element
+type, rather than declaring a second, parallel interface.
+
+`api-calls` is scoped to the caller by the server's own repo, not by a `project` query param — so
+`ApiCallsHost` needs only the transport, mirroring `VarsHost`/`ProjectsHost`, not `DocumentsHost`.
