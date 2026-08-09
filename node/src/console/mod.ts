@@ -22,6 +22,8 @@ import type { HttpResponse, RequestOptions } from "../http.ts";
 import { AuthApi } from "./auth.ts";
 import { DashboardApi } from "./dashboard.ts";
 import { ReliabilityApi } from "./reliability.ts";
+import { ProjectsApi } from "./projects.ts";
+import { SchedulesApi } from "./schedules.ts";
 
 export { AuthApi } from "./auth.ts";
 export type {
@@ -47,6 +49,10 @@ export type {
   ReliabilityUptimeDay,
   ReliabilityVendorStatus,
 } from "./reliability.ts";
+export { ProjectsApi } from "./projects.ts";
+export type { Project, ProjectsHost } from "./projects.ts";
+export { SchedulesApi } from "./schedules.ts";
+export type { Schedule, SchedulesHost, ScheduleUpsertInput } from "./schedules.ts";
 
 /**
  * The slice of `W6wClient` the console namespace group needs: the transport,
@@ -75,6 +81,10 @@ export class ConsoleApi {
   readonly auth: AuthApi;
   /** `console.dashboard.*`. */
   readonly dashboard: DashboardApi;
+  /** `console.projects.*`. */
+  readonly projects: ProjectsApi;
+  /** `console.schedules.*`. */
+  readonly schedules: SchedulesApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
@@ -83,5 +93,7 @@ export class ConsoleApi {
     this.reliability = new ReliabilityApi(host);
     this.auth = new AuthApi(host);
     this.dashboard = new DashboardApi(host);
+    this.projects = new ProjectsApi(host);
+    this.schedules = new SchedulesApi(host);
   }
 }
