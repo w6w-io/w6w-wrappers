@@ -313,6 +313,69 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "requireAuth: false sends NO authorization header, even on a config carrying a token",
+  async () => {
+    const fake = fakeFetch(() => json({ token: "tok_new" }));
+
+    const res = await request<{ token: string }>(CONFIG, fake.fetch, {
+      method: "POST",
+      path: "/auth/login",
+      body: { username: "u", password: "p" },
+      requireAuth: false,
+    });
+
+    assertEquals(res.body, { token: "tok_new" });
+    // Not an empty header, not "Bearer null" — absent entirely.
+    assertEquals(fake.calls[0].headers.has("authorization"), false);
+    assertEquals(fake.calls[0].headers.get("authorization"), null);
+  },
+);
+
+Deno.test("requireAuth omitted behaves exactly as before — the bearer is sent", async () => {
+  const fake = fakeFetch(() => json({ ok: true }));
+
+  await request(CONFIG, fake.fetch, { method: "GET", path: "/vars" });
+
+  assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_1");
+});
+
+Deno.test(
+  "requireAuth: false on a TOKENLESS config never even attempts requireToken — resolves, not ConfigError",
+  async () => {
+    const unauthenticated = resolveConfig({ baseUrl: "https://api.example.com", token: "" });
+    const fake = fakeFetch(() => json({ token: "tok_new" }));
+
+    const res = await request<{ token: string }>(unauthenticated, fake.fetch, {
+      method: "POST",
+      path: "/auth/login",
+      body: { username: "u", password: "p" },
+      requireAuth: false,
+    });
+
+    assertEquals(res.body, { token: "tok_new" });
+    assertEquals(fake.calls[0].headers.get("authorization"), null);
+  },
+);
+
+Deno.test(
+  "RequestOptions.headers ordering still holds when requireAuth is also set — no interaction bug",
+  async () => {
+    const fake = fakeFetch(() => json({ ok: true }));
+
+    await request(CONFIG, fake.fetch, {
+      method: "POST",
+      path: "/auth/login",
+      body: { username: "u", password: "p" },
+      headers: { "x-custom": "1" },
+      requireAuth: false,
+    });
+
+    assertEquals(fake.calls[0].headers.get("x-custom"), "1");
+    assertEquals(fake.calls[0].headers.get("authorization"), null);
+  },
+);
+
 Deno.test("the client defaults to globalThis.fetch, and says so when there is none", async () => {
   const original = globalThis.fetch;
   try {

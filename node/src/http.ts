@@ -51,6 +51,20 @@ export interface RequestOptions {
    * through untouched.
    */
   headers?: Record<string, string>;
+  /**
+   * Whether this request needs a bearer. Defaults to `true` — omitting the
+   * field behaves exactly as it always has.
+   *
+   * Set `false` for the handful of routes that are public server-side (self-
+   * serve login/signup) and must never send one: when `false`,
+   * {@linkcode requireToken} is never called and no `authorization` header is
+   * set, even when the client holds a token. This is the ONLY way
+   * `console.auth.login` can work at all — a client with no token configured
+   * (the normal case pre-login) would otherwise hit `requireToken`'s
+   * `ConfigError` on every request, and `login` is how a caller gets a token
+   * in the first place.
+   */
+  requireAuth?: boolean;
 }
 
 /**
@@ -170,7 +184,12 @@ export async function request<T>(
   const headers = new Headers(options.headers);
   // Resolved per request rather than at construction: a client with no token is
   // constructible (so a CLI's --help works offline) and fails here instead.
-  headers.set("authorization", `Bearer ${requireToken(config)}`);
+  // Skipped entirely when `requireAuth: false` — not just left unset, but never
+  // even attempted, so a tokenless client can call a public route without
+  // `requireToken` raising first.
+  if (options.requireAuth !== false) {
+    headers.set("authorization", `Bearer ${requireToken(config)}`);
+  }
 
   const hasBody = options.body !== undefined;
   if (hasBody) headers.set("content-type", "application/json");
