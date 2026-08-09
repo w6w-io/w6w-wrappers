@@ -304,3 +304,64 @@ groups with a future `reliability`+`api-calls` sub-project instead.
 deliberately NOT covered** — both are live, `requireOperator`-gated routes with zero client-side
 coverage ever (not just zero callers). See `plan.md`'s FINDINGS DISPOSITION for the full reasoning
 behind all three exclusions.
+
+## `console.connections.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const conns = await client.console.connections.listForApp("sendgrid");
+const created = await client.console.connections.create("sendgrid", {
+  authKey: "apiKey",
+  credential: { key: "sk_live_…" },
+});
+const result = await client.console.connections.test(created.id);
+if (!result.ok) console.log(result.error?.message);
+await client.console.connections.delete(created.id);
+```
+
+Six methods, relocated from `packages/studio/src/api/client.ts:252-298`'s single `// Connections`
+comment block — field-for-field, not redesigned. `listConnections` (the seventh call site there) is
+deliberately NOT relocated here: it already has a home on the pre-existing BASE namespace,
+`client.connections.list()` (`src/connections.ts:47-64`), and this domain does not duplicate it.
+
+| Method                | Route                        | Notes                                                                                                                                 |
+| --------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `listForApp(appId)`   | `GET /apps/:id/connections`  | `unwrap<ConnectionSummary[]>(res, "connections")`.                                                                                    |
+| `get(id)`             | `GET /connections/:id`       | `unwrap<ConnectionSummary>(res, "connection")`. No 404 special-casing — propagates as `ApiError`, unlike `console.schedules.get`.     |
+| `create(appId, body)` | `POST /apps/:id/connections` | Body `{authKey, credential, displayName?, profile?}` forwarded verbatim. `unwrap<ConnectionSummary>(res, "connection")` (`201`).      |
+| `update(id, body)`    | `PATCH /connections/:id`     | Body `{displayName?, credential?}` forwarded verbatim, not pre-validated client-side. `unwrap<ConnectionSummary>(res, "connection")`. |
+| `test(id)`            | `POST /connections/:id/test` | **No envelope key — see below.**                                                                                                      |
+| `delete(id)`          | `DELETE /connections/:id`    | Returns nothing; discards `{ok: true}`, same convention as `console.projects.delete`/`console.schedules.delete`.                      |
+
+**`test`'s response has no envelope key — the whole body IS the `ConnectionTestResult`**, mirroring
+`console.reliability.list`'s pattern (`packages/server/packages/api/admin/connections.ts:151-190`
+answers the body directly). Three possible `200`-status shapes:
+
+- `{ok: true, untested: true, message}` — no safe probe action exists for this connection's app.
+- `{ok: true, actionKey}` — the probe action ran and passed.
+- `{ok: false, actionKey, error: {message}}` — the probe action ran and **failed**. This is still a
+  `200` and `test` resolves normally — **a failed test is data, never a raised error**, the exact
+  same rule `client.run()`/`workflows.run()` already document for a failed run. Only a genuine
+  non-2xx (`404 unknown_connection`) raises `ApiError`.
+
+`create`'s and `update`'s `credential` field is opaque (`Record<string, unknown>`) and forwarded
+verbatim — never inspected, logged, or transformed by this method. That is a security-adjacent
+discipline, not a style note: the whole point of the field is a caller-opaque secret payload.
+
+None of these methods take a `project` scoping parameter — connections carry no `?project=`, the
+server scopes by tenant/account from the credential alone — so `ConnectionsHost` needs only the
+transport, mirroring `console.projects`'s/`console.schedules`'s own host shape.
+
+**Console placement here is a resolved decision, not a default applied without thought — see
+`HITL-10` in `HITL.md` and `plan.md`'s SP2.3 section for the full investigation.**
+`endpoints.json`'s `outOfScope` entry for connections writes frames the eventual intent as a real
+partner operation, unlike `projects`/`schedules`/`apps` — but the server routes this domain wraps
+are plain, stateless handlers over an already-resolved payload for both real studio call sites,
+which makes console placement technically safe for studio's own use without by itself justifying
+promotion to the partner surface (cli/python lockstep; no partner-facing OAuth-flow counterpart
+exists yet either). Console placement is the pinned default for this round; partner-surface
+promotion is deferred to a dedicated future project. A future reader evaluating that promotion
+should start from `HITL-10`/SP2.3 rather than re-deriving the reasoning from scratch.
