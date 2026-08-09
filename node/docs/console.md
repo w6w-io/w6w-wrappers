@@ -365,3 +365,79 @@ promotion to the partner surface (cli/python lockstep; no partner-facing OAuth-f
 exists yet either). Console placement is the pinned default for this round; partner-surface
 promotion is deferred to a dedicated future project. A future reader evaluating that promotion
 should start from `HITL-10`/SP2.3 rather than re-deriving the reasoning from scratch.
+
+## `console.workflows.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const { workflow, updatedAt } = await client.console.workflows.get("wf_1");
+const saved = await client.console.workflows.upsert(workflow, { ifUnmodifiedSince: updatedAt });
+const runs = await client.console.workflows.listRuns("wf_1");
+const run = await client.console.workflows.getRun(runs[0].runId);
+await client.console.workflows.archive("wf_1");
+await client.console.workflows.delete("wf_1");
+```
+
+Six methods, relocated from `packages/studio/src/api/client.ts:254-331`'s `// Workflows` comment
+block — field-for-field, not redesigned, except `getRun`, which is genuinely new here (see below).
+
+| Method                      | Route                         | Notes                                                                                                                                                        |
+| --------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `get(id)`                   | `GET /workflows/:id`          | Whole body IS `{workflow, sourceRef, updatedAt}` — no envelope. No 404 special-casing — propagates as `ApiError`, unlike `console.schedules.get`.            |
+| `upsert(definition, opts?)` | `POST /workflows`             | Body is the definition **verbatim** (not wrapped). Optional `?project=`. Optional `ifUnmodifiedSince` → `x-w6w-if-unmodified-since` header. See below.       |
+| `archive(id)`               | `POST /workflows/:id/archive` | Whole body IS `{workflow}` — no envelope. `200`, idempotent (already-archived re-returns unchanged). One-way — no unarchive route exists.                    |
+| `delete(id)`                | `DELETE /workflows/:id`       | Returns nothing; discards `{ok:true}`. Does **not** catch `409 workflow_not_archived` — see below. Cascade-deletes runs/schedules/subscriptions server-side. |
+| `listRuns(id)`              | `GET /workflows/:id/runs`     | `unwrap<RunSummary[]>(res, "runs")`. `404 unknown_workflow` is an ownership gate.                                                                            |
+| `getRun(runId)`             | `GET /runs/:id`               | `unwrap<RunState>(res, "run")`. `404 unknown_run` covers both "no such run" and "not your workflow" — not discriminated.                                     |
+
+**`list` and `run` are deliberately NOT covered here** — both already exist on the BASE namespace
+(`client.workflows.list()`/`client.workflows.run()`, `src/workflows.ts`), and studio reuses them
+verbatim. Adding a duplicate `list`/`run` under `console.workflows` would give a caller two ways to
+reach the same route — the exact anti-duplication defect this project's own rules flag. **No poll
+loop lives here either**, for the same reason `src/workflows.ts`'s own module doc gives for the base
+surface: "no client-side polling… three wrappers each re-implementing a poll would be three timeout
+policies and three retry-storm bugs to keep in sync." `getRun` is one request, one answer — the
+caller (studio's `lib/workflow-poll.ts`) owns the loop.
+
+**`upsert`'s precondition header is `RequestOptions.headers`'s first real consumer.** `upsert` takes
+an explicit `ifUnmodifiedSince?: string | null` option and translates it into
+`x-w6w-if-unmodified-since` itself — it does not expose a raw `headers` parameter to the caller. The
+header is sent **only when supplied**, mirroring the server's own conditional exactly
+(`admin/workflows.ts`): never as an empty or `"undefined"`/`"null"` string. Passing it and having
+the stored `updatedAt` no longer match answers **`409 workflow_stale`** — recoverable by reloading
+(via `get`) and re-saving. A **different** `409`, **`workflow_conflict`**, means another
+`(tenant,subject)` owns this id — NOT recoverable by reloading. Both share the HTTP status; only the
+`error.code` distinguishes them, and this method does not collapse them into one thing — the caller
+must inspect `code`.
+
+**`delete` does not enforce archive-then-delete — it surfaces the server's refusal.** The server
+requires a workflow be `"archived"` before it can be deleted; deleting one that is not answers
+`409
+workflow_not_archived`, and this method does NOT catch it — it propagates as `ApiError`, a real
+signal the caller must handle. Enforcing the archive-then-delete sequence is not this method's job.
+
+Return shapes — `RunState` (from `getRun`) and `RunSummary` (from `listRuns`) are defined LOCALLY in
+`src/console/workflows.ts`, not the shared `src/types.ts`, mirroring where `Schedule`/`Project`
+live. Field-for-field, relocated from `packages/studio/src/api/types.ts:84-102`, with one deliberate
+deviation: `RunState.error` and `RunState.steps` stay **opaque** (`unknown` /
+`Record<string, unknown>`), matching this package's own documented philosophy for `RunResult`
+(`src/types.ts` — "a client that modelled their internals would be wrong for someone"), rather than
+studio's richer local typing (`{code,message,…}` / `Record<string, StepExecution>`).
+
+None of these six methods take a client-side default-project fallback — they are addressed by
+`wf_…`/`run_…` id (plus `upsert`'s optional explicit `?project=`) — so `WorkflowsHost` needs only
+the transport, mirroring `console.projects`'s/`console.schedules`'s own host shape, not the BASE
+`WorkflowsHost` (`src/workflows.ts`), which additionally reads `config.project` as `list()`'s
+default.
+
+**Console placement here is the same precedent as `console.connections`'s `HITL-10`, not a fresh
+judgment call.** `endpoints.json`'s `outOfScope` array names "all write operations on connections
+and workflows" together, with the identical "in this version" framing HITL-10 already investigated
+for connections. The server routes here (`admin/workflows.ts`) are, like connections, plain
+stateless handlers over an already-resolved request body/precondition header — no interactive flow
+the SDK method itself would need to conduct. HITL-10's resolution transfers directly: console
+placement is safe for studio's own use; it does not by itself justify promotion to the partner
+surface (still needs cli/python parity + a documented partner story, neither of which exists today).

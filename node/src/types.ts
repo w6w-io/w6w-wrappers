@@ -168,8 +168,8 @@ export interface ConnectionSummary {
   updatedAt: string;
 }
 
-/** Lifecycle state of a workflow: an editable draft, or a published live one. */
-export type WorkflowStatus = "draft" | "active";
+/** Lifecycle state of a workflow: an editable draft, a published live one, or archived. */
+export type WorkflowStatus = "draft" | "active" | "archived";
 
 /**
  * A workflow definition, as the list route projects it.
