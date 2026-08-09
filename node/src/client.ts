@@ -22,6 +22,7 @@ import {
   type W6wClientOptions,
 } from "./config.ts";
 import { ConnectionsApi } from "./connections.ts";
+import { ConsoleApi } from "./console/mod.ts";
 import { DocumentsApi } from "./documents.ts";
 import { ConfigError } from "./errors.ts";
 import { type HttpResponse, request, type RequestOptions } from "./http.ts";
@@ -90,6 +91,15 @@ export class W6wClient {
    */
   readonly workflows: WorkflowsApi;
 
+  /**
+   * Console-only namespaces: `console.reliability.list`. Studio-internal and
+   * unstable — not part of the published partner contract, excluded from
+   * `endpoints.json` and from this package's root barrel (`docs/console.md`,
+   * HITL-1). Reached only through `@w6w/sdk/console`'s re-exports, and
+   * constructed with the transport only, exactly like `vars` and `connections`.
+   */
+  readonly console: ConsoleApi;
+
   readonly #fetch: FetchLike;
 
   /**
@@ -122,6 +132,7 @@ export class W6wClient {
     this.vars = new VarsApi(this);
     this.connections = new ConnectionsApi(this);
     this.workflows = new WorkflowsApi(this);
+    this.console = new ConsoleApi(this);
   }
 
   /**
