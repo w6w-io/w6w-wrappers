@@ -15,7 +15,7 @@
  * placeholder used only to prove the transport forwards the string verbatim.
  */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertFalse } from "@std/assert";
 import { W6wClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import type { VaultSecretSummary } from "../../src/console/vault.ts";
@@ -219,3 +219,24 @@ Deno.test("console.vault.delete percent-encodes id via the `path` tag", async ()
 
   assertEquals(c.calls[0].url, "https://api.example.com/vault/sec%201");
 });
+
+Deno.test(
+  "VaultSecretSummary's interface body (read from src/console/vault.ts's own source text) never declares a `value` field",
+  async () => {
+    // Source-level structural check, not a runtime/type check: a fixture
+    // object satisfying a narrower interface also satisfies a wider one
+    // (structural typing), so nothing above this test — which only exercises
+    // JSON fixtures — can prove the TYPE itself never gains a `value` field.
+    // Mirrors the idiom in packages/studio/src/lib/no-direct-api-access.ts,
+    // which reads its own source text rather than trusting runtime behavior.
+    const src = await Deno.readTextFile(new URL("../../src/console/vault.ts", import.meta.url));
+    const match = src.match(/export interface VaultSecretSummary \{([^}]*)\}/);
+    if (!match) {
+      throw new Error("VaultSecretSummary interface not found in src/console/vault.ts");
+    }
+    // Anchored to a line START so a doc comment merely MENTIONING "value"
+    // (the interface's own JSDoc block, and the module docstring, both do)
+    // can never false-positive this gate.
+    assertFalse(/^\s*value\??\s*:/m.test(match[1]));
+  },
+);
