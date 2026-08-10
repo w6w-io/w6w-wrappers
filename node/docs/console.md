@@ -106,17 +106,18 @@ const client = new W6wClient({ baseUrl: "https://api.example.com" }); // no toke
 const { token, user } = await client.console.auth.login("alice", "hunter2");
 ```
 
-Four methods, relocated verbatim from the studio's own API client
-(`packages/studio/src/api/client.ts:249-291`), with the same field-for-field shapes it used
-(`packages/studio/src/api/types.ts:10-82`) — this module does not redesign them, only gives them a
-second home.
+Five methods. `login`, `signup`, `checkAccountSlug` and `createAccount` are relocated verbatim from
+the studio's own API client (`packages/studio/src/api/client.ts:249-291`), with the same
+field-for-field shapes it used (`packages/studio/src/api/types.ts:10-82`) — this module does not
+redesign them, only gives them a second home. `getMe` is genuinely new here (see below).
 
-| Method                      | Route                                   | Public/authenticated                                                                          |
-| --------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `login(username, password)` | `POST /auth/login`                      | **PUBLIC** — sends no bearer (`requireAuth: false`), even on a client already holding a token |
-| `signup(input)`             | `POST /auth/signup`                     | **PUBLIC** — sends no bearer (`requireAuth: false`)                                           |
-| `checkAccountSlug(name)`    | `GET /auth/signup/slug-available?name=` | **PUBLIC** — sends no bearer (`requireAuth: false`)                                           |
-| `createAccount(name, slug)` | `POST /accounts`                        | **AUTHENTICATED** — default `requireAuth`, re-issues the session with the new account's claim |
+| Method                      | Route                                   | Public/authenticated                                                                               |
+| --------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `login(username, password)` | `POST /auth/login`                      | **PUBLIC** — sends no bearer (`requireAuth: false`), even on a client already holding a token      |
+| `signup(input)`             | `POST /auth/signup`                     | **PUBLIC** — sends no bearer (`requireAuth: false`)                                                |
+| `checkAccountSlug(name)`    | `GET /auth/signup/slug-available?name=` | **PUBLIC** — sends no bearer (`requireAuth: false`)                                                |
+| `createAccount(name, slug)` | `POST /accounts`                        | **AUTHENTICATED** — default `requireAuth`, re-issues the session with the new account's claim      |
+| `getMe()`                   | `GET /auth/me`                          | **AUTHENTICATED** — default `requireAuth`; returns `ConsoleMe`, not the published `Me` — see below |
 
 The three public routes are registered server-side ABOVE `app.use("*", authGuard)`
 (`packages/server/packages/api/data/signup.ts:23-41`, `id/auth.ts:22-55`) and must never read a
@@ -126,10 +127,19 @@ every request, and `login` is how a caller gets a token in the first place. `cre
 returned token is minted `role: "user"` unconditionally, so adopting it downgrades an operator —
 this namespace never writes the session itself, the caller decides.
 
-**`getMe` is not part of this namespace.** `client.me()` already exists (`src/me.ts`, base surface)
-and covers `GET /auth/me` exactly — do not look for it under `console.auth`.
+**`getMe` IS part of this namespace, and returns `ConsoleMe`, not the published `Me`.**
+`GET /auth/me` answers additively with a studio-internal capability field, `tenantAdmin: boolean` —
+**required**, not optional, on `ConsoleMe`: an older server that omits the key resolves `undefined`
+at runtime, which is falsy, so every `if (me.tenantAdmin)` fails CLOSED rather than granting by
+accident. `Me` (`src/types.ts`) is **published contract** — `endpoints.json` names it as the `me`
+operation's `returns` — so adding `tenantAdmin` there would trigger the publish-in-lockstep release
+across node, cli and python for what is a studio-only authorization hint; `ConsoleMe` is the
+studio-internal superset instead. `client.me()` (`src/me.ts`, base surface) still exists and still
+covers `GET /auth/me` exactly for the published shape — both read the same route and differ only in
+what they promise about the body. Use `client.me()` for the published `Me`; use
+`client.console.auth.getMe()` when the caller needs `tenantAdmin`.
 
-None of these four call `unwrap()` — every response body is flat, no envelope key, exactly like
+None of these five call `unwrap()` — every response body is flat, no envelope key, exactly like
 `console.reliability.list`.
 
 ## `console.dashboard.stats(params?)`
@@ -295,6 +305,15 @@ Relocated verbatim from `packages/studio/src/api/client.ts:235-393`, which the f
 `AppSummary`, `ActionDef`, `AuthDef`, `TriggerDef`, `HealthCheckMeta`, `AppHealthStatus`,
 `AppDetail`, `PreviewSourceResponse`, `ImportResponse`, `RefreshAppResponse` and
 `OAuthConfigSummary` shapes are still pinned by `packages/studio/src/api/types.ts`.
+
+**`AppSummary` carries two additive fields beyond that pin**, both optional:
+`supportsOAuth?: boolean` (true when the app declares an `oauth2` auth method, server-computed from
+`app.latest.auth` by `summarize`, `packages/server/packages/api/wire-summary.ts:81` — no client ever
+re-derives it) and `owner?: { tenant: string; subject: string }` (ownership sentinels: neither set
+means global, `tenant` set with an empty `subject` means tenant-owned, both set means user-owned;
+projected server-side by `wireOwner`, `wire-summary.ts:70-72`). `owner` is optional on this type
+even though the server always sends it, so the type is also satisfied by a caller-written literal
+and by an older host.
 
 **`listApiCalls` is deliberately NOT covered here** — it lives under the same `client.ts` comment
 block but has no named apps-domain consumer (its only caller is reliability's drill-down page); it
@@ -809,3 +828,53 @@ type, rather than declaring a second, parallel interface.
 
 `api-calls` is scoped to the caller by the server's own repo, not by a `project` query param — so
 `ApiCallsHost` needs only the transport, mirroring `VarsHost`/`ProjectsHost`, not `DocumentsHost`.
+
+## `console.tenantOAuthApps.*`
+
+```ts
+import { W6wClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6wClient();
+const { configs, callbackUrl } = await client.console.tenantOAuthApps.list();
+// Register `callbackUrl` with the provider — never assemble it client-side.
+await client.console.tenantOAuthApps.put("sendgrid", "oauth2", { clientId: "abc" });
+await client.console.tenantOAuthApps.remove("sendgrid", "oauth2");
+```
+
+Three methods: a tenant administrator's own OAuth client overrides for the apps their tenant
+connects to. The tenant is never a parameter — these routes are scoped by the caller's own bearer
+(the tenant claim) plus a server-side tenant-admin check, unlike the operator family
+(`GET`/`PUT`/`DELETE /tenants/:id/oauth-app…`), which takes the tenant in the path.
+
+| Method                       | Route                                      | Notes                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list()`                     | `GET /tenant/oauth-apps`                   | Returns the body VERBATIM — no `unwrap()`. `callbackUrl` rides beside `configs`; unwrapping just `configs` would silently drop it.                    |
+| `put(appId, authKey, input)` | `PUT /tenant/oauth-app/:appId/:authKey`    | **Body built by omission — see below.** No query string is ever set. Reads `res.body.config` directly (server answers `201`); never calls `unwrap()`. |
+| `remove(appId, authKey)`     | `DELETE /tenant/oauth-app/:appId/:authKey` | Resolves `void`, discarding `{ok: true}`, same convention as `console.projects.delete`/`console.schedules.delete`.                                    |
+
+**`put` builds its request body by OMISSION, key by key — an omitted field never reaches the wire.**
+`SetTenantOAuthAppInput` has four optional keys (`clientId`, `clientSecret`, `extra`, `disabled`);
+the server merges whichever ones are present over the stored row and leaves everything else
+untouched. This is a genuine RUNTIME allowlist, not merely a compile-time one: even a caller that
+defeats the type (`as unknown as SetTenantOAuthAppInput`) and passes `redirectUri` or `force` cannot
+get either one onto the wire — neither key is ever read by the body builder. Separately, `put` sets
+**no query string at all** on the request, so `?force=true` is unreachable by construction — there
+is no code path that could add it, not merely an unwritten one. Neither `redirectUri` (the callback
+URL is derived server-side) nor `force` (the operator's affordance) is offered to a tenant admin.
+
+**`clientSecret: ""` IS carried to the wire verbatim, and it is destructive server-side — an omitted
+`clientSecret` is not.** Measured directly against the real request body (not inferred):
+`put(..., { clientSecret: "" })` produces `{"clientSecret":""}` on the wire; `put(..., {})` and
+`put(..., { clientSecret: undefined })` both produce `{}`, so an omitted `clientSecret` never
+reaches the request at all. On the server, `hasClientSecret` is computed as `clientSecret !== null`,
+so an empty string satisfies the enabled-override invariant and **silently overwrites the stored
+secret with an empty one** — no error, unlike the neighbouring `clientId: ""` and `redirectUri`
+cases, which fail loudly. This is a caller obligation, not something this method enforces: **a
+caller must omit `clientSecret` rather than send `""`** when it does not intend to change the stored
+secret — `toSetBody` (`src/console/tenant-oauth-apps.ts:150-157`) forwards whatever it is given
+verbatim and refuses nothing.
+
+None of `list`/`put`/`remove` calls this package's `unwrap()` helper: `list` returns the whole body
+(`callbackUrl` rides beside `configs`, so unwrapping just `configs` would drop it), `put` reaches
+one level in itself (`res.body.config`), and `remove` discards the body entirely.

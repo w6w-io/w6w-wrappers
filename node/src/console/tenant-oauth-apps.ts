@@ -124,7 +124,11 @@ export interface TenantOAuthAppsResponse {
 export interface SetTenantOAuthAppInput {
   /** The OAuth client id. `null` clears it. */
   clientId?: string | null;
-  /** The OAuth client secret, write-only. `null` clears it. Never sent as `""`. */
+  /**
+   * The OAuth client secret, write-only. `null` clears it. Sending `""` IS
+   * carried to the wire and IS destructive (silently overwrites the stored
+   * secret) — omit this key instead of sending `""` when not changing it.
+   */
   clientSecret?: string | null;
   /** Provider-specific extras. `null` clears them to `{}`. */
   extra?: Record<string, unknown> | null;
