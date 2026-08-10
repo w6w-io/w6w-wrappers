@@ -3,12 +3,17 @@
  *
  * No case here needs a live server (`docs/implementation.md` §9). Beyond the
  * per-operation assertions, this suite pins the two things that are new here
- * relative to `console.reliability`: the server's four response shapes carry
- * **no envelope key** (so each method must return the body verbatim rather
- * than calling `unwrap()`), and three of the four methods must send **no**
+ * relative to `console.reliability`: the server's response shapes carry **no
+ * envelope key** (so each method must return the body verbatim rather than
+ * calling `unwrap()`), and three of the five methods must send **no**
  * `authorization` header, even on a client constructed with a token
- * (`RequestOptions.requireAuth`, HITL-9) — the fourth, `createAccount`, is
- * authenticated and must send the bearer like any other request.
+ * (`RequestOptions.requireAuth`, HITL-9) — the other two, `createAccount` and
+ * `getMe`, are authenticated and must send the bearer like any other request.
+ *
+ * `getMe` additionally carries the studio-internal capability field
+ * `tenantAdmin` (`plan-B.md` § WIRE PINS W1/W9) that the published `Me` does
+ * not declare, so its cases pin the field's presence on the resolved value and
+ * the bearer on the recorded call.
  */
 
 import { assertEquals, assertStringIncludes } from "@std/assert";
@@ -16,6 +21,7 @@ import { W6wClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import type {
   AccountWire,
+  ConsoleMe,
   CreateAccountResponse,
   LoginResponse,
   SignupResponse,
@@ -109,11 +115,22 @@ const CREATE_ACCOUNT: CreateAccountResponse = {
   expiresIn: 3600,
 };
 
-Deno.test("console.auth: all four operations are functions on a constructed client", () => {
+/** The console projection of `GET /auth/me` — a superset of the published `Me`. */
+const ME: ConsoleMe = {
+  tenant: "ten_1",
+  subject: "usr_1",
+  account: "acc_1",
+  role: "admin",
+  invokeBaseUrl: "https://api.example.com",
+  tenantAdmin: true,
+  versions: { composition: "server@1a2b3c4" },
+};
+
+Deno.test("console.auth: all five operations are functions on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
   const c = new W6wClient({ baseUrl: "https://api.example.com", token: "t" });
-  for (const name of ["login", "signup", "checkAccountSlug", "createAccount"] as const) {
+  for (const name of ["login", "signup", "checkAccountSlug", "createAccount", "getMe"] as const) {
     assertEquals(typeof c.console.auth[name], "function", `console.auth.${name} is missing`);
   }
 });
@@ -236,6 +253,69 @@ Deno.test(
     assertEquals(res2, SIGNUP);
   },
 );
+
+Deno.test(
+  "console.auth.getMe GETs /auth/me and resolves the flat body VERBATIM — no unwrap()",
+  async () => {
+    const c = client(() => json(ME));
+
+    const res = await c.client.console.auth.getMe();
+
+    // Verbatim: this method adds nothing to the body. `client.me()` (the base
+    // surface) fills in `versions.wrapper` from this package's own VERSION —
+    // a mutant that routed this method through `fetchMe` would show up here as
+    // an extra `wrapper` key.
+    assertEquals(res, ME);
+    assertEquals(res.versions, { composition: "server@1a2b3c4" });
+    assertEquals(c.calls.length, 1);
+    assertEquals(c.calls[0].method, "GET");
+    assertEquals(c.calls[0].url, "https://api.example.com/auth/me");
+    assertEquals(c.calls[0].body, null);
+  },
+);
+
+Deno.test("console.auth.getMe carries tenantAdmin through, both ways", async () => {
+  const c = client(() => json(ME));
+  assertEquals((await c.client.console.auth.getMe()).tenantAdmin, true);
+
+  const c2 = client(() => json({ ...ME, tenantAdmin: false }));
+  assertEquals((await c2.client.console.auth.getMe()).tenantAdmin, false);
+
+  // An older host that never learned the key: `undefined` is falsy, so every
+  // `if (me.tenantAdmin)` fails CLOSED. Pinned because it is the whole reason
+  // the field is declared required rather than optional.
+  const { tenantAdmin: _drop, ...withoutField } = ME;
+  const c3 = client(() => json(withoutField));
+  // Widened deliberately: the type says `boolean`, the wire may say nothing.
+  const older: { tenantAdmin?: boolean } = await c3.client.console.auth.getMe();
+  assertEquals(older.tenantAdmin, undefined);
+});
+
+/**
+ * `tenantAdmin` is REQUIRED on {@linkcode ConsoleMe}, and this is the only
+ * thing that pins it: every runtime case above still passes if the field is
+ * quietly made optional (measured — see this task's
+ * `artifacts/TB3-gate-strength.sh`, mutant M7). A client forced to branch on
+ * `undefined` is a client that will branch wrong; the wire may omit the key
+ * (an older host), and that case is handled by `undefined` being falsy at
+ * runtime, not by relaxing the type a caller writes against.
+ */
+// @ts-expect-error — `tenantAdmin` is required; making it optional unpins the whole rule.
+const _meWithoutCapability: ConsoleMe = { tenant: "t", subject: "s", account: "a", role: "r" };
+
+Deno.test("ConsoleMe requires tenantAdmin — the type-level guard above is live", () => {
+  assertEquals(typeof _meWithoutCapability, "object");
+});
+
+Deno.test("console.auth.getMe DOES send the bearer — it is not a public route", async () => {
+  const c = client(() => json(ME));
+
+  await c.client.console.auth.getMe();
+
+  // `requireAuth` must be left at its default. A `requireAuth: false`
+  // copy-pasted from `login` would make every call a 401 server-side.
+  assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
+});
 
 Deno.test(
   "checkAccountSlug's query param is encoded via `query`, not string concatenation",
