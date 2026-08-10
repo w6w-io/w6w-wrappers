@@ -23,8 +23,20 @@
  * `requireAuth: false` it could never be called by a tokenless client, since
  * `requireToken` would raise before the request ever reached `fetch`.
  *
- * `getMe` is deliberately NOT modeled here: `client.me()` already exists
- * (`../me.ts`, base surface) and covers `GET /auth/me` exactly.
+ * **`getMe` IS modeled here now — that changed, and this is why.** This file
+ * previously said it was deliberately not modeled, because `client.me()`
+ * (`../me.ts`, base surface) covered `GET /auth/me` exactly. It no longer does.
+ * The route answers additively with a **studio-internal capability field**,
+ * `tenantAdmin` (`plan-B.md` § WIRE PINS W1/W9), and the published `Me`
+ * (`../types.ts:104-123`) deliberately does not carry it: `Me` is part of the
+ * published partner contract — `endpoints.json` names it as the `me`
+ * operation's `returns` — so declaring a field there would be a
+ * publish-in-lockstep change across every language wrapper (CLAUDE.md), for
+ * what is a studio-only authorization hint. The console surface is exactly the
+ * place a studio-only projection belongs, so the capability is typed on
+ * {@linkcode ConsoleMe} instead, and `client.me()` stays untouched and keeps
+ * returning the published shape. Both read the same route; they differ only in
+ * what they promise about the body.
  *
  * **Response shapes are flat, no envelope key**, mirroring
  * `console/reliability.ts`'s own pattern (verified against the server route
@@ -117,11 +129,50 @@ export interface CreateAccountResponse {
 }
 
 /**
+ * `GET /auth/me` as the console reads it (W1/W9) — a **superset** of the
+ * published `Me` (`../types.ts:104-123`), carrying the studio-internal
+ * capability field that shape deliberately does not declare. See this module's
+ * header for why the field lives here and not there.
+ *
+ * The published contract already requires clients to tolerate unknown keys on
+ * this route, so widening it server-side broke no partner; this type simply
+ * names one of those keys for the one client that acts on it.
+ */
+export interface ConsoleMe {
+  /** Tenant the caller belongs to. */
+  tenant: string;
+  /** The authenticated subject (a user or a machine principal). */
+  subject: string;
+  /** Account the caller is acting in. */
+  account: string;
+  /** The caller's role within that account. */
+  role: string;
+  /** The base callable URLs are rendered against. Present on this host; do not derive URLs from it. */
+  invokeBaseUrl?: string;
+  /**
+   * Server-decided: may this caller administer its tenant? Studio-internal;
+   * not on the published `Me`.
+   *
+   * **Required, not optional, on purpose.** A client forced to branch on
+   * `undefined` is a client that will branch wrong; an older server that omits
+   * the key yields `undefined` at runtime, which is falsy, so every
+   * `if (me.tenantAdmin)` fails CLOSED — the capability is denied, never
+   * accidentally granted.
+   */
+  tenantAdmin: boolean;
+  /** Component versions, as the published `Me` documents them. Optional and open. */
+  versions?: Record<string, string>;
+}
+
+/**
  * The `console.auth` namespace on a `W6wClient`.
  *
  * @example
  * ```ts
  * const { token } = await client.console.auth.login("user", "pass");
+ * const me = await client.console.auth.getMe();
+ * if (me.tenantAdmin) { // tenant-admin surface
+ * }
  * ```
  */
 export class AuthApi {
@@ -215,6 +266,31 @@ export class AuthApi {
       method: "POST",
       path: "/accounts",
       body: { name, slug },
+    });
+    return res.body;
+  }
+
+  /**
+   * Read the caller's identity **and its tenant-admin capability**.
+   *
+   * AUTHENTICATED — the default `requireAuth` applies, unlike `login`,
+   * `signup` and `checkAccountSlug`. `/auth/me` reads the principal, so a
+   * request without a bearer is a `401`, and a tokenless client raises
+   * `ConfigError` before `fetch` is ever called.
+   *
+   * Same route as the base surface's `client.me()`; this one promises the
+   * console projection ({@linkcode ConsoleMe}) instead of the published `Me`.
+   * Unlike `client.me()` it does **not** fill in a `versions.wrapper` entry
+   * from this package's own `VERSION` (`../me.ts` does that): what this returns
+   * is the server's body, verbatim.
+   *
+   * @returns The caller's identity, plus `tenantAdmin`.
+   * @throws {ApiError} On any non-2xx, e.g. `401` when the bearer is missing or expired.
+   */
+  async getMe(): Promise<ConsoleMe> {
+    const res = await this.#host.request<ConsoleMe>({
+      method: "GET",
+      path: "/auth/me",
     });
     return res.body;
   }

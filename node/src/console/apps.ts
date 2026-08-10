@@ -101,6 +101,25 @@ export interface AppSummary {
   healthCheckCount?: number;
   /** True when at least one declared health check is app-scoped and needs no credential. */
   hasPublicHealthCheck?: boolean;
+  /**
+   * True when the app declares an `oauth2` auth method. Server-computed from
+   * `app.latest.auth` by `summarize` (`packages/server/packages/api/wire-summary.ts:81`),
+   * so no client ever re-derives it and no caller needs the per-app
+   * `GET /apps/:id/auths` read just to know whether OAuth is on the table.
+   */
+  supportsOAuth?: boolean;
+  /**
+   * Ownership sentinels: neither set -> global · `tenant` set, `subject` empty
+   * -> tenant-owned · both -> user-owned. Projected server-side by `wireOwner`
+   * (`wire-summary.ts:70-72`), which is why both members are plain strings here
+   * and never `undefined`.
+   *
+   * **Optional on this type even though the server always sends it**
+   * (`WireAppSummary.owner` at `wire-summary.ts:57` is required and has shipped
+   * since T2.2): the type is also satisfied by a literal a caller writes and by
+   * an older host, and declaring it required would break both.
+   */
+  owner?: { tenant: string; subject: string };
 }
 
 /**
