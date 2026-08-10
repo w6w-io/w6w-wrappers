@@ -19,8 +19,15 @@
 import { type FetchLike, requireToken, type ResolvedConfig } from "./config.ts";
 import { ApiError } from "./errors.ts";
 
-/** HTTP methods this surface uses. */
-export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+/**
+ * HTTP methods this surface uses.
+ *
+ * `PUT` was added by T2.2.1 (BLK-3): `console.apps.upsertOAuthConfig` relocates
+ * `client.ts`'s `upsertAppOAuthConfig`, which sends `PUT
+ * /apps/:id/oauth-config/:authKey` — the first operation in this package to
+ * need it. Purely additive to the union; no existing caller's behavior changes.
+ */
+export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 /**
  * Query parameters. `undefined` values are dropped, so an optional argument
@@ -42,6 +49,29 @@ export interface RequestOptions {
   query?: QueryParams;
   /** Request body. Serialised as JSON when present; omit it for a bodiless request. */
   body?: unknown;
+  /**
+   * Extra headers to send with this request. Applied as the **base** the
+   * transport builds on, never the other way around: the bearer
+   * (`authorization`) and, when a body is present, `content-type` are set
+   * *after* this base, so a caller-supplied entry with either of those names
+   * can never override what this transport sets. Any other header name passes
+   * through untouched.
+   */
+  headers?: Record<string, string>;
+  /**
+   * Whether this request needs a bearer. Defaults to `true` — omitting the
+   * field behaves exactly as it always has.
+   *
+   * Set `false` for the handful of routes that are public server-side (self-
+   * serve login/signup) and must never send one: when `false`,
+   * {@linkcode requireToken} is never called and no `authorization` header is
+   * set, even when the client holds a token. This is the ONLY way
+   * `console.auth.login` can work at all — a client with no token configured
+   * (the normal case pre-login) would otherwise hit `requireToken`'s
+   * `ConfigError` on every request, and `login` is how a caller gets a token
+   * in the first place.
+   */
+  requireAuth?: boolean;
 }
 
 /**
@@ -154,10 +184,19 @@ export async function request<T>(
   options: RequestOptions,
 ): Promise<HttpResponse<T>> {
   const url = buildUrl(config, options);
-  const headers = new Headers();
+  // The caller-supplied headers are the BASE the transport builds on, never the
+  // reverse: `authorization` and `content-type` are set below, after this base,
+  // so nothing a caller passes here can shadow the bearer this transport
+  // attaches or the content-type it advertises for a JSON body.
+  const headers = new Headers(options.headers);
   // Resolved per request rather than at construction: a client with no token is
   // constructible (so a CLI's --help works offline) and fails here instead.
-  headers.set("authorization", `Bearer ${requireToken(config)}`);
+  // Skipped entirely when `requireAuth: false` — not just left unset, but never
+  // even attempted, so a tokenless client can call a public route without
+  // `requireToken` raising first.
+  if (options.requireAuth !== false) {
+    headers.set("authorization", `Bearer ${requireToken(config)}`);
+  }
 
   const hasBody = options.body !== undefined;
   if (hasBody) headers.set("content-type", "application/json");

@@ -269,6 +269,113 @@ Deno.test("query parameters are encoded, and undefined ones are dropped", () => 
   );
 });
 
+Deno.test(
+  "options.headers is the BASE the transport builds on — it can never override authorization or content-type",
+  async () => {
+    const fake = fakeFetch(() => json({ ok: true }));
+
+    const res = await request<{ ok: boolean }>(CONFIG, fake.fetch, {
+      method: "POST",
+      path: "/vars",
+      body: { a: 1 },
+      headers: {
+        "x-w6w-if-unmodified-since": "abc",
+        authorization: "Bearer evil",
+        "content-type": "text/plain",
+      },
+    });
+
+    assertEquals(res.body, { ok: true });
+    // The caller-supplied header passes through untouched…
+    assertEquals(fake.calls[0].headers.get("x-w6w-if-unmodified-since"), "abc");
+    // …but never shadows what this transport itself sets. `CONFIG` is built
+    // with token "tok_1" (see above), so the real bearer must win.
+    assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_1");
+    assertEquals(fake.calls[0].headers.get("content-type"), "application/json");
+  },
+);
+
+Deno.test(
+  "options.headers passes an arbitrary header through untouched when the transport sets nothing to conflict with it",
+  async () => {
+    const fake = fakeFetch(() => json({ ok: true }));
+
+    // No body on this request, so the transport's own conditional
+    // `content-type` set never runs — a caller-supplied content-type here is
+    // not shadowing anything and passes through as ordinary base content.
+    await request(CONFIG, fake.fetch, {
+      method: "GET",
+      path: "/vars",
+      headers: { "content-type": "text/plain" },
+    });
+
+    assertEquals(fake.calls[0].headers.get("content-type"), "text/plain");
+  },
+);
+
+Deno.test(
+  "requireAuth: false sends NO authorization header, even on a config carrying a token",
+  async () => {
+    const fake = fakeFetch(() => json({ token: "tok_new" }));
+
+    const res = await request<{ token: string }>(CONFIG, fake.fetch, {
+      method: "POST",
+      path: "/auth/login",
+      body: { username: "u", password: "p" },
+      requireAuth: false,
+    });
+
+    assertEquals(res.body, { token: "tok_new" });
+    // Not an empty header, not "Bearer null" — absent entirely.
+    assertEquals(fake.calls[0].headers.has("authorization"), false);
+    assertEquals(fake.calls[0].headers.get("authorization"), null);
+  },
+);
+
+Deno.test("requireAuth omitted behaves exactly as before — the bearer is sent", async () => {
+  const fake = fakeFetch(() => json({ ok: true }));
+
+  await request(CONFIG, fake.fetch, { method: "GET", path: "/vars" });
+
+  assertEquals(fake.calls[0].headers.get("authorization"), "Bearer tok_1");
+});
+
+Deno.test(
+  "requireAuth: false on a TOKENLESS config never even attempts requireToken — resolves, not ConfigError",
+  async () => {
+    const unauthenticated = resolveConfig({ baseUrl: "https://api.example.com", token: "" });
+    const fake = fakeFetch(() => json({ token: "tok_new" }));
+
+    const res = await request<{ token: string }>(unauthenticated, fake.fetch, {
+      method: "POST",
+      path: "/auth/login",
+      body: { username: "u", password: "p" },
+      requireAuth: false,
+    });
+
+    assertEquals(res.body, { token: "tok_new" });
+    assertEquals(fake.calls[0].headers.get("authorization"), null);
+  },
+);
+
+Deno.test(
+  "RequestOptions.headers ordering still holds when requireAuth is also set — no interaction bug",
+  async () => {
+    const fake = fakeFetch(() => json({ ok: true }));
+
+    await request(CONFIG, fake.fetch, {
+      method: "POST",
+      path: "/auth/login",
+      body: { username: "u", password: "p" },
+      headers: { "x-custom": "1" },
+      requireAuth: false,
+    });
+
+    assertEquals(fake.calls[0].headers.get("x-custom"), "1");
+    assertEquals(fake.calls[0].headers.get("authorization"), null);
+  },
+);
+
 Deno.test("the client defaults to globalThis.fetch, and says so when there is none", async () => {
   const original = globalThis.fetch;
   try {
