@@ -32,6 +32,7 @@ import { SavedTestsApi } from "./saved-tests.ts";
 import { SchedulesApi } from "./schedules.ts";
 import { StepTestsApi } from "./step-tests.ts";
 import { SubscriptionsApi } from "./subscriptions.ts";
+import { TenantOAuthAppsApi } from "./tenant-oauth-apps.ts";
 import { TokensApi } from "./tokens.ts";
 import { VaultApi } from "./vault.ts";
 import { WorkflowsApi } from "./workflows.ts";
@@ -40,6 +41,7 @@ export { AuthApi } from "./auth.ts";
 export type {
   AccountWire,
   AuthHost,
+  ConsoleMe,
   CreateAccountResponse,
   LoginResponse,
   SignupInput,
@@ -138,6 +140,13 @@ export type {
 } from "./subscriptions.ts";
 export { ApiCallsApi } from "./api-calls.ts";
 export type { ApiCallsFilter, ApiCallsHost } from "./api-calls.ts";
+export { TenantOAuthAppsApi } from "./tenant-oauth-apps.ts";
+export type {
+  SetTenantOAuthAppInput,
+  TenantOAuthAppsHost,
+  TenantOAuthAppsResponse,
+  TenantOAuthAppSummary,
+} from "./tenant-oauth-apps.ts";
 
 /**
  * The slice of `W6wClient` the console namespace group needs: the transport,
@@ -192,6 +201,8 @@ export class ConsoleApi {
   readonly subscriptions: SubscriptionsApi;
   /** `console.apiCalls.*`. */
   readonly apiCalls: ApiCallsApi;
+  /** `console.tenantOAuthApps.*` — the caller's OWN tenant, never a tenant of its choosing. */
+  readonly tenantOAuthApps: TenantOAuthAppsApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
@@ -213,5 +224,6 @@ export class ConsoleApi {
     this.endpoints = new EndpointsApi(host);
     this.subscriptions = new SubscriptionsApi(host);
     this.apiCalls = new ApiCallsApi(host);
+    this.tenantOAuthApps = new TenantOAuthAppsApi(host);
   }
 }

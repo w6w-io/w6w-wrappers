@@ -178,6 +178,61 @@ Deno.test("console.apps.list stops when the server sends no nextCursor", async (
   assertEquals(c.calls.length, 1);
 });
 
+Deno.test(
+  "console.apps.list carries supportsOAuth and owner through untouched",
+  async () => {
+    // The server always sends both (`api/wire-summary.ts:81` computes
+    // `supportsOAuth`; `owner` at `:57` has shipped since T2.2). `list` must
+    // pass the summaries through, not project a field list of its own — a
+    // mutant that re-mapped each page would drop exactly these two.
+    const GLOBAL: AppSummary = {
+      ...APP_A,
+      supportsOAuth: true,
+      owner: { tenant: "", subject: "" },
+    };
+    const TENANT_OWNED: AppSummary = {
+      ...APP_B,
+      supportsOAuth: false,
+      owner: { tenant: "ten_1", subject: "" },
+    };
+    const USER_OWNED: AppSummary = {
+      ...APP_B,
+      id: "app_3",
+      supportsOAuth: true,
+      owner: { tenant: "ten_1", subject: "usr_1" },
+    };
+    const c = client(() => json({ apps: [GLOBAL, TENANT_OWNED, USER_OWNED] }));
+
+    const res = await c.client.console.apps.list();
+
+    assertEquals(res, [GLOBAL, TENANT_OWNED, USER_OWNED]);
+    // The sentinel semantics the doc comment states, exercised over real
+    // values: only an app with an EMPTY `owner.tenant` is global, and the
+    // tenant OAuth route accepts nothing else.
+    assertEquals(
+      res.filter((a) => a.owner?.tenant === "" && a.supportsOAuth).map((a) => a.id),
+      ["app_1"],
+    );
+  },
+);
+
+Deno.test("AppSummary's two new fields are OPTIONAL — an older host still satisfies it", () => {
+  // APP_A/APP_B above already carry neither field; this states the rule the
+  // rest of the suite depends on out loud, and would fail to COMPILE (not to
+  // run) the moment either field were declared required.
+  const _older: AppSummary = {
+    id: "app_9",
+    displayName: "Legacy",
+    version: "0.1.0",
+    description: "",
+    categories: [],
+    sourceRef: "file:./legacy",
+    importedAt: "2026-07-01T00:00:00.000Z",
+  };
+  assertEquals(_older.supportsOAuth, undefined);
+  assertEquals(_older.owner, undefined);
+});
+
 // --- get / getActions / getHealth: three reads of one GET /apps/:id --------
 
 Deno.test("console.apps.get resolves the WHOLE AppDetail body", async () => {
