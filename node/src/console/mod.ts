@@ -87,6 +87,8 @@ export type {
   HealthSeverity,
   HealthState,
   ImportResponse,
+  InvokeOptions,
+  InvokeStartState,
   OAuthConfigSummary,
   PackEntryPreview,
   PackPreviewInfo,
