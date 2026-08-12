@@ -79,6 +79,29 @@ export interface AppsHost {
  * `packages/studio/src/api/types.ts:10-32` — this module does not redesign
  * the shape, only gives it a second home.
  */
+/**
+ * The incoming state a single-step test is run against — what the upstream
+ * steps last produced. The server projects it onto the scope roots an
+ * `ExprValue` reads (`steps.<id>.output`, `trigger.event`), so a step whose
+ * params reference an upstream step resolves them instead of getting `""`.
+ *
+ * Deliberately loose about `output`: it is whatever that step returned.
+ */
+export interface InvokeStartState {
+  steps?: Record<string, { output?: unknown }>;
+  trigger?: { event?: unknown };
+}
+
+/** Options for {@link AppsNamespace.invoke}. */
+export interface InvokeOptions {
+  /** Run the action with this connection; omitted, the server picks one. */
+  connectionId?: string;
+  /** Which project's vars and documents `ExprValue` params resolve against. */
+  project?: string;
+  /** Upstream state to resolve `steps.<id>.output` / `trigger.event` against. */
+  state?: InvokeStartState;
+}
+
 export interface AppSummary {
   id: string;
   displayName: string;
@@ -737,16 +760,27 @@ export class AppsApi {
   /**
    * Invoke one of an app's actions.
    *
-   * No studio-page caller, but this method's shape must exactly match
-   * `W6wApi.invokeAction`'s signature on the `@w6w/ui` facade
-   * (`packages/ui/src/provider.tsx:137-142`) as far as this wire call
-   * reaches — the facade's `opts` also carries `project`/`state`, a superset
-   * this method does not model (bridging that is a different task's job).
+   * This method's shape must exactly match `W6wApi.invokeAction`'s signature on
+   * the `@w6w/ui` facade (`packages/ui/src/provider.tsx`). It now models the
+   * WHOLE of that `opts` — `project` and `state` included.
+   *
+   * **They are not decoration, and modelling only `connectionId` was a live
+   * bug.** `params` may contain unresolved `ExprValue` envelopes, which the
+   * server resolves against an ambient scope built from exactly these two
+   * fields (`invoke.ts` → `buildAmbientScope`): `state` seeds
+   * `steps.<id>.output` and `trigger.event`, `project` chooses which project's
+   * vars and documents are in scope. Dropped, every
+   * `{{ steps.<id>.output.<field> }}` in a step test resolves to the empty
+   * string and the action fails on a required param it was visibly given — the
+   * editor's own preview resolves locally and shows the right value, so the
+   * failure reads as an app bug rather than a lost field.
    *
    * @param appId - The app id.
    * @param actionKey - The action's key, as declared by the app's manifest.
    * @param params - The action's parameters, forwarded verbatim.
-   * @param opts - Optional `connectionId` to run the action with; omitted, the server picks.
+   * @param opts - `connectionId` to run with (omitted, the server picks);
+   *   `project` to scope vars/documents to; `state` to resolve upstream
+   *   references against.
    * @returns The whole response body — no envelope key to peel.
    * @throws {ApiError} On any non-2xx, including an action's own failure (`424`).
    */
@@ -754,7 +788,7 @@ export class AppsApi {
     appId: string,
     actionKey: string,
     params: Record<string, unknown>,
-    opts: { connectionId?: string } = {},
+    opts: InvokeOptions = {},
   ): Promise<{ value: unknown; logs?: string[]; apiCalls?: ApiCallRecord[] }> {
     const res = await this.#host.request<
       { value: unknown; logs?: string[]; apiCalls?: ApiCallRecord[] }

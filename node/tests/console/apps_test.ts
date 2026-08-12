@@ -481,6 +481,40 @@ Deno.test("console.apps.invoke sends { params, ...opts } verbatim", async () => 
   assertEquals(JSON.parse(c.calls[0].body ?? "null"), { params: { a: 1 }, connectionId: "conn_1" });
 });
 
+// `project` and `state` are not decoration: the server resolves any ExprValue
+// left in `params` against a scope built from exactly those two (`invoke.ts` ->
+// `buildAmbientScope`). Modelling only `connectionId` here — which this method
+// did until 2026-08-11 — silently drops them, and every
+// `{{ steps.<id>.output.<field> }}` in a step test resolves to "" while the
+// editor's local preview still shows the right value. Assert the WHOLE body, so
+// a dropped key is a failure rather than an absence nobody looks for.
+Deno.test("console.apps.invoke forwards project and state, not just connectionId", async () => {
+  const c = client(() => json({ value: null }));
+  const state = { steps: { gate_1: { output: { email: "a@b.com" } } } };
+
+  await c.client.console.apps.invoke("app_1", "send", { a: 1 }, {
+    connectionId: "conn_1",
+    project: "prj_9",
+    state,
+  });
+
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
+    params: { a: 1 },
+    connectionId: "conn_1",
+    project: "prj_9",
+    state,
+  });
+});
+
+Deno.test("console.apps.invoke carries state alone, with no connection", async () => {
+  const c = client(() => json({ value: null }));
+  const state = { trigger: { event: { id: 7 } } };
+
+  await c.client.console.apps.invoke("app_1", "send", {}, { state });
+
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { params: {}, state });
+});
+
 Deno.test("console.apps.preview sends { source } with no refresh key when opts.refresh is omitted", async () => {
   const c = client(() => json({ kind: "app", sourceRef: "s", app: {} }));
 
