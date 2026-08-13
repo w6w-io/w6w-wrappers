@@ -145,8 +145,15 @@ jobs:
       - name: react — its own suite, against that build
         working-directory: react
         run: |
-          npm install
+          # The sibling goes in FIRST, and the order is not stylistic. react's
+          # `dependencies["@w6w/sdk"]` tracks VERSION, so on a release commit it
+          # names the version this run is about to publish and which therefore
+          # does not exist on the registry yet — a bare `npm install` here dies
+          # with ETARGET before it can install anything. Installing the local
+          # build first satisfies that dependency, and the `npm install` after
+          # it fills in the rest without displacing it (measured, both ways).
           npm install --no-save ../node
+          npm install
           npm test
 
   # ── PyPI ───────────────────────────────────────────────────────────────────
