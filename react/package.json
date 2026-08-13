@@ -1,0 +1,52 @@
+{
+  "name": "@w6w/react",
+  "version": "0.3.0",
+  "description": "React bindings for @w6w/sdk — a <W6wProvider>, a small hook set, and a structural adapter for @w6w/ui's W6wApi contract.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/w6w-io/w6w-wrappers.git",
+    "directory": "react"
+  },
+  "homepage": "https://github.com/w6w-io/w6w-wrappers/tree/main/react#readme",
+  "bugs": "https://github.com/w6w-io/w6w-wrappers/issues",
+  "keywords": ["w6w", "workflow", "react", "sdk", "hooks"],
+  "type": "module",
+  "types": "./dist/mod.d.ts",
+  "main": "./dist/mod.js",
+  "exports": {
+    ".": {
+      "types": "./dist/mod.d.ts",
+      "import": "./dist/mod.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import ./src/test-jsx-loader.mjs --test src/__tests__/*.test.ts",
+    "lint": "biome check .",
+    "format": "biome format --write ."
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "dependencies": {
+    "@w6w/sdk": "^0.3.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/react": "^18.3.17",
+    "jsdom": "^30.0.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

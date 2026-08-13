@@ -1,0 +1,10 @@
+# npm build output — CI-only, never committed (mirrors ../node's D7 discipline).
+dist/
+
+# npm install output — installed fresh by CI and by any gate run.
+node_modules/
+
+# No lockfile is committed for this lane — matches node/cli's own convention
+# (docs/release.md:178-179): npm resolves `@w6w/sdk` fresh against the pinned
+# `^0.3.0` range on every install.
+package-lock.json
