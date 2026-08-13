@@ -7,6 +7,7 @@ Open-source client libraries that wrap the w6w HTTP API.
 | SDK  | [`node/`](./node)     | `@w6w/sdk` (npm + JSR) | TypeScript |
 | CLI  | [`cli/`](./cli)       | `@w6w/cli` (npm), binary `w6w` | TypeScript |
 | SDK  | [`python/`](./python) | `w6w` (PyPI) | Python |
+| SDK bindings | react/ | `@w6w/react` (npm) | TypeScript (React) |
 
 ## Install
 
@@ -14,6 +15,7 @@ Open-source client libraries that wrap the w6w HTTP API.
 npm install @w6w/sdk        # or: deno add jsr:@w6w/sdk
 npm install -g @w6w/cli
 pip install w6w
+npm install @w6w/react      # composes @w6w/sdk — a derived lane, see docs/parity.md
 ```
 
 Each install is a normal, tokenless publish from this repo's own CI, over OIDC —
@@ -36,7 +38,10 @@ after a change lands here, the monorepo bumps its pointer in a dedicated
 > this repo's CI and a publish job on the shared release trigger. There is no
 > repo to create, no CI to bootstrap, and no fourth set of publish secrets. What
 > it does still cost is the obligation in [docs/parity.md](./docs/parity.md):
-> every future operation gets written one more time, on the same day.
+> every future operation gets written one more time, on the same day. That
+> obligation falls on a **contract lane** — a `go/` or `dart/` implementing
+> `endpoints.json` directly — not on a **derived lane** like `react/`, which
+> composes an existing lane's client instead and carries no such cost.
 
 ## The two rules
 
@@ -67,7 +72,8 @@ w6w-wrappers/                  # ← submodule of the w6w monorepo at packages/w
 │   └── release.md        # how a release actually runs
 ├── node/              # @w6w/sdk   (npm + JSR)
 ├── cli/               # @w6w/cli   (npm, binary `w6w`)
-└── python/            # w6w        (PyPI)
+├── python/            # w6w        (PyPI)
+└── react/             # @w6w/react (npm, derived lane — composes node/)
 ```
 
 Every lane reads the contract at `../endpoints.json` and `../VERSION` — resolved

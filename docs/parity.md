@@ -42,6 +42,19 @@ The test asserts **existence and signature**, not behavior — it is a drift ala
 not a substitute for the wrapper's own unit tests. What it catches is the actual
 failure mode: an operation added to two wrappers and forgotten in the third.
 
+Not every lane in this repo carries this test, and the split has a name. A
+**contract lane** — `node`, `cli`, `python` — implements every operation in
+`endpoints.json` directly, appears in every operation's `naming` object, and must
+have this test, green, with no exception. A **derived lane** — `react`, the first
+one — composes an existing contract lane's already-conformant published client
+instead of talking to `endpoints.json` itself, so it has no `naming` entry to
+assert and carries no conformance test of its own; it still ships at the same
+`VERSION` as everything else, because it only ever builds from a contract lane's
+release, never from the contract independently. The missing `naming.react` key is
+therefore not a gap the runner should have caught — it is the shape of the
+category, and §Adding a language says the same for anyone tempted to read it as a
+shortcut.
+
 **`status` records *server readiness*, not wrapper obligation, so the runner
 exempts nothing.** An operation is `"planned"` when its route is not live yet — a
 statement about the **server**, aimed at a *user* deciding whether a call will
@@ -149,6 +162,12 @@ The bar for a new wrapper joining the lockstep:
   and its own publish job on the shared release trigger
   ([release.md](./release.md)).
 - Its manifest version written from `VERSION`.
+
+`react/` sits in this repo without meeting this bar because it is a
+**derived lane** (§Conformance), not a contract lane — it composes `node/`'s
+client rather than implementing `endpoints.json` directly, and that exemption is
+react's alone, not a precedent for a contract lane like a prospective `go/` or
+`dart/`.
 
 Until all three hold, keep it out of the release workflow rather than shipping it
 half-joined.

@@ -83,6 +83,23 @@ would make the Python package **untestable in the environment that has to develo
 it**. Zero dependencies is also the right answer for a published client: it can
 never conflict with a user's pins.
 
+### react (TypeScript, derived lane)
+
+- **Node, not Deno.** `react/` is gated by Node.js rather than the Deno toolchain
+  `node/` and `cli/` use above. Its tests exercise React components, so they
+  follow `packages/ui`'s `test-jsx-loader.mjs` + `jsdom` pattern — a Deno test run
+  has no DOM to mount into.
+- **`package.json` scripts** — `build`, `typecheck`, `test`, `lint`, `format` —
+  not `deno task`; there is no `deno.json` in this lane.
+- **npm-only distribution.** `@w6w/react` publishes to npm only, with no JSR job:
+  JSR's no-slow-types rule and the source-verbatim publish that `node/` relies on
+  (§1 above) have nothing to do with a lane that ships compiled output.
+- **No conformance runner.** `react/` implements no operation in
+  `endpoints.json` — it composes `node/`'s already-conformant client — so it has
+  no `naming` entry to assert, and none of `node/tests/surface_test.ts`,
+  `cli/tests/help_test.ts` or `python/tests/test_surface.py` look for one. See
+  §10 for why that is by design, not an oversight.
+
 ---
 
 ## 2. Configuration and environment
@@ -891,3 +908,8 @@ precisely the failure the lockstep bet exists to prevent.
 So: `status` tells a **user** whether calling the operation will reach a live
 route today. It tells an **implementer** nothing. Implement all seventeen; test
 all seventeen against a mocked transport; assert all seventeen in conformance.
+
+One more claim this section does not make: `react/` is exempt from this runner
+not through `required`/`planned` bookkeeping but because it is a
+**derived lane** that implements no `endpoints.json` operation at all — see the
+new `react` subsection in §1 for what that means.
