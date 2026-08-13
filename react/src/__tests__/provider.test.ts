@@ -1,9 +1,13 @@
 /**
- * `<W6wProvider>` + the C-4 token-supplier shim, plus one read hook and one
- * mutation hook exercised end-to-end through it (A11) — every request goes
+ * `<W6wProvider>` + the C-4 token-supplier shim, plus one read hook and two
+ * mutation hooks exercised end-to-end through it (A11) — every request goes
  * through a fake `fetch` injected via the `fetch` prop, mirroring the pattern
  * `node/tests/http_test.ts`/`client_test.ts` use for the SDK's own transport
- * tests (read-only reference, transcribed here, never imported).
+ * tests (read-only reference, transcribed here, never imported). The
+ * `useRunWorkflow` case (T1.1.2) pins its `wait: true` default — and that a
+ * caller's explicit `wait: false` survives it — by reading the `?wait=`
+ * query param on the wire, since that is the only externally observable
+ * effect of what gets passed to `client.workflows.run`.
  *
  * Real React reconciliation (jsdom + `react-dom/client` + `act`) is used
  * deliberately for the memoization test below: it asserts the SAME
@@ -18,7 +22,7 @@ import { JSDOM } from "jsdom";
 import { act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
 import { W6wProvider, useW6wClient } from "../W6wProvider.tsx";
-import { useCreateVar, useMe } from "../hooks.ts";
+import { useCreateVar, useMe, useRunWorkflow } from "../hooks.ts";
 
 // React 18.3+'s `act` warns ("not configured to support act(...)") unless this
 // flag is set — required once per process, not per test.
@@ -235,4 +239,53 @@ test("useCreateVar (mutation hook) calls through the provider's client and retur
 
     assert.equal(created?.id, "var_1");
     assert.equal(fake.calls.length, 1);
+  }));
+
+test("useRunWorkflow defaults to wait: true, but does not clobber an explicit wait: false", () =>
+  withRoot(async (root) => {
+    const fake = fakeFetch(() => json({ runId: "run_1", status: "succeeded" }));
+
+    let captured: ReturnType<typeof useRunWorkflow> | null = null;
+    function Probe() {
+      captured = useRunWorkflow();
+      return null;
+    }
+
+    act(() => {
+      root.render(
+        createElement(
+          W6wProvider,
+          { baseUrl: "https://api.example.com", token: "tok_1", fetch: fake.fetch },
+          createElement(Probe),
+        ),
+      );
+    });
+    assert.ok(captured);
+    const hook = captured as ReturnType<typeof useRunWorkflow>;
+
+    // No options: the omitted `wait` must default to `true` — sent on the wire
+    // as `?wait=true` (`node/src/workflows.ts` only ever emits `?wait=true` or
+    // no `wait` param at all).
+    await act(async () => {
+      await hook.call("wf_1");
+    });
+    assert.equal(fake.calls.length, 1);
+    assert.match(
+      new URL(fake.calls[0]?.url as string).search,
+      /(?:^\?|&)wait=true(?:&|$)/,
+      "expected ?wait=true when the caller omits `wait`",
+    );
+
+    // Explicit `wait: false` must survive, not be overwritten by the default —
+    // which shows up on the wire as NO `wait` param at all (the server treats
+    // `?wait=false` the same as its absence, so the transport never sends it).
+    await act(async () => {
+      await hook.call("wf_1", { wait: false });
+    });
+    assert.equal(fake.calls.length, 2);
+    assert.doesNotMatch(
+      new URL(fake.calls[1]?.url as string).search,
+      /wait=true/,
+      "an explicit wait: false must not be clobbered into ?wait=true",
+    );
   }));

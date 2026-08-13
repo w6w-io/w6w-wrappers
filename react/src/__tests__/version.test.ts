@@ -39,3 +39,12 @@ test("the barrel re-exports VERSION", async () => {
   const mod = (await import("../../mod.ts")) as { VERSION: string };
   assert.equal(mod.VERSION, VERSION);
 });
+
+test("package.json's @w6w/sdk dependency range tracks VERSION (the ship-time bump lockstep)", () => {
+  const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+    dependencies?: Record<string, string>;
+  };
+  const range = pkg.dependencies?.["@w6w/sdk"];
+  const sharedVersion = readFileSync(sharedVersionPath, "utf8").trim();
+  assert.equal(range, `^${sharedVersion}`);
+});
