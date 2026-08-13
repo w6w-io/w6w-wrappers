@@ -30,11 +30,13 @@ Below `1.0.0`, breaking changes may land in a minor bump. That grace ends at
 
 ## Conformance
 
-Each wrapper carries a conformance test that reads `endpoints.json` and
-asserts the client exposes **every** operation in `operations[]` — **regardless of
-its `status`** — under the name in that operation's `naming` entry for its
-language. The mechanics of resolving a `naming` string to a symbol or a CLI
-command are pinned in
+Each **contract lane** — `node`, `cli`, `python`, and any future language that
+talks to `endpoints.json` directly — carries a conformance test that reads
+`endpoints.json` and asserts the client exposes **every** operation in
+`operations[]` — **regardless of its `status`** — under the name in that
+operation's `naming` entry for its language. (Not every lane in this repo is a
+contract lane — see below.) The mechanics of resolving a `naming` string to a
+symbol or a CLI command are pinned in
 [implementation.md §10](./implementation.md#10-conformance-runner); this section
 and that one must agree, and that one is the newer, pinned spec.
 
@@ -169,5 +171,6 @@ client rather than implementing `endpoints.json` directly, and that exemption is
 react's alone, not a precedent for a contract lane like a prospective `go/` or
 `dart/`.
 
-Until all three hold, keep it out of the release workflow rather than shipping it
-half-joined.
+Until all three hold **for a would-be contract lane**, keep it out of the release
+workflow rather than shipping it half-joined — a derived lane like `react/` was
+never bound by this bar to begin with, so it does not apply here.

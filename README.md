@@ -46,15 +46,18 @@ after a change lands here, the monorepo bumps its pointer in a dedicated
 ## The two rules
 
 **1. One surface.** [`endpoints.json`](./endpoints.json) is the machine-readable
-source of truth for what every wrapper must expose. A wrapper is not conformant
-until it implements every operation in it. See [docs/endpoints.md](./docs/endpoints.md)
+source of truth for what every wrapper must expose. A **contract lane** is not
+conformant until it implements every operation in it; a **derived lane** —
+`react/` — inherits that guarantee from the contract lane it composes instead of
+implementing the surface itself. See [docs/endpoints.md](./docs/endpoints.md)
 for the catalog with wire shapes and per-language signatures.
 
 **2. One version, released together.** [`VERSION`](./VERSION) holds the single
-version all three wrappers publish under. There is no such thing as
-`@w6w/sdk@0.2.0` without `@w6w/cli@0.2.0` and `w6w==0.2.0`. A user on any
-wrapper at version *X* gets the same operations as a user on any other wrapper
-at version *X* — that is the whole promise. See [docs/parity.md](./docs/parity.md).
+version every wrapper in this repo, contract lane or derived, publishes under.
+There is no such thing as `@w6w/sdk@0.2.0` without `@w6w/cli@0.2.0`,
+`w6w==0.2.0`, and `@w6w/react@0.2.0`. A user on any wrapper at version *X* gets
+the same operations as a user on any other wrapper at version *X* — that is the
+whole promise. See [docs/parity.md](./docs/parity.md).
 
 ## Layout
 
