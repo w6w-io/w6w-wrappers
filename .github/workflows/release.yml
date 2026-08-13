@@ -237,10 +237,15 @@ jobs:
 
   npm-react:
     needs: [verify, test, npm-sdk]
-    # After npm-sdk, not just verify+test: react declares a real npm dependency
-    # on "@w6w/sdk": "^0.3.0", so its `npm install` below needs that version
-    # already live on the registry — otherwise it resolves to nothing (there is
-    # no 0.3.0 yet) and the install fails. Unlike the `test` job's own react step,
+    # After npm-sdk, not just verify+test: react declares a real npm dependency on
+    # "@w6w/sdk" and resolves it from the registry below. Two independent reasons it
+    # has to be the copy THIS release just published. First, the range tracks
+    # VERSION — `react/src/__tests__/version.test.ts` pins that — so at release time
+    # it names a version only `npm-sdk` can have created. Second, and easy to miss:
+    # every `@w6w/sdk` published before this lane existed lacks the `./console`
+    # subpath that `react/src/adapter.ts` is built on (`npm view @w6w/sdk@0.3.0
+    # exports` returns the root export alone), so an older copy does not merely
+    # mismatch — it cannot satisfy the imports at all. Unlike the `test` job's own react step,
     # this one does NOT substitute the sibling build: a publish job must build
     # against exactly what consumers will resolve, and by the time this job runs
     # `npm-sdk` has already uploaded, so the registry copy is the real, current one.
