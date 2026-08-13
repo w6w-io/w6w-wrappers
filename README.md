@@ -7,6 +7,7 @@ Open-source client libraries that wrap the w6w HTTP API.
 | SDK  | [`node/`](./node)     | `@w6w/sdk` (npm + JSR) | TypeScript |
 | CLI  | [`cli/`](./cli)       | `@w6w/cli` (npm), binary `w6w` | TypeScript |
 | SDK  | [`python/`](./python) | `w6w` (PyPI) | Python |
+| SDK bindings | react/ | `@w6w/react` (npm) | TypeScript (React) |
 
 ## Install
 
@@ -14,6 +15,7 @@ Open-source client libraries that wrap the w6w HTTP API.
 npm install @w6w/sdk        # or: deno add jsr:@w6w/sdk
 npm install -g @w6w/cli
 pip install w6w
+npm install @w6w/react      # composes @w6w/sdk — a derived lane, see docs/parity.md
 ```
 
 Each install is a normal, tokenless publish from this repo's own CI, over OIDC —
@@ -36,20 +38,26 @@ after a change lands here, the monorepo bumps its pointer in a dedicated
 > this repo's CI and a publish job on the shared release trigger. There is no
 > repo to create, no CI to bootstrap, and no fourth set of publish secrets. What
 > it does still cost is the obligation in [docs/parity.md](./docs/parity.md):
-> every future operation gets written one more time, on the same day.
+> every future operation gets written one more time, on the same day. That
+> obligation falls on a **contract lane** — a `go/` or `dart/` implementing
+> `endpoints.json` directly — not on a **derived lane** like `react/`, which
+> composes an existing lane's client instead and carries no such cost.
 
 ## The two rules
 
 **1. One surface.** [`endpoints.json`](./endpoints.json) is the machine-readable
-source of truth for what every wrapper must expose. A wrapper is not conformant
-until it implements every operation in it. See [docs/endpoints.md](./docs/endpoints.md)
+source of truth for what every wrapper must expose. A **contract lane** is not
+conformant until it implements every operation in it; a **derived lane** —
+`react/` — inherits that guarantee from the contract lane it composes instead of
+implementing the surface itself. See [docs/endpoints.md](./docs/endpoints.md)
 for the catalog with wire shapes and per-language signatures.
 
 **2. One version, released together.** [`VERSION`](./VERSION) holds the single
-version all three wrappers publish under. There is no such thing as
-`@w6w/sdk@0.2.0` without `@w6w/cli@0.2.0` and `w6w==0.2.0`. A user on any
-wrapper at version *X* gets the same operations as a user on any other wrapper
-at version *X* — that is the whole promise. See [docs/parity.md](./docs/parity.md).
+version every wrapper in this repo, contract lane or derived, publishes under.
+There is no such thing as `@w6w/sdk@0.2.0` without `@w6w/cli@0.2.0`,
+`w6w==0.2.0`, and `@w6w/react@0.2.0`. A user on any wrapper at version *X* gets
+the same operations as a user on any other wrapper at version *X* — that is the
+whole promise. See [docs/parity.md](./docs/parity.md).
 
 ## Layout
 
@@ -67,7 +75,8 @@ w6w-wrappers/                  # ← submodule of the w6w monorepo at packages/w
 │   └── release.md        # how a release actually runs
 ├── node/              # @w6w/sdk   (npm + JSR)
 ├── cli/               # @w6w/cli   (npm, binary `w6w`)
-└── python/            # w6w        (PyPI)
+├── python/            # w6w        (PyPI)
+└── react/             # @w6w/react (npm, derived lane — composes node/)
 ```
 
 Every lane reads the contract at `../endpoints.json` and `../VERSION` — resolved

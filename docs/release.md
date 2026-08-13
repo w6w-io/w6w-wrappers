@@ -158,37 +158,66 @@ permanent inconsistency, and the only fix is burning a version number.
 
 ## Notes on the npm and JSR lanes
 
-Four jobs (`npm-sdk`, `npm-cli`, `jsr-sdk`, `jsr-cli`), and the shape is copied
-from the house pattern — `w6w-core`'s `publish-types.yml` ships `@w6w/types`
-to npm and JSR over OIDC with no stored credential. What was *not* copyable is
-written out here, because each item is a thing that would otherwise be
-discovered at upload time:
+Five jobs (`npm-sdk`, `npm-cli`, `npm-react`, `jsr-sdk`, `jsr-cli`), and the
+shape is copied from the house pattern — `w6w-core`'s `publish-types.yml`
+ships `@w6w/types` to npm and JSR over OIDC with no stored credential. What
+was *not* copyable is written out here, because each item is a thing that
+would otherwise be discovered at upload time:
 
-- **`npm publish --provenance` cannot be used while this repo is private.**
-  [GitHub retired provenance for private source repositories](https://github.blog/changelog/2023-07-26-publishing-with-npm-provenance-from-private-source-repositories-is-no-longer-supported/),
-  and it is not generated even under trusted publishing. So the npm jobs omit
-  the flag for now; when the repo goes public (which is gated on stripping the
-  internal citations — [implementation.md](./implementation.md)), modern npm
-  emits provenance **automatically** under trusted publishing and the flag is
-  still not needed. This is one of the concrete costs of staying private.
-- **`@w6w/cli` publishes *after* `@w6w/sdk`** — `needs: [verify, test, npm-sdk]`,
-  not just the shared gate — because it declares a real npm dependency on it,
-  and its `npm install` step needs `^0.2.1` already live on the registry.
-  Otherwise there is a window in which that install resolves to nothing.
-- **Both npm jobs use `npm install`, not `npm ci`.** There is no committed
-  `package-lock.json` for either lane — dev and CI both run on the Deno tasks
-  in `deno.json`, and the npm manifests exist only to build and publish. `dist/`
-  is produced by `tsc -p tsconfig.build.json` (the CLI additionally runs
-  `scripts/fix-shebang.mjs`), and the CLI's sources import the bare specifier
-  `@w6w/sdk`, which resolves from `node_modules` — not through the Deno import
-  map, which points at `../node/mod.ts` and is a *development* convenience.
+- **This repo is public** (verified live: `gh repo view w6w-io/w6w-wrappers` →
+  `PUBLIC`), so
+  [GitHub's retirement of provenance for private source repositories](https://github.blog/changelog/2023-07-26-publishing-with-npm-provenance-from-private-source-repositories-is-no-longer-supported/)
+  no longer applies here — `npm publish --provenance` is available, and modern
+  npm emits provenance **automatically** under trusted publishing without the
+  flag. The npm jobs stay off it anyway: this is a **deliberate, tracked
+  deferral**, not a technical blocker — see `FOLLOWUPS.md` (G-8). Turning it on
+  touches the already-working `npm-sdk`/`npm-cli` jobs and is a separate
+  decision from adding a new lane.
+- **`@w6w/cli` and `@w6w/react` both publish *after* `@w6w/sdk`** —
+  `needs: [verify, test, npm-sdk]`, not just the shared gate — because each
+  declares a real npm dependency on it, and its `npm install` step needs that
+  version already live on the registry. Otherwise there is a window in which
+  that install resolves to nothing. (The `test` job's own react step hits the
+  same gap earlier and for a different reason — see the note below.)
+- **All three npm jobs use `npm install`, not `npm ci`.** There is no committed
+  `package-lock.json` for any of the three lanes — dev and CI both run on the
+  Deno tasks in `deno.json` for `node`/`cli` (react has no `deno.json`; its own
+  local gate is `npm test`), and the npm manifests exist only to build and
+  publish. `dist/` is produced by `tsc -p tsconfig.build.json`/`tsconfig.json`
+  (the CLI additionally runs `scripts/fix-shebang.mjs`), and the CLI's and
+  react's sources both import the bare specifier `@w6w/sdk`, which resolves
+  from `node_modules` — not through the Deno import map, which points at
+  `../node/mod.ts` and is a *development* convenience.
+- **The `test` job builds `node/` and substitutes it into `react/`'s
+  `node_modules` before running react's own suite** (`npm install --no-save
+  ../node`, after a plain `npm install`) — react imports `@w6w/sdk/console`, a
+  subpath no published `@w6w/sdk` carried until after this lane was added, so
+  a bare registry install would fail the very first CI run. This step stays
+  even once a console-bearing `@w6w/sdk` is on the registry: every other lane
+  already tests against the sibling checkout rather than the last release, and
+  a test job that silently measures a stale published package is the failure
+  this repo's one-repo layout exists to prevent. The `npm-react` publish job
+  does **not** do this substitution — it installs from the registry like every
+  other publish job, which is correct there: a publish job must build against
+  exactly what consumers will resolve, and by the time it runs `npm-sdk` has
+  already uploaded.
 - **JSR needs the `@w6w` scope to exist and each package linked to this repo**
   before OIDC publishing works; confirmed with `deno publish --dry-run` for
-  both lanes, including the CLI's cross-package `@w6w/sdk` import. The publish
-  step itself is `npx --yes jsr publish` from the lane directory, no build.
-- **The trusted publishers for all four artifacts register against
+  the `node`/`cli` lanes, including the CLI's cross-package `@w6w/sdk` import.
+  The publish step itself is `npx --yes jsr publish` from the lane directory,
+  no build. There is no `jsr-react` job — react is a JSX+`react`-peer package,
+  not the `.ts`-source-verbatim shape JSR publishing here assumes.
+- **The trusted publishers for all five artifacts register against
   `w6w-io/w6w-wrappers` + `release.yml`**, exactly as PyPI's does. Registering
-  them against the archived `w6w-node` / `w6w-cli` repos would have to be undone.
+  them against the archived `w6w-node` / `w6w-cli` repos would have to be
+  undone. **`@w6w/react` needs one extra, one-time step first**: unlike PyPI's
+  pending-publisher flow, npm's trusted-publisher registration requires the
+  package to already exist on the registry — the same situation
+  `@w6w/sdk@0.1.1`/`@w6w/cli@0.1.1` were already in, above ("published before
+  this workflow existed"). A human publishes `@w6w/react`'s first version
+  manually from an authenticated local shell, then registers the trusted
+  publisher exactly as for the other two npm packages; every release after
+  that goes out from CI, tokenless, like its siblings.
 
 ## Partial-failure reality
 

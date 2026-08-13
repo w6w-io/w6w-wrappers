@@ -78,6 +78,9 @@ jobs:
                   "python/pyproject.toml", r'^version\s*=\s*"([^"]+)"'),
               "python/src/w6w/_version.py": from_regex(
                   "python/src/w6w/_version.py", r'__version__:\s*str\s*=\s*"([^"]+)"'),
+              "react/package.json": from_json("react/package.json", "version"),
+              "react/src/version.ts": from_regex(
+                  "react/src/version.ts", r'VERSION:\s*string\s*=\s*"([^"]+)"'),
           }
 
           tag = os.environ.get("TAG", "").strip()
@@ -127,6 +130,25 @@ jobs:
         working-directory: cli
         run: deno task test
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      # The react lane imports `@w6w/sdk/console`, a subpath no PUBLISHED @w6w/sdk carries yet.
+      # Build the sibling out of this checkout and install it over the registry copy, so the suite
+      # measures the source of truth in this commit rather than the last release. Keep this step even
+      # after a console-bearing @w6w/sdk ships: every other lane already tests against the sibling, and
+      # a test job that silently measures a stale published package is the failure this repo's
+      # one-repo layout exists to prevent.
+      - name: node — build the SDK the react lane imports
+        working-directory: node
+        run: npm install && npm run build
+      - name: react — its own suite, against that build
+        working-directory: react
+        run: |
+          npm install
+          npm install --no-save ../node
+          npm test
+
   # ── PyPI ───────────────────────────────────────────────────────────────────
   pypi:
     needs: [verify, test]
@@ -162,9 +184,9 @@ jobs:
 
   # ── npm ────────────────────────────────────────────────────────────────────
   # Same OIDC posture as PyPI: npm >= 11.5.1 detects the trusted publisher
-  # itself, no NODE_AUTH_TOKEN anywhere. `--provenance` stays off — GitHub
-  # doesn't generate provenance attestations for private source repos, and
-  # this one is private until docs/implementation.md's citations are stripped.
+  # itself, no NODE_AUTH_TOKEN anywhere. This repo is public, so `--provenance`
+  # would work, but it stays off by deliberate, separate decision — see
+  # FOLLOWUPS.md (G-8) and docs/release.md's --provenance paragraph.
   npm-sdk:
     needs: [verify, test]
     if: github.event_name == 'release'
@@ -211,6 +233,40 @@ jobs:
           npm run build
       - name: Publish @w6w/cli
         working-directory: cli
+        run: npm publish --access public
+
+  npm-react:
+    needs: [verify, test, npm-sdk]
+    # After npm-sdk, not just verify+test: react declares a real npm dependency on
+    # "@w6w/sdk" and resolves it from the registry below. Two independent reasons it
+    # has to be the copy THIS release just published. First, the range tracks
+    # VERSION — `react/src/__tests__/version.test.ts` pins that — so at release time
+    # it names a version only `npm-sdk` can have created. Second, and easy to miss:
+    # every `@w6w/sdk` published before this lane existed lacks the `./console`
+    # subpath that `react/src/adapter.ts` is built on (`npm view @w6w/sdk@0.3.0
+    # exports` returns the root export alone), so an older copy does not merely
+    # mismatch — it cannot satisfy the imports at all. Unlike the `test` job's own react step,
+    # this one does NOT substitute the sibling build: a publish job must build
+    # against exactly what consumers will resolve, and by the time this job runs
+    # `npm-sdk` has already uploaded, so the registry copy is the real, current one.
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm install --global npm@latest
+      - name: Install + build
+        working-directory: react
+        run: |
+          npm install
+          npm run build
+      - name: Publish @w6w/react
+        working-directory: react
         run: npm publish --access public
 
   # ── JSR ────────────────────────────────────────────────────────────────────
