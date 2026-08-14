@@ -5,7 +5,7 @@
  * both mutants survived `check`, `lint`, `fmt:check` and every test file:
  *
  * 1. **A client that ignores its injected `fetch`.** Every http test calls
- *    `request(CONFIG, fake.fetch, …)` directly, so a `W6wClient` that quietly
+ *    `request(CONFIG, fake.fetch, …)` directly, so a `W6WClient` that quietly
  *    used `globalThis.fetch` instead of the transport it was handed still passed
  *    — executed, the fake was called **0 times** and a real network request went
  *    out. "No test may require a live server" (`docs/implementation.md` §9) was
@@ -22,7 +22,7 @@
  */
 
 import { assertEquals, assertRejects } from "@std/assert";
-import { W6wClient } from "../src/client.ts";
+import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ConfigError } from "../src/errors.ts";
 
@@ -52,7 +52,7 @@ function spyFetch(body: unknown = { ok: true }): { fetch: FetchLike; calls: Call
 
 Deno.test("the client uses the transport it was injected with, and only that one", async () => {
   const spy = spyFetch({ documents: [], vars: [] });
-  const client = new W6wClient({
+  const client = new W6WClient({
     baseUrl: "https://api.example.com",
     token: "tok_1",
     fetch: spy.fetch,
@@ -78,7 +78,7 @@ Deno.test("every namespace and method routes through the injected transport", as
   // client rather than with the transport, so one of them wiring itself to the
   // global would be invisible everywhere else.
   const spy = spyFetch({ runId: "run_1", status: "queued", kind: "workflow", ok: true });
-  const client = new W6wClient({
+  const client = new W6WClient({
     baseUrl: "https://api.example.com",
     token: "tok_1",
     project: "prj_1",
@@ -114,12 +114,12 @@ Deno.test("two clients in one process never share a credential", async () => {
   // construction, so a sequential A-then-B script would still look right.
   const spyA = spyFetch({ documents: [] });
   const spyB = spyFetch({ documents: [] });
-  const a = new W6wClient({
+  const a = new W6WClient({
     baseUrl: "https://tenant-a.example.com",
     token: "tok_TENANT_A",
     fetch: spyA.fetch,
   });
-  const b = new W6wClient({
+  const b = new W6WClient({
     baseUrl: "https://tenant-b.example.com",
     token: "tok_TENANT_B",
     fetch: spyB.fetch,
@@ -149,7 +149,7 @@ Deno.test("a client with no token borrows nobody else's", async () => {
   // one tenant's credential, to another tenant's server, with no error anywhere.
   const spyA = spyFetch({ documents: [] });
   const spyNone = spyFetch({ documents: [] });
-  const withToken = new W6wClient({
+  const withToken = new W6WClient({
     baseUrl: "https://tenant-a.example.com",
     token: "tok_TENANT_A",
     fetch: spyA.fetch,
@@ -157,7 +157,7 @@ Deno.test("a client with no token borrows nobody else's", async () => {
   const saved = Deno.env.get("W6W_TOKEN");
   Deno.env.delete("W6W_TOKEN");
   try {
-    const tokenless = new W6wClient({
+    const tokenless = new W6WClient({
       baseUrl: "https://tenant-b.example.com",
       fetch: spyNone.fetch,
     });

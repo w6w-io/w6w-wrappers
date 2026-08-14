@@ -1,8 +1,8 @@
 /**
- * `createW6wUiAdapter` — a structurally-typed bridge from a `W6wClient` to
- * `@w6w/ui`'s `W6wApi` contract (C-1, C-2).
+ * `createW6WUiAdapter` — a structurally-typed bridge from a `W6WClient` to
+ * `@w6w/ui`'s `W6WApi` contract (C-1, C-2).
  *
- * `W6wApi` below is a HAND-DUPLICATE of `packages/ui/src/provider.tsx:87-231` —
+ * `W6WApi` below is a HAND-DUPLICATE of `packages/ui/src/provider.tsx:87-231` —
  * transcribed by hand, never imported. `@w6w/ui` is `SEE LICENSE IN LICENSE`
  * and unpublished; this lane is MIT, so no dependency edge to it may exist
  * anywhere, not even a type-only one (C-1). The VALUE types the interface
@@ -25,7 +25,7 @@
  * exceptions the SDK's own module headers document:
  * - `listConnections` — see the comment at its call site below.
  * - `recordTestRun` / `recordStepTestRun` — the SDK returns the real created
- *   row; `W6wApi` is pinned `Promise<void>`. Discarded with
+ *   row; `W6WApi` is pinned `Promise<void>`. Discarded with
  *   `.then(() => undefined)`, mirroring
  *   `packages/studio/src/repos/saved-tests.ts:97-109` and
  *   `step-tests.ts:46-59` (read-only reference, transcribed, never imported).
@@ -37,7 +37,7 @@
  *
  * @module
  */
-import { ApiError, type ConnectionSummary, type W6wClient } from "@w6w/sdk";
+import { ApiError, type ConnectionSummary, type W6WClient } from "@w6w/sdk";
 import type {
   ActionDef,
   ApiCallRecord,
@@ -50,11 +50,11 @@ import type {
 } from "@w6w/sdk/console";
 
 /**
- * The `@w6w/ui` `W6wApi` contract, hand-duplicated — see this module's
+ * The `@w6w/ui` `W6WApi` contract, hand-duplicated — see this module's
  * header. Every member's signature mirrors `provider.tsx:87-231`'s member of
  * the same name.
  */
-export interface W6wApi {
+export interface W6WApi {
   /** List registered apps to pick from in the connection modal. */
   listApps(): Promise<AppSummary[]>;
 
@@ -181,7 +181,7 @@ export interface W6wApi {
  * Alias `@w6w/sdk`'s `ApiError.raw` onto `.body` (`err.body === err.raw`, not
  * a copy) before an error reaches the caller — the field name every
  * duck-typing consumer of `@w6w/ui`'s own `ApiError` shape expects
- * (`packages/ui/src/createW6wApi.ts:29-44`). `ApiError.name` is already
+ * (`packages/ui/src/createW6WApi.ts:29-44`). `ApiError.name` is already
  * `"ApiError"` on `@w6w/sdk`'s own class (`node/src/errors.ts`); nothing to
  * add there.
  *
@@ -206,8 +206,8 @@ async function withApiErrorBody<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Build a `W6wApi` implementation over an existing `W6wClient`. See this module's header. */
-export function createW6wUiAdapter(client: W6wClient): W6wApi {
+/** Build a `W6WApi` implementation over an existing `W6WClient`. See this module's header. */
+export function createW6WUiAdapter(client: W6WClient): W6WApi {
   return {
     listApps: () => withApiErrorBody(() => client.console.apps.list()),
 
@@ -246,7 +246,7 @@ export function createW6wUiAdapter(client: W6wClient): W6wApi {
     deleteSavedTest: (connectionId, id) =>
       withApiErrorBody(() => client.console.savedTests.delete(connectionId, id)),
 
-    // The SDK returns the real created `SavedTestRun`; `W6wApi.recordTestRun`
+    // The SDK returns the real created `SavedTestRun`; `W6WApi.recordTestRun`
     // is pinned `Promise<void>` — discard, don't drop the call.
     recordTestRun: (connId, body) =>
       withApiErrorBody(() =>

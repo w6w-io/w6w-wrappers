@@ -24,7 +24,7 @@
  * @module
  */
 
-import { ConfigError, type FetchLike, W6wClient } from "@w6w/sdk";
+import { ConfigError, type FetchLike, W6WClient } from "@w6w/sdk";
 import type { GlobalOptions } from "./args.ts";
 
 /**
@@ -199,7 +199,7 @@ export function createClient(
   globals: GlobalOptions,
   env: EnvReader = NO_ENV,
   options: ClientOptions = {},
-): W6wClient {
+): W6WClient {
   const baseUrl = resolve(globals.baseUrl, env, ENV_BASE_URL);
   if (baseUrl === undefined || baseUrl.trim().length === 0) {
     throw configError(
@@ -223,7 +223,7 @@ export function createClient(
   // The join rule (origin in, base path appended, never doubled) belongs to the
   // SDK and is applied by the constructor. Nothing here re-derives it — read it
   // back off `client.config.baseUrl` if you need to know where a request went.
-  return new W6wClient({
+  return new W6WClient({
     baseUrl: requireAbsolute(baseUrl.trim()),
     token: requireSendableToken(token),
     project: options.project,

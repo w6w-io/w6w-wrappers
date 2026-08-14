@@ -64,7 +64,7 @@ import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 import { unwrap } from "../types.ts";
 
 /**
- * The slice of `W6wClient` this namespace needs: the transport, and nothing
+ * The slice of `W6WClient` this namespace needs: the transport, and nothing
  * else. Structural rather than a concrete client type, so the namespace stays
  * independently constructible in a test and this module never imports the
  * client back — mirrors `VarsHost` in `../vars.ts`.
@@ -447,7 +447,7 @@ interface AppsPage {
 }
 
 /**
- * The `console.apps` namespace on a `W6wClient`.
+ * The `console.apps` namespace on a `W6WClient`.
  *
  * @example
  * ```ts
@@ -664,7 +664,7 @@ export class AppsApi {
    * URL for the caller to open.
    *
    * No studio-page caller, but this method's shape must exactly match
-   * `W6wApi.startAppOAuthFlow`'s signature on the `@w6w/ui` facade
+   * `W6WApi.startAppOAuthFlow`'s signature on the `@w6w/ui` facade
    * (`packages/ui/src/provider.tsx:110-114`), which calls it.
    *
    * @param appId - The app id.
@@ -760,7 +760,7 @@ export class AppsApi {
   /**
    * Invoke one of an app's actions.
    *
-   * This method's shape must exactly match `W6wApi.invokeAction`'s signature on
+   * This method's shape must exactly match `W6WApi.invokeAction`'s signature on
    * the `@w6w/ui` facade (`packages/ui/src/provider.tsx`). It now models the
    * WHOLE of that `opts` — `project` and `state` included.
    *

@@ -9,7 +9,7 @@
  */
 
 import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
-import { W6wClient } from "../src/client.ts";
+import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
 import type { Var } from "../src/types.ts";
@@ -60,10 +60,10 @@ const VAR: Var = {
  * default scope on purpose: the point of several cases below is that the
  * variable namespace does not forward it.
  */
-function client(respond: (call: Call) => Response): { client: W6wClient; calls: Call[] } {
+function client(respond: (call: Call) => Response): { client: W6WClient; calls: Call[] } {
   const fake = fakeFetch(respond);
   return {
-    client: new W6wClient({
+    client: new W6WClient({
       baseUrl: "https://api.example.com",
       token: "tok_1",
       project: "prj_default",
@@ -76,7 +76,7 @@ function client(respond: (call: Call) => Response): { client: W6wClient; calls: 
 Deno.test("vars: all six operations are functions on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
-  const c = new W6wClient({ baseUrl: "https://api.example.com", token: "t" });
+  const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
   for (const name of ["list", "get", "getByName", "create", "update", "delete"] as const) {
     assertEquals(typeof c.vars[name], "function", `vars.${name} is missing`);
   }

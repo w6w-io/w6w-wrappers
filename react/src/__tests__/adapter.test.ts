@@ -1,5 +1,5 @@
 /**
- * `createW6wUiAdapter` — the `W6wApi` bridge (C-1, C-2).
+ * `createW6WUiAdapter` — the `W6WApi` bridge (C-1, C-2).
  *
  * Every case here drives the adapter through a fake `fetch`, mirroring
  * `node/tests/console/apps_test.ts`'s pattern (read-only reference,
@@ -8,8 +8,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FetchLike } from "@w6w/sdk";
-import { W6wClient } from "@w6w/sdk";
-import { createW6wUiAdapter } from "../adapter.ts";
+import { W6WClient } from "@w6w/sdk";
+import { createW6WUiAdapter } from "../adapter.ts";
 
 /** One recorded call to the fake transport. */
 interface Call {
@@ -42,8 +42,8 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function testClient(fetch: FetchLike): W6wClient {
-  return new W6wClient({ baseUrl: "https://api.example.com", token: "tok_1", fetch });
+function testClient(fetch: FetchLike): W6WClient {
+  return new W6WClient({ baseUrl: "https://api.example.com", token: "tok_1", fetch });
 }
 
 test("listApps reaches the real console.apps.list() pass-through, spanning more than one page", async () => {
@@ -68,7 +68,7 @@ test("listApps reaches the real console.apps.list() pass-through, spanning more 
   const fake = fakeFetch((_call, i) =>
     i === 0 ? json({ apps: [appOne], nextCursor: "cursor_2" }) : json({ apps: [appTwo] }),
   );
-  const adapter = createW6wUiAdapter(testClient(fake.fetch));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
 
   const apps = await adapter.listApps();
 
@@ -82,7 +82,7 @@ test("listApps reaches the real console.apps.list() pass-through, spanning more 
 test("a thrown ApiError gains a `.body` alias of `.raw` (one shared helper, every member)", async () => {
   const errorBody = { error: { code: "unknown_app", message: "no such app" } };
   const fake = fakeFetch(() => json(errorBody, 404));
-  const adapter = createW6wUiAdapter(testClient(fake.fetch));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
 
   await assert.rejects(
     () => adapter.getAppAuth("app_missing"),
@@ -98,7 +98,7 @@ test("a thrown ApiError gains a `.body` alias of `.raw` (one shared helper, ever
   );
 });
 
-test("recordTestRun discards the SDK's real created row to void, per the W6wApi contract", async () => {
+test("recordTestRun discards the SDK's real created row to void, per the W6WApi contract", async () => {
   const fake = fakeFetch(() =>
     json(
       {
@@ -117,7 +117,7 @@ test("recordTestRun discards the SDK's real created row to void, per the W6wApi 
       201,
     ),
   );
-  const adapter = createW6wUiAdapter(testClient(fake.fetch));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
 
   const result = await adapter.recordTestRun("conn_1", { actionKey: "k", ok: true });
 
@@ -129,7 +129,7 @@ test("listConnections calls the BASE /connections route, not console.connections
     assert.equal(call.url, "https://api.example.com/connections");
     return json({ connections: [] });
   });
-  const adapter = createW6wUiAdapter(testClient(fake.fetch));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
 
   await adapter.listConnections();
 
@@ -142,7 +142,7 @@ test("invokeAction forwards the WHOLE opts object (connectionId, project, state)
     capturedBody = typeof init?.body === "string" ? JSON.parse(init.body) : init?.body;
     return Promise.resolve(json({ value: "ok" }));
   };
-  const adapter = createW6wUiAdapter(testClient(capturing));
+  const adapter = createW6WUiAdapter(testClient(capturing));
 
   await adapter.invokeAction(
     "app_1",

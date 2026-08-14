@@ -1,5 +1,5 @@
 /**
- * `W6wClient` — the object every operation hangs off.
+ * `W6WClient` — the object every operation hangs off.
  *
  * It holds three things and no behaviour of its own: the resolved
  * configuration, the transport, and (from T2.1.3 onward) the operation
@@ -19,7 +19,7 @@ import {
   type FetchLike,
   resolveConfig,
   type ResolvedConfig,
-  type W6wClientOptions,
+  type W6WClientOptions,
 } from "./config.ts";
 import { ConnectionsApi } from "./connections.ts";
 import { ConsoleApi } from "./console/mod.ts";
@@ -43,14 +43,14 @@ import { WorkflowsApi } from "./workflows.ts";
  * @example
  * ```ts
  * // From the environment.
- * const client = new W6wClient();
+ * const client = new W6WClient();
  *
  * // Explicit, overriding the environment. Two clients, two credentials, one
  * // process — no interference.
- * const other = new W6wClient({ baseUrl: "https://api.example.com", token: "t_2" });
+ * const other = new W6WClient({ baseUrl: "https://api.example.com", token: "t_2" });
  * ```
  */
-export class W6wClient {
+export class W6WClient {
   /**
    * The resolved base URL, credential and default project. Exposed read-only
    * so a host can log *which server* it is talking to without re-deriving the
@@ -125,7 +125,7 @@ export class W6wClient {
    * @param options - Explicit configuration; anything omitted falls back to the environment.
    * @throws {ConfigError} When no base URL is configured, or the host has no `fetch`.
    */
-  constructor(options: W6wClientOptions = {}) {
+  constructor(options: W6WClientOptions = {}) {
     this.config = resolveConfig(options);
     if (options.fetch) {
       this.#fetch = options.fetch;
@@ -134,7 +134,7 @@ export class W6wClient {
       if (typeof global !== "function") {
         throw new ConfigError(
           "This runtime has no global fetch. Pass an implementation " +
-            "(new W6wClient({ fetch })) or run on Node 18+, Deno or Bun.",
+            "(new W6WClient({ fetch })) or run on Node 18+, Deno or Bun.",
         );
       }
       // Bound, so the default keeps working when it is called as a bare

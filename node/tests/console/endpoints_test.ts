@@ -18,7 +18,7 @@
  */
 
 import { assertEquals, assertRejects } from "@std/assert";
-import { W6wClient } from "../../src/client.ts";
+import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
 import type { EndpointDef, EndpointSummary } from "../../src/console/endpoints.ts";
@@ -54,10 +54,10 @@ function json(body: unknown, status = 200): Response {
 }
 
 /** A client wired to a fake transport. */
-function client(respond: (call: Call) => Response): { client: W6wClient; calls: Call[] } {
+function client(respond: (call: Call) => Response): { client: W6WClient; calls: Call[] } {
   const fake = fakeFetch(respond);
   return {
-    client: new W6wClient({
+    client: new W6WClient({
       baseUrl: "https://api.example.com",
       token: "tok_1",
       fetch: fake.fetch,
@@ -98,7 +98,7 @@ Deno.test(
   () => {
     // Runtime, not type-level: a namespace that silently lost a method would
     // still typecheck everywhere else in this suite.
-    const c = new W6wClient({ baseUrl: "https://api.example.com", token: "t" });
+    const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
     assertEquals(typeof c.console.endpoints.list, "function");
     assertEquals(typeof c.console.endpoints.get, "function");
     assertEquals(typeof c.console.endpoints.upsert, "function");

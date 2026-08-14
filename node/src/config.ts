@@ -38,7 +38,7 @@ export const BASE_PATH = "";
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 /** Constructor options for a client. Every field is optional. */
-export interface W6wClientOptions {
+export interface W6WClientOptions {
   /**
    * The **origin** of the w6w server, e.g. `https://api.example.com`. The API
    * is served at its root, so no path is appended. It must be an absolute
@@ -147,7 +147,7 @@ export function joinBaseUrl(origin: string): string {
   if (trimmed.length === 0) {
     throw new ConfigError(
       "No w6w base URL is configured. Pass one to the client " +
-        '(new W6wClient({ baseUrl: "https://api.example.com" })) or set the ' +
+        '(new W6WClient({ baseUrl: "https://api.example.com" })) or set the ' +
         `${ENV_BASE_URL} environment variable. It holds the server's origin, ` +
         "e.g. \"https://api.example.com\" — the API is served at its root, so no " +
         "path is appended.",
@@ -198,7 +198,7 @@ function parses(origin: string): boolean {
  * @returns The resolved configuration.
  * @throws {ConfigError} When no usable base URL was supplied, naming `W6W_BASE_URL`.
  */
-export function resolveConfig(options: W6wClientOptions = {}): ResolvedConfig {
+export function resolveConfig(options: W6WClientOptions = {}): ResolvedConfig {
   return {
     // Every normalisation, the emptiness test and the absoluteness check live in
     // `joinBaseUrl` — one code path, so the exported helper and the client can
@@ -230,7 +230,7 @@ export function requireToken(config: ResolvedConfig): string {
   if (config.token === null || config.token.trim().length === 0) {
     throw new ConfigError(
       "No w6w API token is configured. Pass one to the client " +
-        '(new W6wClient({ token: "…" })) or set the ' +
+        '(new W6WClient({ token: "…" })) or set the ' +
         `${ENV_TOKEN} environment variable. Every w6w API operation is authenticated.`,
     );
   }

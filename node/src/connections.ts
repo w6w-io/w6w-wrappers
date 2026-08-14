@@ -24,7 +24,7 @@ import type { HttpResponse, RequestOptions } from "./http.ts";
 import { type ConnectionSummary, unwrap } from "./types.ts";
 
 /**
- * The slice of `W6wClient` this namespace needs: the transport, and nothing
+ * The slice of `W6WClient` this namespace needs: the transport, and nothing
  * else. Connections carry no `?project=` — the server scopes them by
  * tenant/account from the credential — so, as with `vars`, this host cannot
  * reach the client's configuration to send a scope even by accident.
@@ -35,7 +35,7 @@ export interface ConnectionsHost {
 }
 
 /**
- * The `connections` namespace on a `W6wClient`.
+ * The `connections` namespace on a `W6WClient`.
  *
  * @example
  * ```ts

@@ -16,7 +16,7 @@
  *
  * It is deliberately not a namespace class. `endpoints.json` names this
  * operation `client.me()`, a method on the client itself, so the module exports
- * a function over a narrow host interface and `W6wClient` delegates to it —
+ * a function over a narrow host interface and `W6WClient` delegates to it —
  * same layering as the namespaces, without inventing a `client.me.me()`.
  *
  * @module
@@ -28,7 +28,7 @@ import type { Me } from "./types.ts";
 import { VERSION } from "./version.ts";
 
 /**
- * The slice of `W6wClient` this operation needs: the transport, and nothing
+ * The slice of `W6WClient` this operation needs: the transport, and nothing
  * else. Structural rather than a concrete client type, so it stays
  * independently callable in a test and this module never imports the client
  * back.

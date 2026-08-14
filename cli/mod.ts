@@ -43,7 +43,7 @@ import {
 import { HELP_TREE } from "./src/help.generated.ts";
 import type { HelpCommand } from "./src/help.generated.ts";
 import type { CliIo } from "./src/runtime.ts";
-import type { FetchLike, W6wClient } from "@w6w/sdk";
+import type { FetchLike, W6WClient } from "@w6w/sdk";
 
 export { parse } from "./src/args.ts";
 export type { FlagSpec, GlobalOptions, Invocation, ParseOptions, ParseResult } from "./src/args.ts";
@@ -91,7 +91,7 @@ export type {
  * The explicit `: string` annotation is required, not decorative: JSR publishes
  * this file as TypeScript source and rejects inferred public types.
  */
-export const VERSION: string = "0.4.0";
+export const VERSION: string = "0.5.0";
 
 /** `w6w help <command>` is accepted as an alias for `w6w <command> --help`. */
 const HELP_COMMAND = "help";
@@ -118,7 +118,7 @@ export interface CommandContext {
    *
    * @throws {ConfigError} When the base URL or token is missing or unusable.
    */
-  client(): W6wClient;
+  client(): W6WClient;
 }
 
 /**
@@ -332,7 +332,7 @@ async function dispatch(routed: RunRoute, io: CliIo, options: CliOptions): Promi
 
   // Built on demand and remembered: a command that never asks for the API never
   // needs a token, and one that asks twice gets one client, not two.
-  let client: W6wClient | null = null;
+  let client: W6WClient | null = null;
   const context: CommandContext = {
     command: routed.command,
     invocation: routed.invocation,

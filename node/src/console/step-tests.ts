@@ -28,7 +28,7 @@
  *
  * **`recordRun` returns the REAL created row, not `void`.** Studio's current
  * `client.ts` discards it to `void` (`.then(() => {})`) only so its `api`
- * object stays assignable to `@w6w/ui`'s `W6wApi.recordStepTestRun` (typed
+ * object stays assignable to `@w6w/ui`'s `W6WApi.recordStepTestRun` (typed
  * `Promise<void>`, `packages/ui/src/provider.tsx:211-221`) — that is
  * STUDIO's constraint, not the SDK's. Mirrors `./saved-tests.ts`'s
  * `recordTestRun` exactly; the void-discard happens at studio's own repo
@@ -46,7 +46,7 @@ import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 import { unwrap } from "../types.ts";
 
 /**
- * The slice of `W6wClient` this namespace needs: the transport, and nothing
+ * The slice of `W6WClient` this namespace needs: the transport, and nothing
  * else. Structural rather than a concrete client type, so the namespace stays
  * independently constructible in a test and this module never imports the
  * client back — mirrors `ConnectionsHost` in `./connections.ts`.
@@ -92,7 +92,7 @@ export interface StepTestRun {
 }
 
 /**
- * The `console.stepTests` namespace on a `W6wClient`.
+ * The `console.stepTests` namespace on a `W6WClient`.
  *
  * @example
  * ```ts

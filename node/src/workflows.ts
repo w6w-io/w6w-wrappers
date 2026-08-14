@@ -56,7 +56,7 @@ import {
 } from "./types.ts";
 
 /**
- * The slice of `W6wClient` this namespace needs: the transport, plus the
+ * The slice of `W6WClient` this namespace needs: the transport, plus the
  * resolved configuration it reads the **default project** out of. Structural
  * rather than a concrete client type, so the namespace stays independently
  * constructible in a test and this module never imports the client back.
@@ -144,7 +144,7 @@ export interface WorkflowRunResult extends RunResult {
 }
 
 /**
- * The `workflows` namespace on a `W6wClient`.
+ * The `workflows` namespace on a `W6WClient`.
  *
  * @example
  * ```ts

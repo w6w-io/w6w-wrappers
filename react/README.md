@@ -1,10 +1,10 @@
 # @w6w/react
 
-React bindings for [`@w6w/sdk`](../node) — a `<W6wProvider>` that holds one memoized
-`W6wClient` with per-request token freshness, a small hook set over the SDK's public
+React bindings for [`@w6w/sdk`](../node) — a `<W6WProvider>` that holds one memoized
+`W6WClient` with per-request token freshness, a small hook set over the SDK's public
 surface (`me`, `documents`, `vars`, `connections`, `workflows`, `run`), and
-`createW6wUiAdapter`, a structural bridge from a `W6wClient` to
-[`@w6w/ui`](https://github.com/w6w-io/w6w-ui)'s `W6wApi` contract.
+`createW6WUiAdapter`, a structural bridge from a `W6WClient` to
+[`@w6w/ui`](https://github.com/w6w-io/w6w-ui)'s `W6WApi` contract.
 
 License: MIT · Version: 0.3.0
 
@@ -18,7 +18,7 @@ re-verify against the wire contract; verify `@w6w/sdk` instead.
 npm install @w6w/react react
 ```
 
-`react-dom` is not a dependency of this package — `<W6wProvider>`'s only JSX is a
+`react-dom` is not a dependency of this package — `<W6WProvider>`'s only JSX is a
 context wrapper (`<Ctx.Provider>`), never a DOM element of its own. Your app already
 depends on `react-dom` to mount itself; nothing extra is needed here.
 
@@ -27,13 +27,13 @@ depends on `react-dom` to mount itself; nothing extra is needed here.
 Wrap your app root once:
 
 ```tsx
-import { W6wProvider } from "@w6w/react";
+import { W6WProvider } from "@w6w/react";
 
 function App() {
   return (
-    <W6wProvider baseUrl="https://api.example.com" token={() => getCurrentJwt()}>
+    <W6WProvider baseUrl="https://api.example.com" token={() => getCurrentJwt()}>
       <YourApp />
-    </W6wProvider>
+    </W6WProvider>
   );
 }
 ```
@@ -41,13 +41,13 @@ function App() {
 `token` accepts a literal string, or a supplier function called fresh on every
 request — pass a supplier when your token rotates (e.g. a short-lived JWT read from
 an auth SDK) and the client will pick up the new value on the very next call, with no
-teardown/rebuild of the underlying `W6wClient`. See `src/W6wProvider.tsx`'s module
+teardown/rebuild of the underlying `W6WClient`. See `src/W6WProvider.tsx`'s module
 header for the exact mechanism (the C-4 shim).
 
 Then, anywhere under the provider:
 
 ```tsx
-import { useDocuments, useW6wClient } from "@w6w/react";
+import { useDocuments, useW6WClient } from "@w6w/react";
 
 function DocList() {
   const { data, loading, error, refetch } = useDocuments();
@@ -64,41 +64,41 @@ function DocList() {
 ## Using this package with `@w6w/ui`
 
 `@w6w/ui`'s components (e.g. `AppPicker`, `ActionTestForm`, the flow editor) take a
-`W6wApi` object through their own `<W6wUIProvider api={...}>`. Build one from your
-`@w6w/react` client with `createW6wUiAdapter`:
+`W6WApi` object through their own `<W6WUIProvider api={...}>`. Build one from your
+`@w6w/react` client with `createW6WUiAdapter`:
 
 ```tsx
-import { createW6wUiAdapter, useW6wClient, W6wProvider } from "@w6w/react";
-import { W6wUIProvider, AppPicker } from "@w6w/ui";
+import { createW6WUiAdapter, useW6WClient, W6WProvider } from "@w6w/react";
+import { W6WUIProvider, AppPicker } from "@w6w/ui";
 
 function UiBridge({ children }: { children: React.ReactNode }) {
-  const client = useW6wClient();
-  const api = useMemo(() => createW6wUiAdapter(client), [client]);
-  return <W6wUIProvider api={api}>{children}</W6wUIProvider>;
+  const client = useW6WClient();
+  const api = useMemo(() => createW6WUiAdapter(client), [client]);
+  return <W6WUIProvider api={api}>{children}</W6WUIProvider>;
 }
 
 function App() {
   return (
-    <W6wProvider baseUrl="https://api.example.com" token={jwtSupplier}>
+    <W6WProvider baseUrl="https://api.example.com" token={jwtSupplier}>
       <UiBridge>
         <AppPicker onPick={(appId) => console.log(appId)} />
       </UiBridge>
-    </W6wProvider>
+    </W6WProvider>
   );
 }
 ```
 
 **`@w6w/ui` is not on npm today.** The `@w6w` scope holds only `@w6w/sdk` and
 `@w6w/cli` at the time of writing (`npm view @w6w/ui` → 404); the source itself IS a
-public GitHub repository (`w6w-io/w6w-ui`). `createW6wUiAdapter`'s `W6wApi` return
+public GitHub repository (`w6w-io/w6w-ui`). `createW6WUiAdapter`'s `W6WApi` return
 type targets that contract *structurally* — this package names `@w6w/ui` nowhere in
 its own manifest and needs no change whenever `@w6w/ui` becomes reachable another
 way (this monorepo, a `git+https://` dependency on the public repo, or a private
 registry). This is an honest statement of today's install story, not a promise that
 `npm i @w6w/ui` resolves.
 
-`createW6wUiAdapter` is built entirely on `@w6w/sdk/console` — the SAME namespace
-`packages/studio`'s own facade uses for these routes (`packages/ui/src/createW6wApi.ts`
+`createW6WUiAdapter` is built entirely on `@w6w/sdk/console` — the SAME namespace
+`packages/studio`'s own facade uses for these routes (`packages/ui/src/createW6WApi.ts`
 is the *other* hand-rolled client for them; this package is not a third one).
 **`client.console.*` is documented "Studio-internal… unstable" and is deliberately
 excluded from `endpoints.json`'s conformance runner** (`node/src/client.ts:114-116`).
@@ -138,7 +138,7 @@ with only a `runId` and no public polling operation to follow it with —
 surface described above, so this hook does not reach for it. Pass `wait: false`
 explicitly if you genuinely want the queued-and-walk-away behaviour.
 
-`useW6wClient()` returns the underlying `W6wClient` for anything not covered by a
+`useW6WClient()` returns the underlying `W6WClient` for anything not covered by a
 hook (e.g. `client.console.*` directly, at your own risk per the caveat above).
 
 ## Known limitations
@@ -153,7 +153,7 @@ hook (e.g. `client.console.*` directly, at your own risk per the caveat above).
   return type just gets no autocomplete for those extra fields.
 - **`ActionTestForm.tsx:149,176`'s error handling cannot be satisfied from this
   package.** `@w6w/ui`'s `ActionTestForm` does a NOMINAL `instanceof ApiError` check
-  against its OWN `ApiError` class (`packages/ui/src/createW6wApi.ts`), not a
+  against its OWN `ApiError` class (`packages/ui/src/createW6WApi.ts`), not a
   duck-typed one. No error object this adapter throws can ever satisfy that check
   without importing `@w6w/ui`'s class directly, which this package's MIT/C-1
   boundary forbids. Concretely: on a failed `invokeAction` used together with

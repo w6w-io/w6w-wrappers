@@ -6,7 +6,7 @@
  * but deliberately EXCLUDED from `endpoints.json`'s `operations[]` and from
  * the root barrel (`../../mod.ts`) — see `docs/console.md` and HITL-1 in this
  * task's contract. `client.console` is instance state exactly like every other
- * namespace on `W6wClient` (`docs/implementation.md` §MECHANISM PIN —
+ * namespace on `W6WClient` (`docs/implementation.md` §MECHANISM PIN —
  * instance state, never globals): it holds the host it was constructed with
  * and nothing of its own.
  *
@@ -151,7 +151,7 @@ export type {
 } from "./tenant-oauth-apps.ts";
 
 /**
- * The slice of `W6wClient` the console namespace group needs: the transport,
+ * The slice of `W6WClient` the console namespace group needs: the transport,
  * and nothing else. Structural rather than a concrete client type, so
  * `ConsoleApi` stays independently constructible in a test and this module
  * never imports the client back.
@@ -162,7 +162,7 @@ export interface ConsoleHost {
 }
 
 /**
- * The `console` namespace group on a `W6wClient` — studio-internal, not part
+ * The `console` namespace group on a `W6WClient` — studio-internal, not part
  * of the published partner contract.
  *
  * @example

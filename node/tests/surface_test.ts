@@ -62,7 +62,7 @@ const PUBLIC_SURFACE: Record<string, "function" | "string"> = {
   // T2.1.1 — the version, in lockstep across all three wrappers.
   VERSION: "string",
   // T2.1.2 — transport core.
-  W6wClient: "function",
+  W6WClient: "function",
   ApiError: "function",
   ConfigError: "function",
   BASE_PATH: "string",
@@ -102,7 +102,7 @@ Deno.test("the barrel exports the whole public surface, by name", () => {
 Deno.test("the barrel's classes and guards are reachable and usable, not just present", () => {
   // Named exports can survive as `undefined` shaped holes in a bad merge; these
   // lines fail if the binding is not the thing it claims to be.
-  const client = new barrel.W6wClient({ baseUrl: "https://api.example.com", token: "t" });
+  const client = new barrel.W6WClient({ baseUrl: "https://api.example.com", token: "t" });
   assertEquals(typeof client.documents.list, "function");
   assertEquals(typeof client.vars.list, "function");
   assertEquals(typeof client.connections.list, "function");

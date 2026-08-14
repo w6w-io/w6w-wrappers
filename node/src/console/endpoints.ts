@@ -46,7 +46,7 @@ import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 import { unwrap } from "../types.ts";
 
 /**
- * The slice of `W6wClient` this namespace needs: the transport, and nothing
+ * The slice of `W6WClient` this namespace needs: the transport, and nothing
  * else. Structural rather than a concrete client type, so the namespace stays
  * independently constructible in a test and this module never imports the
  * client back — mirrors `WorkflowsHost` in `./workflows.ts`.
@@ -162,7 +162,7 @@ export type EndpointInvokeResult =
   | { kind: "workflow"; runId: string };
 
 /**
- * The `console.endpoints` namespace on a `W6wClient`.
+ * The `console.endpoints` namespace on a `W6WClient`.
  *
  * @example
  * ```ts

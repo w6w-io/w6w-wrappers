@@ -1,7 +1,7 @@
 # `@w6w/sdk/console` — the console-only surface
 
 The other documents in this directory describe the **published partner contract**: `sdk-surface.md`
-catalogs every symbol on `@w6w/sdk`'s root export (`import { W6wClient } from "@w6w/sdk"`), and
+catalogs every symbol on `@w6w/sdk`'s root export (`import { W6WClient } from "@w6w/sdk"`), and
 `endpoints.json` / `docs/parity.md`'s "Adding an operation" process govern how that surface grows in
 lockstep across all three wrappers.
 
@@ -17,7 +17,7 @@ unstable, not part of the published partner contract —
   was never a promise to a partner in the first place.
 
 It exists as a **separate subpath export** (`deno.json`'s `"./console"`, `package.json`'s
-`"./console"`) rather than a namespace hidden on `W6wClient` directly, so a host that only wants the
+`"./console"`) rather than a namespace hidden on `W6WClient` directly, so a host that only wants the
 partner surface never pulls this code in, and a host that wants both — the operator console itself —
 imports one client and gets `client.console.*` alongside everything else. It is built on the same
 transport as every other namespace (`src/http.ts`, `src/errors.ts`, `src/config.ts`) and obeys the
@@ -32,10 +32,10 @@ appended to `ConsoleApi`'s constructor as one `this.<domain> = new <Domain>Api(h
 ## `console.reliability.list(days?, limit?)`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const board = await client.console.reliability.list(30, 5);
 ```
 
@@ -99,10 +99,10 @@ this project's `FOLLOWUPS.md` and is not part of this change.
 ## `console.auth.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient({ baseUrl: "https://api.example.com" }); // no token — see below
+const client = new W6WClient({ baseUrl: "https://api.example.com" }); // no token — see below
 const { token, user } = await client.console.auth.login("alice", "hunter2");
 ```
 
@@ -145,10 +145,10 @@ None of these five call `unwrap()` — every response body is flat, no envelope 
 ## `console.dashboard.stats(params?)`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console";
 
-const client = new W6wClient();
+const client = new W6WClient();
 const rollup = await client.console.dashboard.stats({ bucket: "week" });
 ```
 
@@ -203,10 +203,10 @@ change.
 ## `console.projects.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const projects = await client.console.projects.list();
 const created = await client.console.projects.create("Acme");
 await client.console.projects.delete(created.id);
@@ -231,10 +231,10 @@ project's `plan.md` FINDINGS DISPOSITION for the full reasoning behind the scope
 ## `console.schedules.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const schedule = await client.console.schedules.get("wf_1");
 if (schedule === null) {
   await client.console.schedules.upsert("wf_1", { cron: "0 * * * *" });
@@ -268,10 +268,10 @@ covered here** — the same "studio never wrapped it" reasoning as `console.proj
 ## `console.apps.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const apps = await client.console.apps.list();
 const detail = await client.console.apps.get(apps[0].id);
 const result = await client.console.apps.invoke(detail.app.id as string, "send", { to: "a@b.com" });
@@ -294,11 +294,11 @@ wire call (method/path/body/query) is unchanged from `client.ts`.
 | `listOAuthConfig(appId)`                  | `GET /apps/:id/oauth-config`                         | `unwrap<OAuthConfigSummary[]>(res, "configs")`. **Dead code (HITL-4).**                                                                                                                                                                       |
 | `upsertOAuthConfig(appId, authKey, body)` | `PUT /apps/:id/oauth-config/:authKey`                | `unwrap<OAuthConfigSummary>(res, "config")` (server answers `201`). Body forwarded verbatim. **Dead code (HITL-4).**                                                                                                                          |
 | `deleteOAuthConfig(appId, authKey)`       | `DELETE /apps/:id/oauth-config/:authKey`             | Returns nothing; discards `{ok:true}`. **Dead code (HITL-4).**                                                                                                                                                                                |
-| `startOAuthFlow(appId, authKey, body?)`   | `POST /apps/:id/oauth-config/:authKey/authorize-url` | Whole body IS `{authorizationUrl, state, expiresIn}` — no envelope. No studio-page caller, but called via `@w6w/ui`'s `W6wApi.startAppOAuthFlow` facade.                                                                                      |
+| `startOAuthFlow(appId, authKey, body?)`   | `POST /apps/:id/oauth-config/:authKey/authorize-url` | Whole body IS `{authorizationUrl, state, expiresIn}` — no envelope. No studio-page caller, but called via `@w6w/ui`'s `W6WApi.startAppOAuthFlow` facade.                                                                                      |
 | `preview(source, opts?)`                  | `POST /apps/preview`                                 | Whole body IS the `kind`-discriminated union — no envelope.                                                                                                                                                                                   |
 | `import(source, opts?)`                   | `POST /apps/import`                                  | Whole body IS the `kind`-discriminated union — no envelope.                                                                                                                                                                                   |
 | `refresh(id, opts?)`                      | `POST /apps/:id/refresh`                             | Whole body IS `RefreshAppResponse` — no envelope.                                                                                                                                                                                             |
-| `invoke(appId, actionKey, params, opts?)` | `POST /apps/:id/actions/:key/invoke`                 | Whole body IS `{value, logs?, apiCalls?}` — no envelope. No studio-page caller, but called heavily via `@w6w/ui`'s `W6wApi.invokeAction` facade (that facade's `opts` also carries `project`/`state`, a superset this method does not model). |
+| `invoke(appId, actionKey, params, opts?)` | `POST /apps/:id/actions/:key/invoke`                 | Whole body IS `{value, logs?, apiCalls?}` — no envelope. No studio-page caller, but called heavily via `@w6w/ui`'s `W6WApi.invokeAction` facade (that facade's `opts` also carries `project`/`state`, a superset this method does not model). |
 | `delete(appId)`                           | `DELETE /apps/:id`                                   | Whole body IS `{removed: number}` — **returned, not discarded to `void`**, the one deliberate asymmetry vs. `console.projects.delete`/`console.schedules.delete`.                                                                             |
 
 Relocated verbatim from `packages/studio/src/api/client.ts:235-393`, which the field-for-field
@@ -327,10 +327,10 @@ behind all three exclusions.
 ## `console.connections.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const conns = await client.console.connections.listForApp("sendgrid");
 const created = await client.console.connections.create("sendgrid", {
   authKey: "apiKey",
@@ -388,10 +388,10 @@ should start from `HITL-10`/SP2.3 rather than re-deriving the reasoning from scr
 ## `console.workflows.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const { workflow, updatedAt } = await client.console.workflows.get("wf_1");
 const saved = await client.console.workflows.upsert(workflow, { ifUnmodifiedSince: updatedAt });
 const runs = await client.console.workflows.listRuns("wf_1");
@@ -464,10 +464,10 @@ surface (still needs cli/python parity + a documented partner story, neither of 
 ## `console.savedTests.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const tests = await client.console.savedTests.list("conn_1");
 const created = await client.console.savedTests.create("conn_1", {
   actionKey: "send",
@@ -497,7 +497,7 @@ comment block — field-for-field, not redesigned.
 
 **`recordTestRun` returns the real created `SavedTestRun` row, unwrapped from `{run}` — it does NOT
 discard to `void`.** Studio's own `client.ts` currently discards this call's result
-(`.then(() => {})`) only so its `api` object stays assignable to `@w6w/ui`'s `W6wApi.recordTestRun`,
+(`.then(() => {})`) only so its `api` object stays assignable to `@w6w/ui`'s `W6WApi.recordTestRun`,
 which that facade types `Promise<void>` — that is studio's constraint, not this package's. A caller
 wanting the studio-facade `void` shape adapts it themselves (this is what studio's own
 `src/repos/saved-tests.ts` does, at the repo layer, not here).
@@ -509,10 +509,10 @@ server scopes by connection/tenant — so `SavedTestsHost` needs only the transp
 ## `console.stepTests.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const fixture = await client.console.stepTests.save("wf_1", "nd_1", {
   input: { foo: "bar" },
   with: { to: "a@b.com" },
@@ -541,7 +541,7 @@ SHORTENED versus `client.ts`'s flat names (`saveStepTest` → `save`, `listStepT
 **`recordRun` returns the real created `StepTestRun` row, unwrapped from `{run}` — it does NOT
 discard to `void`.** Same rule as `console.savedTests.recordTestRun` above: studio's own `client.ts`
 discards this call's result only so its `api` object stays assignable to `@w6w/ui`'s
-`W6wApi.recordStepTestRun` (`Promise<void>`) — studio's constraint, not this package's. A caller
+`W6WApi.recordStepTestRun` (`Promise<void>`) — studio's constraint, not this package's. A caller
 wanting the studio-facade `void` shape adapts it themselves.
 
 **`PATCH`/`DELETE /workflows/:workflowId/steps/:stepId/tests/:id` also exist server-side but are
@@ -556,10 +556,10 @@ the server scopes by workflow/tenant — so `StepTestsHost` needs only the trans
 ## `console.vault.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const secrets = await client.console.vault.list();
 const created = await client.console.vault.create({ name: "openai_key", value: "sk-…" });
 await client.console.vault.update(created.id, { description: "Prod key" });
@@ -613,10 +613,10 @@ None of these six methods take a `project` scoping parameter — vault secrets a
 ## `console.tokens.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const tokens = await client.console.tokens.list();
 const { token, secret } = await client.console.tokens.create("ci-deploy");
 console.log(secret); // shown exactly once — capture it now or it is gone
@@ -661,10 +661,10 @@ host shape.
 ## `console.functions.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const fns = await client.console.functions.list();
 const fn = await client.console.functions.get(fns[0].id);
 await client.console.functions.upsert({ ...fn, description: "Send an email" });
@@ -702,10 +702,10 @@ HTTP route — so `FunctionsHost` needs only the transport, mirroring `console.w
 ## `console.endpoints.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const endpoints = await client.console.endpoints.list();
 const { endpoint, invokeUrl } = await client.console.endpoints.get(endpoints[0].id);
 const result = await client.console.endpoints.invoke(endpoint.id, { to: "a@b.com" });
@@ -760,10 +760,10 @@ route on this domain — so `EndpointsHost` needs only the transport, mirroring
 ## `console.subscriptions.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const subs = await client.console.subscriptions.list();
 const sub = await client.console.subscriptions.create("app_x", "new-message", {
   workflowId: "wf_1",
@@ -806,10 +806,10 @@ so `SubscriptionsHost` needs only the transport, mirroring `VarsHost`/`ProjectsH
 ## `console.apiCalls.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const calls = await client.console.apiCalls.list({ appId: "app_x", limit: 50 });
 ```
 
@@ -832,10 +832,10 @@ type, rather than declaring a second, parallel interface.
 ## `console.tenantOAuthApps.*`
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
-const client = new W6wClient();
+const client = new W6WClient();
 const { configs, callbackUrl } = await client.console.tenantOAuthApps.list();
 // Register `callbackUrl` with the provider — never assemble it client-side.
 await client.console.tenantOAuthApps.put("sendgrid", "oauth2", { clientId: "abc" });

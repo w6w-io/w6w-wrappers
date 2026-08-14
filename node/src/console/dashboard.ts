@@ -26,7 +26,7 @@
 import type { HttpResponse, RequestOptions } from "../http.ts";
 
 /**
- * The slice of `W6wClient` this namespace needs: the transport, and nothing
+ * The slice of `W6WClient` this namespace needs: the transport, and nothing
  * else. Structural rather than a concrete client type, so the namespace stays
  * independently constructible in a test and this module never imports the
  * client back — mirrors `ReliabilityHost` in `./reliability.ts`.
@@ -67,7 +67,7 @@ export interface DashboardStats {
 }
 
 /**
- * The `console.dashboard` namespace on a `W6wClient`.
+ * The `console.dashboard` namespace on a `W6WClient`.
  *
  * @example
  * ```ts
