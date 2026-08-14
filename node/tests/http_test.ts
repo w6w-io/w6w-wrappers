@@ -14,7 +14,7 @@ import {
   assertStringIncludes,
   assertThrows,
 } from "@std/assert";
-import { W6wClient } from "../src/client.ts";
+import { W6WClient } from "../src/client.ts";
 import { type FetchLike, resolveConfig } from "../src/config.ts";
 import { ApiError, ConfigError } from "../src/errors.ts";
 import { buildUrl, path, request } from "../src/http.ts";
@@ -382,7 +382,7 @@ Deno.test("the client defaults to globalThis.fetch, and says so when there is no
     // Prove the default is the global: replace it and watch the client use it.
     const fake = fakeFetch(() => json({ ok: true }));
     globalThis.fetch = fake.fetch as typeof globalThis.fetch;
-    const client = new W6wClient({ baseUrl: "https://api.example.com", token: "tok_g" });
+    const client = new W6WClient({ baseUrl: "https://api.example.com", token: "tok_g" });
     const res = await client.request<{ ok: boolean }>({ method: "GET", path: "/me" });
     assertEquals(res.body, { ok: true });
     assertEquals(fake.calls[0].url, "https://api.example.com/me");
@@ -393,7 +393,7 @@ Deno.test("the client defaults to globalThis.fetch, and says so when there is no
     // deno-lint-ignore no-explicit-any
     delete (globalThis as any).fetch;
     const err = assertThrows(
-      () => new W6wClient({ baseUrl: "https://api.example.com", token: "tok_g" }),
+      () => new W6WClient({ baseUrl: "https://api.example.com", token: "tok_g" }),
       ConfigError,
     );
     assertStringIncludes(err.message, "fetch");

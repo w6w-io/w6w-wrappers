@@ -50,7 +50,7 @@
 import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 
 /**
- * The slice of `W6wClient` this namespace needs: the transport, and nothing
+ * The slice of `W6WClient` this namespace needs: the transport, and nothing
  * else. Structural rather than a concrete client type, so the namespace stays
  * independently constructible in a test and this module never imports the
  * client back — mirrors `AuthHost` in `./auth.ts`.
@@ -161,7 +161,7 @@ function toSetBody(input: SetTenantOAuthAppInput): Record<string, unknown> {
 }
 
 /**
- * The `console.tenantOAuthApps` namespace on a `W6wClient` — the caller's own
+ * The `console.tenantOAuthApps` namespace on a `W6WClient` — the caller's own
  * tenant, never a tenant of its choosing.
  *
  * @example

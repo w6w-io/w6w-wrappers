@@ -1,21 +1,21 @@
 /**
- * `<W6wProvider>` — one `W6wClient` per `baseUrl`, with per-request token
+ * `<W6WProvider>` — one `W6WClient` per `baseUrl`, with per-request token
  * freshness (C-4).
  *
- * `@w6w/sdk`'s `W6wClientOptions.token` (`node/src/config.ts:41-63`) is
+ * `@w6w/sdk`'s `W6WClientOptions.token` (`node/src/config.ts:41-63`) is
  * resolved ONCE, at construction, into `readonly` instance state
  * (`node/src/client.ts:59`) — there is no supplier form. A naive
- * `new W6wClient({ token })` therefore captures whatever `token` was at mount
+ * `new W6WClient({ token })` therefore captures whatever `token` was at mount
  * time and never sees a later rotation.
  *
  * The fix lives at the `fetch`-injection seam, not the `token` seam.
  * `node/src/http.ts`'s `request()` builds `headers = new Headers(options.headers)`
  * and then unconditionally `headers.set("authorization", ...)` BEFORE calling
  * the injected `fetchImpl(url, {method, headers, body})` — `Headers.set`
- * REPLACES, so a custom `fetch` passed to `new W6wClient({ fetch })` can read
+ * REPLACES, so a custom `fetch` passed to `new W6WClient({ fetch })` can read
  * the CURRENT token and overwrite `authorization` on the `Headers` object it
  * receives, immediately before delegating to the real transport. This
- * provider therefore constructs its `W6wClient` ONCE, with a non-blank
+ * provider therefore constructs its `W6WClient` ONCE, with a non-blank
  * placeholder token (any non-blank string satisfies `requireToken`,
  * `config.ts:229-237` — it is never actually sent, since the injected `fetch`
  * always overwrites it first) and an injected `fetch` that resolves the
@@ -35,7 +35,7 @@
  *
  * @module
  */
-import { type FetchLike, W6wClient } from "@w6w/sdk";
+import { type FetchLike, W6WClient } from "@w6w/sdk";
 import { type ReactNode, createContext, useContext, useMemo, useRef } from "react";
 
 /** A static bearer token, or a supplier read fresh on every request. */
@@ -49,7 +49,7 @@ export type TokenSource = string | (() => string | null | undefined);
  */
 const PLACEHOLDER_TOKEN = "w6w-react-unused-placeholder-token";
 
-export interface W6wProviderProps {
+export interface W6WProviderProps {
   /** The w6w server's origin, e.g. `"https://api.example.com"`. */
   baseUrl: string;
   /** A literal bearer token, or a supplier called fresh on every request. */
@@ -65,13 +65,13 @@ export interface W6wProviderProps {
   children: ReactNode;
 }
 
-const Ctx = createContext<W6wClient | null>(null);
+const Ctx = createContext<W6WClient | null>(null);
 
 /**
- * Provides one memoized `W6wClient` to every component under it. See this
+ * Provides one memoized `W6WClient` to every component under it. See this
  * module's header for the C-4 token-freshness mechanism.
  */
-export function W6wProvider(props: W6wProviderProps): ReactNode {
+export function W6WProvider(props: W6WProviderProps): ReactNode {
   const { baseUrl, token, fetch: fetchOverride, project, children } = props;
 
   // "Latest ref" pattern: kept in sync on every render, but never a `useMemo`
@@ -97,23 +97,23 @@ export function W6wProvider(props: W6wProviderProps): ReactNode {
         fetchRef.current ?? ((i: string, ii?: RequestInit) => globalThis.fetch(i, ii));
       return transport(input, { ...init, headers });
     };
-    return new W6wClient({ baseUrl, token: PLACEHOLDER_TOKEN, project, fetch: injectedFetch });
+    return new W6WClient({ baseUrl, token: PLACEHOLDER_TOKEN, project, fetch: injectedFetch });
   }, [baseUrl, project]);
 
   return <Ctx.Provider value={client}>{children}</Ctx.Provider>;
 }
 
 /**
- * Access the memoized `W6wClient`. Throws a helpful error if used outside a
- * `<W6wProvider>` (mirrors `packages/ui/src/provider.tsx:249-258`'s
- * `useW6wApi` shape — read-only reference, transcribed here, never imported).
+ * Access the memoized `W6WClient`. Throws a helpful error if used outside a
+ * `<W6WProvider>` (mirrors `packages/ui/src/provider.tsx:249-258`'s
+ * `useW6WApi` shape — read-only reference, transcribed here, never imported).
  */
-export function useW6wClient(): W6wClient {
+export function useW6WClient(): W6WClient {
   const client = useContext(Ctx);
   if (!client) {
     throw new Error(
-      "useW6wClient must be used inside <W6wProvider>. " +
-        'Wrap your app root with <W6wProvider baseUrl="..." token="...">...</W6wProvider>.',
+      "useW6WClient must be used inside <W6WProvider>. " +
+        'Wrap your app root with <W6WProvider baseUrl="..." token="...">...</W6WProvider>.',
     );
   }
   return client;

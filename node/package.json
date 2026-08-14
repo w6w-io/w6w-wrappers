@@ -1,6 +1,6 @@
 {
   "name": "@w6w/sdk",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Typed client for the w6w HTTP API. Thin transport, auth and error mapping — nothing else.",
   "license": "MIT",
   "repository": {

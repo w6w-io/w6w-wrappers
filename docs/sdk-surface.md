@@ -25,7 +25,7 @@ and the code disagree, **the code wins and this file is a bug**.
 
 | | TypeScript (`@w6w/sdk`) | Python (`w6w`) |
 |---|---|---|
-| Class | `new W6wClient(options?)` | `Client(base_url=None, token=None, project=None, transport=None)` |
+| Class | `new W6WClient(options?)` | `Client(base_url=None, token=None, project=None, transport=None)` |
 | Base URL | `options.baseUrl` → `W6W_BASE_URL` | `base_url` → `W6W_BASE_URL` |
 | Credential | `options.token` → `W6W_TOKEN` | `token` → `W6W_TOKEN` |
 | Default project | `options.project` (no env var) | `project` (no env var) |
@@ -33,11 +33,11 @@ and the code disagree, **the code wins and this file is a bug**.
 | Resolved config | `client.config: ResolvedConfig` | `client.config: ResolvedConfig` (frozen) |
 
 **The class name differs on purpose, and it is the only name that does.** A
-TypeScript caller imports the symbol flat — `import { W6wClient } from
+TypeScript caller imports the symbol flat — `import { W6WClient } from
 "@w6w/sdk"` — into a namespace shared with everything else they import, so the
 prefix is what disambiguates it. A Python caller reaches it through the package
 (`from w6w import Client`, or `w6w.Client`), which already carries the brand;
-`w6w.W6wClient` stutters. Every *other* published name is the same word in both,
+`w6w.W6WClient` stutters. Every *other* published name is the same word in both,
 transliterated only for case convention (`getByKey` / `get_by_key`).
 
 Behaviour that is the same in both, and pinned:

@@ -48,7 +48,7 @@ import type { HttpResponse, RequestOptions } from "./http.ts";
 import type { RunEnvelope } from "./types.ts";
 
 /**
- * The slice of `W6wClient` this operation needs: the transport, and nothing
+ * The slice of `W6WClient` this operation needs: the transport, and nothing
  * else. Structural rather than a concrete client type, so it stays
  * independently callable in a test and this module never imports the client
  * back.

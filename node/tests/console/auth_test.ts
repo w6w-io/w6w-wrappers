@@ -17,7 +17,7 @@
  */
 
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { W6wClient } from "../../src/client.ts";
+import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import type {
   AccountWire,
@@ -60,10 +60,10 @@ function json(body: unknown, status = 200): Response {
 }
 
 /** A client wired to a fake transport, WITH a token — the interesting case for `requireAuth`. */
-function client(respond: (call: Call) => Response): { client: W6wClient; calls: Call[] } {
+function client(respond: (call: Call) => Response): { client: W6WClient; calls: Call[] } {
   const fake = fakeFetch(respond);
   return {
-    client: new W6wClient({
+    client: new W6WClient({
       baseUrl: "https://api.example.com",
       token: "tok_1",
       fetch: fake.fetch,
@@ -129,7 +129,7 @@ const ME: ConsoleMe = {
 Deno.test("console.auth: all five operations are functions on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
-  const c = new W6wClient({ baseUrl: "https://api.example.com", token: "t" });
+  const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
   for (const name of ["login", "signup", "checkAccountSlug", "createAccount", "getMe"] as const) {
     assertEquals(typeof c.console.auth[name], "function", `console.auth.${name} is missing`);
   }
@@ -241,14 +241,14 @@ Deno.test(
   "login and signup work on a TOKENLESS client — the actual bug requireAuth fixes",
   async () => {
     const fake = fakeFetch(() => json(LOGIN));
-    const c = new W6wClient({ baseUrl: "https://api.example.com", fetch: fake.fetch }); // no token
+    const c = new W6WClient({ baseUrl: "https://api.example.com", fetch: fake.fetch }); // no token
 
     // Must resolve, not throw ConfigError.
     const res = await c.console.auth.login("u", "p");
     assertEquals(res, LOGIN);
 
     const fake2 = fakeFetch(() => json(SIGNUP, 201));
-    const c2 = new W6wClient({ baseUrl: "https://api.example.com", fetch: fake2.fetch });
+    const c2 = new W6WClient({ baseUrl: "https://api.example.com", fetch: fake2.fetch });
     const res2 = await c2.console.auth.signup({ email: "a@b.com", password: "x" });
     assertEquals(res2, SIGNUP);
   },

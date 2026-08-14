@@ -1,5 +1,5 @@
 /**
- * `<W6wProvider>` + the C-4 token-supplier shim, plus one read hook and two
+ * `<W6WProvider>` + the C-4 token-supplier shim, plus one read hook and two
  * mutation hooks exercised end-to-end through it (A11) — every request goes
  * through a fake `fetch` injected via the `fetch` prop, mirroring the pattern
  * `node/tests/http_test.ts`/`client_test.ts` use for the SDK's own transport
@@ -11,17 +11,17 @@
  *
  * Real React reconciliation (jsdom + `react-dom/client` + `act`) is used
  * deliberately for the memoization test below: it asserts the SAME
- * `W6wClient` reference survives a genuine RE-RENDER of the same component
+ * `W6WClient` reference survives a genuine RE-RENDER of the same component
  * instance, which `renderToStaticMarkup` (a fresh mount every call) cannot
  * exercise.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { FetchLike, W6wClient } from "@w6w/sdk";
+import type { FetchLike, W6WClient } from "@w6w/sdk";
 import { JSDOM } from "jsdom";
 import { act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
-import { W6wProvider, useW6wClient } from "../W6wProvider.tsx";
+import { W6WProvider, useW6WClient } from "../W6WProvider.tsx";
 import { useCreateVar, useMe, useRunWorkflow } from "../hooks.ts";
 
 // React 18.3+'s `act` warns ("not configured to support act(...)") unless this
@@ -86,23 +86,23 @@ test("token supplier is re-read per request, not captured at construction", () =
     let n = 0;
     const tokenSupplier = () => (n++ === 0 ? "token-a" : "token-b");
 
-    let captured: W6wClient | null = null;
+    let captured: W6WClient | null = null;
     function Capture() {
-      captured = useW6wClient();
+      captured = useW6WClient();
       return null;
     }
 
     act(() => {
       root.render(
         createElement(
-          W6wProvider,
+          W6WProvider,
           { baseUrl: "https://api.example.com", token: tokenSupplier, fetch: fake.fetch },
           createElement(Capture),
         ),
       );
     });
-    assert.ok(captured, "useW6wClient did not resolve a client");
-    const client = captured as W6wClient;
+    assert.ok(captured, "useW6WClient did not resolve a client");
+    const client = captured as W6WClient;
 
     await client.me();
     await client.me();
@@ -115,16 +115,16 @@ test("token supplier is re-read per request, not captured at construction", () =
 test("the client is memoized across re-renders on baseUrl, not on token", () =>
   withRoot((root) => {
     const fake = fakeFetch();
-    let captured: W6wClient | null = null;
+    let captured: W6WClient | null = null;
     function Capture() {
-      captured = useW6wClient();
+      captured = useW6WClient();
       return null;
     }
 
     act(() => {
       root.render(
         createElement(
-          W6wProvider,
+          W6WProvider,
           { baseUrl: "https://api.example.com", token: "token-a", fetch: fake.fetch },
           createElement(Capture),
         ),
@@ -136,7 +136,7 @@ test("the client is memoized across re-renders on baseUrl, not on token", () =>
     act(() => {
       root.render(
         createElement(
-          W6wProvider,
+          W6WProvider,
           { baseUrl: "https://api.example.com", token: "token-b", fetch: fake.fetch },
           createElement(Capture),
         ),
@@ -147,17 +147,17 @@ test("the client is memoized across re-renders on baseUrl, not on token", () =>
     assert.equal(first, second, "the client must be the SAME reference across re-renders");
   }));
 
-test("useW6wClient throws a helpful error outside <W6wProvider>", () =>
+test("useW6WClient throws a helpful error outside <W6WProvider>", () =>
   withRoot((root) => {
     function Capture() {
-      useW6wClient();
+      useW6WClient();
       return null;
     }
     assert.throws(() => {
       act(() => {
         root.render(createElement(Capture));
       });
-    }, /useW6wClient must be used inside <W6wProvider>/);
+    }, /useW6WClient must be used inside <W6WProvider>/);
   }));
 
 test("useMe (read hook) fetches through the provider's client and resolves {data, loading}", () =>
@@ -175,7 +175,7 @@ test("useMe (read hook) fetches through the provider's client and resolves {data
     await act(async () => {
       root.render(
         createElement(
-          W6wProvider,
+          W6WProvider,
           { baseUrl: "https://api.example.com", token: "tok_1", fetch: fake.fetch },
           createElement(Probe),
         ),
@@ -220,7 +220,7 @@ test("useCreateVar (mutation hook) calls through the provider's client and retur
     act(() => {
       root.render(
         createElement(
-          W6wProvider,
+          W6WProvider,
           { baseUrl: "https://api.example.com", token: "tok_1", fetch: fake.fetch },
           createElement(Probe),
         ),
@@ -254,7 +254,7 @@ test("useRunWorkflow defaults to wait: true, but does not clobber an explicit wa
     act(() => {
       root.render(
         createElement(
-          W6wProvider,
+          W6WProvider,
           { baseUrl: "https://api.example.com", token: "tok_1", fetch: fake.fetch },
           createElement(Probe),
         ),

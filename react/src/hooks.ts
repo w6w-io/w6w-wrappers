@@ -1,7 +1,7 @@
 /**
  * The hook set — one small primitive underneath (`useAsync` / a private
  * mutation primitive), every read/mutation hook a thin wrapper over
- * `useW6wClient()`. No react-query or any other data-fetching dependency
+ * `useW6WClient()`. No react-query or any other data-fetching dependency
  * anywhere (`package.json` carries none — see README).
  *
  * Built only over the PUBLIC, non-`console` surface (`me`, `documents`,
@@ -33,7 +33,7 @@ import type {
   WorkflowSummary,
 } from "@w6w/sdk";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useW6wClient } from "./W6wProvider.tsx";
+import { useW6WClient } from "./W6WProvider.tsx";
 
 /** What every read hook returns. */
 export interface ReadResult<T> {
@@ -141,13 +141,13 @@ function useMutationResource<Args extends unknown[], T>(
 // ── reads ────────────────────────────────────────────────────────────────
 
 export function useMe(): ReadResult<Me> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   const fetcher = useCallback(() => client.me(), [client]);
   return useAsync(fetcher);
 }
 
 export function useDocuments(options?: DocumentOptions): ReadResult<Doc[]> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   const project = options?.project;
   const fetcher = useCallback(
     () => client.documents.list(project === undefined ? undefined : { project }),
@@ -157,7 +157,7 @@ export function useDocuments(options?: DocumentOptions): ReadResult<Doc[]> {
 }
 
 export function useDocument(id: string, options?: DocumentOptions): ReadResult<Doc> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   const project = options?.project;
   const fetcher = useCallback(
     () => client.documents.get(id, project === undefined ? undefined : { project }),
@@ -167,7 +167,7 @@ export function useDocument(id: string, options?: DocumentOptions): ReadResult<D
 }
 
 export function useDocumentByKey(key: string, options?: DocumentOptions): ReadResult<Doc> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   const project = options?.project;
   const fetcher = useCallback(
     () => client.documents.getByKey(key, project === undefined ? undefined : { project }),
@@ -177,25 +177,25 @@ export function useDocumentByKey(key: string, options?: DocumentOptions): ReadRe
 }
 
 export function useVars(): ReadResult<Var[]> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   const fetcher = useCallback(() => client.vars.list(), [client]);
   return useAsync(fetcher);
 }
 
 export function useVar(id: string): ReadResult<Var> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   const fetcher = useCallback(() => client.vars.get(id), [client, id]);
   return useAsync(fetcher);
 }
 
 export function useConnections(): ReadResult<ConnectionSummary[]> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   const fetcher = useCallback(() => client.connections.list(), [client]);
   return useAsync(fetcher);
 }
 
 export function useWorkflows(options?: WorkflowListOptions): ReadResult<WorkflowSummary[]> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   const project = options?.project;
   const fetcher = useCallback(
     () => client.workflows.list(project === undefined ? undefined : { project }),
@@ -207,7 +207,7 @@ export function useWorkflows(options?: WorkflowListOptions): ReadResult<Workflow
 // ── mutations ────────────────────────────────────────────────────────────
 
 export function useCreateDocument(): MutationResult<[DocumentCreateInput, DocumentOptions?], Doc> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   return useMutationResource((input: DocumentCreateInput, options?: DocumentOptions) =>
     client.documents.create(input, options),
   );
@@ -217,31 +217,31 @@ export function useUpdateDocument(): MutationResult<
   [string, DocumentPatch, DocumentOptions?],
   Doc
 > {
-  const client = useW6wClient();
+  const client = useW6WClient();
   return useMutationResource((id: string, patch: DocumentPatch, options?: DocumentOptions) =>
     client.documents.update(id, patch, options),
   );
 }
 
 export function useDeleteDocument(): MutationResult<[string, DocumentOptions?], void> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   return useMutationResource((id: string, options?: DocumentOptions) =>
     client.documents.delete(id, options),
   );
 }
 
 export function useCreateVar(): MutationResult<[VarCreateInput], Var> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   return useMutationResource((input: VarCreateInput) => client.vars.create(input));
 }
 
 export function useUpdateVar(): MutationResult<[string, VarPatch], Var> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   return useMutationResource((id: string, patch: VarPatch) => client.vars.update(id, patch));
 }
 
 export function useDeleteVar(): MutationResult<[string], void> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   return useMutationResource((id: string) => client.vars.delete(id));
 }
 
@@ -255,13 +255,13 @@ export function useDeleteVar(): MutationResult<[string], void> {
  * explicitly; the default only fills in what the caller left unstated.
  */
 export function useRunWorkflow(): MutationResult<[string, WorkflowRunOptions?], WorkflowRunResult> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   return useMutationResource((id: string, options?: WorkflowRunOptions) =>
     client.workflows.run(id, { ...options, wait: options?.wait ?? true }),
   );
 }
 
 export function useRun(): MutationResult<[RunInput], RunEnvelope> {
-  const client = useW6wClient();
+  const client = useW6WClient();
   return useMutationResource((input: RunInput) => client.run(input));
 }

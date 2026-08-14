@@ -37,7 +37,7 @@ import type { ApiCallRecord } from "./apps.ts";
 export type { ApiCallRecord } from "./apps.ts";
 
 /**
- * The slice of `W6wClient` this namespace needs: the transport, and nothing
+ * The slice of `W6WClient` this namespace needs: the transport, and nothing
  * else. Structural rather than a concrete client type, so the namespace stays
  * independently constructible in a test and this module never imports the
  * client back — mirrors `VarsHost` in `../vars.ts`.
@@ -63,7 +63,7 @@ export interface ApiCallsFilter {
 }
 
 /**
- * The `console.apiCalls` namespace on a `W6wClient`.
+ * The `console.apiCalls` namespace on a `W6WClient`.
  *
  * @example
  * ```ts

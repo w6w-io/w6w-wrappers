@@ -14,7 +14,7 @@ makes, so a reader of two SDKs sees one model:
   "you have not configured a server" is exactly the diagnosis a user needs kept
   apart.
 
-Both derive directly from `Exception` rather than from a shared `W6wError` base,
+Both derive directly from `Exception` rather than from a shared `W6WError` base,
 because §3 pins the Python type as `class ApiError(Exception)` and three
 wrappers agreeing on the model matters more here than the convenience of one
 `except` clause catching both. The two are raised in different situations and

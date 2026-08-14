@@ -8,7 +8,7 @@
  */
 
 import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
-import { W6wClient } from "../src/client.ts";
+import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
 import type { Doc } from "../src/types.ts";
@@ -58,10 +58,10 @@ const DOC: Doc = {
 function client(
   respond: (call: Call) => Response,
   project?: string,
-): { client: W6wClient; calls: Call[] } {
+): { client: W6WClient; calls: Call[] } {
   const fake = fakeFetch(respond);
   return {
-    client: new W6wClient({
+    client: new W6WClient({
       baseUrl: "https://api.example.com",
       token: "tok_1",
       project,
@@ -75,7 +75,7 @@ Deno.test("documents: all six operations are functions on a constructed client",
   // Deliberately a runtime assertion, not a type-level one: a namespace that
   // silently loses a method would still typecheck in every OTHER file of this
   // suite (they call through the same object), so the suite has to look.
-  const c = new W6wClient({ baseUrl: "https://api.example.com", token: "t" });
+  const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
   for (const name of ["list", "get", "getByKey", "create", "update", "delete"] as const) {
     assertEquals(typeof c.documents[name], "function", `documents.${name} is missing`);
   }

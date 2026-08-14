@@ -17,7 +17,7 @@ import {
   resolveConfig,
 } from "../src/config.ts";
 import { ConfigError } from "../src/errors.ts";
-import { W6wClient } from "../src/client.ts";
+import { W6WClient } from "../src/client.ts";
 
 /**
  * Run `fn` with the given variables set (or deleted, for `undefined`), then put
@@ -157,7 +157,7 @@ Deno.test("a client with a relative base URL never issues a request", () => {
   };
   withEnv(NO_ENV, () => {
     assertThrows(
-      () => new W6wClient({ baseUrl: "/foo", token: "tok_1", fetch: spy }),
+      () => new W6WClient({ baseUrl: "/foo", token: "tok_1", fetch: spy }),
       ConfigError,
     );
   });
@@ -280,9 +280,9 @@ Deno.test("two clients in one process hold different credentials and base URLs",
   // client this package transcribes keeps its token in a module variable, and
   // under that design the second construction would overwrite the first.
   withEnv({ W6W_BASE_URL: "https://env.example.com", W6W_TOKEN: "tok_env" }, () => {
-    const a = new W6wClient({ baseUrl: "https://a.example.com", token: "tok_a" });
-    const b = new W6wClient({ baseUrl: "https://b.example.com/api/", token: "tok_b" });
-    const fromEnv = new W6wClient();
+    const a = new W6WClient({ baseUrl: "https://a.example.com", token: "tok_a" });
+    const b = new W6WClient({ baseUrl: "https://b.example.com/api/", token: "tok_b" });
+    const fromEnv = new W6WClient();
 
     assertEquals(a.config, { baseUrl: "https://a.example.com", token: "tok_a", project: null });
     // `b` configured an explicit "/api/" path: the trailing slash comes off, the

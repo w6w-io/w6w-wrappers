@@ -33,9 +33,9 @@ same set of operations in every language.
 ## Quick start
 
 ```ts
-import { W6wClient, isActionRun, isFunctionRun, isWorkflowRun } from "@w6w/sdk";
+import { W6WClient, isActionRun, isFunctionRun, isWorkflowRun } from "@w6w/sdk";
 
-const client = new W6wClient(); // reads W6W_BASE_URL and W6W_TOKEN
+const client = new W6WClient(); // reads W6W_BASE_URL and W6W_TOKEN
 
 // Who am I, and what versions am I talking to?
 const me = await client.me();
@@ -121,13 +121,13 @@ interference. There is no default base URL — a client built without one and wi
 raises a configuration error naming the variable.
 
 ```ts
-import { W6wClient } from "@w6w/sdk";
+import { W6WClient } from "@w6w/sdk";
 
 // Everything from the environment.
-const client = new W6wClient();
+const client = new W6WClient();
 
 // Explicit arguments override W6W_BASE_URL and W6W_TOKEN.
-const other = new W6wClient({ baseUrl: "https://api.example.com", token: "…" });
+const other = new W6WClient({ baseUrl: "https://api.example.com", token: "…" });
 ```
 
 ### `W6W_BASE_URL` is an origin

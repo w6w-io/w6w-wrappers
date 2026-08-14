@@ -59,7 +59,7 @@ import { type RunStatus, type StepError, unwrap } from "../types.ts";
 const PRECONDITION_HEADER = "x-w6w-if-unmodified-since";
 
 /**
- * The slice of `W6wClient` this namespace needs: the transport, and nothing
+ * The slice of `W6WClient` this namespace needs: the transport, and nothing
  * else. Structural rather than a concrete client type, so the namespace stays
  * independently constructible in a test and this module never imports the
  * client back — mirrors `SchedulesHost` in `./schedules.ts`.
@@ -125,7 +125,7 @@ export interface RunSummary {
 }
 
 /**
- * The `console.workflows` namespace on a `W6wClient`.
+ * The `console.workflows` namespace on a `W6WClient`.
  *
  * @example
  * ```ts

@@ -13,7 +13,7 @@
  */
 
 import { assertEquals, assertNotEquals, assertRejects, assertStringIncludes } from "@std/assert";
-import { W6wClient } from "../src/client.ts";
+import { W6WClient } from "../src/client.ts";
 import type { FetchLike } from "../src/config.ts";
 import { ApiError } from "../src/errors.ts";
 import type { Me } from "../src/types.ts";
@@ -51,10 +51,10 @@ function json(body: unknown, status = 200, statusText?: string): Response {
 }
 
 /** A client wired to a fake transport. */
-function client(respond: (call: Call) => Response): { client: W6wClient; calls: Call[] } {
+function client(respond: (call: Call) => Response): { client: W6WClient; calls: Call[] } {
   const fake = fakeFetch(respond);
   return {
-    client: new W6wClient({
+    client: new W6WClient({
       baseUrl: "https://api.example.com",
       token: "tok_1",
       fetch: fake.fetch,

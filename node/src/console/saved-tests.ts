@@ -18,7 +18,7 @@
  *
  * **`recordTestRun` returns the REAL created row, not `void`.** Studio's
  * current `client.ts` discards it to `void` (`.then(() => {})`) only so its
- * `api` object stays assignable to `@w6w/ui`'s `W6wApi.recordTestRun`
+ * `api` object stays assignable to `@w6w/ui`'s `W6WApi.recordTestRun`
  * (typed `Promise<void>`, `packages/ui/src/provider.tsx:168-177`) — that is
  * STUDIO's constraint, not the SDK's. Mirrors T2.2.1's `deleteApp` precedent:
  * a "complete client" returns genuinely informative data and discards only
@@ -38,7 +38,7 @@ import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 import { unwrap } from "../types.ts";
 
 /**
- * The slice of `W6wClient` this namespace needs: the transport, and nothing
+ * The slice of `W6WClient` this namespace needs: the transport, and nothing
  * else. Structural rather than a concrete client type, so the namespace stays
  * independently constructible in a test and this module never imports the
  * client back — mirrors `ConnectionsHost` in `./connections.ts`.
@@ -96,7 +96,7 @@ export interface SavedTestRun {
 }
 
 /**
- * The `console.savedTests` namespace on a `W6wClient`.
+ * The `console.savedTests` namespace on a `W6WClient`.
  *
  * @example
  * ```ts
