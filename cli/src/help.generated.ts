@@ -157,7 +157,7 @@ export const HELP_TREE: HelpTree = {
           "kind": "argument",
           "display": "<urn>",
           "description":
-            "conn_… | wf_… | fn_… | ep_… (see: w6w connections list, w6w workflows list)",
+            "conn_… | wf_… | fn_… | ep_… | an alias name (see: w6w connections list, w6w workflows list)",
           "required": true,
         },
         {
