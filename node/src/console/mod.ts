@@ -19,6 +19,7 @@
  */
 
 import type { HttpResponse, RequestOptions } from "../http.ts";
+import { AliasesApi } from "./aliases.ts";
 import { ApiCallsApi } from "./api-calls.ts";
 import { AppsApi } from "./apps.ts";
 import { AuthApi } from "./auth.ts";
@@ -132,6 +133,8 @@ export type {
   EndpointTarget,
   Exposure,
 } from "./endpoints.ts";
+export { AliasesApi } from "./aliases.ts";
+export type { AliasDef, AliasesHost, AliasSummary } from "./aliases.ts";
 export { SubscriptionsApi } from "./subscriptions.ts";
 export type {
   Subscription,
@@ -199,6 +202,8 @@ export class ConsoleApi {
   readonly functions: FunctionsApi;
   /** `console.endpoints.*`. */
   readonly endpoints: EndpointsApi;
+  /** `console.aliases.*`. */
+  readonly aliases: AliasesApi;
   /** `console.subscriptions.*`. */
   readonly subscriptions: SubscriptionsApi;
   /** `console.apiCalls.*`. */
@@ -224,6 +229,7 @@ export class ConsoleApi {
     this.tokens = new TokensApi(host);
     this.functions = new FunctionsApi(host);
     this.endpoints = new EndpointsApi(host);
+    this.aliases = new AliasesApi(host);
     this.subscriptions = new SubscriptionsApi(host);
     this.apiCalls = new ApiCallsApi(host);
     this.tenantOAuthApps = new TenantOAuthAppsApi(host);

@@ -757,6 +757,45 @@ None of these four methods take a `project` scoping parameter — neither is rea
 route on this domain — so `EndpointsHost` needs only the transport, mirroring
 `console.workflows`'s/`console.schedules`'s own host shape.
 
+## `console.aliases.*`
+
+```ts
+import { W6WClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6WClient();
+const aliases = await client.console.aliases.list();
+const alias = await client.console.aliases.get(aliases[0].id);
+await client.console.aliases.upsert({ ...alias, description: "Send email" });
+await client.console.aliases.delete(alias.id);
+```
+
+**This surface is new.** Unlike Functions/Endpoints above, there is no pre-existing
+`studio/src/api/client.ts` alias code being relocated here — Studio never had alias CRUD before this
+project.
+
+| Method               | Route                 | Notes                                                                                        |
+| -------------------- | --------------------- | -------------------------------------------------------------------------------------------- |
+| `list()`             | `GET /aliases`        | `unwrap<AliasSummary[]>(res, "aliases")`.                                                    |
+| `get(id)`            | `GET /aliases/:id`    | `unwrap<AliasDef>(res, "alias")` — plain, no splice (no server-computed field to merge in).  |
+| `upsert(definition)` | `POST /aliases`       | Body is the whole `AliasDef`, forwarded verbatim. `unwrap<{id,name}>(res, "alias")` (`201`). |
+| `delete(id)`         | `DELETE /aliases/:id` | Resolves to `undefined` — the server's `{ok: true}` carries no information a caller can use. |
+
+`name` is **immutable after first save** — a save that changes `name` on an already-stored alias
+answers `409 alias_name_immutable`; a first save with a name already owned by another alias answers
+`409 alias_name_conflict`.
+
+**`invoke` is deliberately NOT modeled here.** The base `client.run({urn, payload})`
+(already-published surface, `endpoints.json`-named, exported from the root `mod.ts`) already reaches
+an alias's target: an alias name is one of `run`'s runnable `urn` arms, alongside
+`conn_…`/`wf_…`/`fn_…`/`ep_…`. Adding a duplicate `console.aliases.invoke` would give a caller two
+ways to reach the same route, mirroring `console.functions`'s/`console.endpoints`'s own precedent of
+NOT re-wrapping base `run`.
+
+None of these four methods take a `project` scoping parameter — neither is reachable via any HTTP
+route on this domain — so `AliasesHost` needs only the transport, mirroring
+`console.workflows`'s/`console.schedules`'s own host shape.
+
 ## `console.subscriptions.*`
 
 ```ts

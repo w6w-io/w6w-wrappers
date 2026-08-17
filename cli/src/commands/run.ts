@@ -1,7 +1,7 @@
 /**
  * `w6w run <urn> [--action <a>] [--payload <json>]` — run anything a URN
  * addresses: a connection action, a function, an endpoint or a workflow
- * (D16).
+ * (D16), or an account-scoped alias name standing in for any of those.
  *
  * One command, one SDK call, no envelope key to unwrap — `client.run()`
  * already returns the kind-tagged `RunEnvelope` verbatim. This command's only
@@ -140,8 +140,9 @@ const run: CommandHandler = async (context) => {
   const urn = appId !== undefined ? await resolveAppUrn(context, appId) : argument(
     context,
     0,
-    "a URN — conn_…, wf_…, fn_… or ep_… (see: `w6w connections list`, `w6w workflows list`), " +
-      "or use `--app <id>` to address a connection by its app instead",
+    "a URN — conn_…, wf_…, fn_… or ep_… — or an account-scoped alias name (see: " +
+      "`w6w connections list`, `w6w workflows list`), or use `--app <id>` to address a " +
+      "connection by its app instead",
   );
   noExtraArguments(context, appId !== undefined ? 0 : 1);
   const result = await context.client().run({

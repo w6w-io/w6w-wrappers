@@ -207,7 +207,8 @@ const PARAM_HELP: Record<string, string> = {
   "vars.delete.id": "Variable id (see: w6w vars list)",
   "vars.getByName.name": "Variable name, as chosen at creation",
   "vars.create.name": "Variable name to create (must match ^[a-z_][a-z0-9_]*$)",
-  "run.urn": "conn_… | wf_… | fn_… | ep_… (see: w6w connections list, w6w workflows list)",
+  "run.urn":
+    "conn_… | wf_… | fn_… | ep_… | an alias name (see: w6w connections list, w6w workflows list)",
   "run.action": "Action to invoke (connection URNs only)",
   "run.payload": "Input object, as a JSON string",
 };

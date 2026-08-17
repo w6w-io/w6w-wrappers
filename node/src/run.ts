@@ -2,8 +2,9 @@
  * `client.run({urn, action, payload})` — run anything a URN addresses.
  *
  * One POST, one kind-tagged body, no envelope key. The URN resolves over the
- * four runnable arms — `conn_…`, `wf_…`, `fn_…`, `ep_…` (D16) — and the answer
- * says which one it hit:
+ * `conn_…`, `wf_…`, `fn_…` and `ep_…` arms (D16), and, additionally, an
+ * account-scoped alias name (kebab-slug, `_`-free, which is why no flag is
+ * needed to disambiguate the two) — and the answer says which one it hit:
  *
  * | `kind` | Field | HTTP |
  * |---|---|---|
@@ -67,7 +68,11 @@ export interface RunHost {
  * uses it for its `wf_…` id.)
  */
 export interface RunInput {
-  /** What to run: `conn_…`, `wf_…`, `fn_…` or `ep_…`. */
+  /**
+   * What to run: `conn_…`, `wf_…`, `fn_…`, `ep_…`, or, additionally, an
+   * account-scoped alias name (kebab-slug, `_`-free, which is why no flag is
+   * needed to disambiguate the two).
+   */
   urn: string;
   /**
    * Which action to invoke. Optional, because a workflow, function or endpoint
