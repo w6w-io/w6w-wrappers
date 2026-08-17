@@ -13,9 +13,14 @@
  *   untouched.
  * - Every id-taking method routes its id through the `path` tag
  *   (percent-encoding).
- * - A typed fixture is declared for each of the three `target` arms
- *   (`action` / `function` / `workflow`) — `deno task check` fails this file
- *   if `target` is ever narrowed to fewer arms.
+ * - A typed fixture is declared for each of the four `target` arms
+ *   (`action` / `function` / `workflow` / `endpoint`) — `deno task check`
+ *   fails this file if `target` is ever narrowed to fewer arms. The
+ *   `endpoint` arm is legal for `AliasDef.target` only — it is a SIBLING of
+ *   `Callable`, never a third `Callable` arm, and `EndpointDef.target`'s own
+ *   `console.endpoints.invoke` result (`EndpointInvokeResult`) can never
+ *   answer an `endpoint` kind; two `@ts-expect-error` probes pin both
+ *   refusals.
  */
 
 import { assertEquals, assertRejects } from "@std/assert";
@@ -23,6 +28,7 @@ import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
 import { ApiError } from "../../src/errors.ts";
 import type { AliasDef, AliasSummary } from "../../src/console/aliases.ts";
+import type { Callable, EndpointInvokeResult } from "../../src/console/endpoints.ts";
 
 /** One recorded call to the fake transport. */
 interface Call {
@@ -91,12 +97,21 @@ const ALIAS_WORKFLOW: AliasDef = {
   target: { kind: "workflow", workflow: "wf_1" },
 };
 
+const ALIAS_ENDPOINT: AliasDef = {
+  id: "als_4",
+  name: "billing-portal",
+  displayName: "Billing portal",
+  description: "",
+  target: { kind: "endpoint", endpoint: "ep_1" },
+};
+
 const SUMMARY_A: AliasSummary = {
   id: "als_1",
   name: "send-email",
   displayName: "Send email",
   description: "",
   updatedAt: "2026-08-17T00:00:00.000Z",
+  target: ALIAS_ACTION.target,
 };
 
 const SUMMARY_B: AliasSummary = {
@@ -105,6 +120,7 @@ const SUMMARY_B: AliasSummary = {
   displayName: "Notify",
   description: "",
   updatedAt: "2026-08-17T00:00:01.000Z",
+  target: ALIAS_FUNCTION.target,
 };
 
 Deno.test(
@@ -238,13 +254,61 @@ Deno.test("console.aliases.upsert throws on a genuine non-2xx", async () => {
 });
 
 Deno.test(
-  "AliasDef.target admits all three EndpointTarget arms — action, function, workflow",
+  "AliasDef.target admits all four EndpointTarget arms — action, function, workflow, endpoint",
   () => {
     // Compile-time, not runtime: this test's real assertion is that
-    // `deno task check` accepts all three literals below as a valid
+    // `deno task check` accepts all four literals below as a valid
     // `AliasDef`. If `target` is ever narrowed to fewer arms, this file
     // fails to typecheck.
-    const fixtures: AliasDef[] = [ALIAS_ACTION, ALIAS_FUNCTION, ALIAS_WORKFLOW];
-    assertEquals(fixtures.map((a) => a.target.kind), ["action", "function", "workflow"]);
+    const fixtures: AliasDef[] = [ALIAS_ACTION, ALIAS_FUNCTION, ALIAS_WORKFLOW, ALIAS_ENDPOINT];
+    assertEquals(
+      fixtures.map((a) => a.target.kind),
+      ["action", "function", "workflow", "endpoint"],
+    );
+  },
+);
+
+Deno.test(
+  "the endpoint arm is a SIBLING of Callable, never a third Callable arm",
+  () => {
+    // D-P1: EndpointRefTarget must NOT be assignable to Callable — it is a
+    // sibling member of EndpointTarget, never a third Callable arm. An
+    // unused `@ts-expect-error` is itself a `deno check` error (TS2578),
+    // which is what makes this a gate and not just a comment.
+    // @ts-expect-error — "endpoint" is not a legal Callable.kind
+    const notCallable: Callable = { kind: "endpoint", endpoint: "ep_1" };
+    // EndpointInvokeResult also stays exactly three arms: an Endpoint's own
+    // target can never resolve to another Endpoint (console.endpoints.invoke
+    // can never answer an "endpoint" kind).
+    // @ts-expect-error — "endpoint" is not a legal EndpointInvokeResult.kind
+    const notInvokeResult: EndpointInvokeResult = { kind: "endpoint", endpoint: "ep_1" };
+    assertEquals((notCallable as { kind: string }).kind, "endpoint");
+    assertEquals((notInvokeResult as { kind: string }).kind, "endpoint");
+  },
+);
+
+Deno.test("AliasSummary.target is REQUIRED, not optional", () => {
+  // @ts-expect-error — target is required; an AliasSummary literal omitting
+  // it must fail to typecheck. If target is ever widened to optional, this
+  // assignment stops erroring and the now-unused `@ts-expect-error` becomes
+  // a `deno check` error (TS2578) in its own right.
+  const missingTarget: AliasSummary = {
+    id: "als_9",
+    name: "billing-portal",
+    displayName: "Billing portal",
+    description: "",
+    updatedAt: "2026-08-17T00:00:02.000Z",
+  };
+  assertEquals(Object.hasOwn(missingTarget, "target"), false);
+});
+
+Deno.test(
+  "console.aliases.list carries each row's target through unwrap unchanged",
+  async () => {
+    const c = client(() => json({ aliases: [SUMMARY_A, SUMMARY_B] }));
+
+    const res = await c.client.console.aliases.list();
+
+    assertEquals(res.map((r) => r.target), [SUMMARY_A.target, SUMMARY_B.target]);
   },
 );

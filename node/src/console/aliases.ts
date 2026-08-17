@@ -48,9 +48,12 @@ export interface AliasesHost {
 
 /**
  * An alias definition — an account-scoped name bound to one runnable
- * target (an app Action, a Function or a Workflow — the same
- * {@linkcode EndpointTarget} union `console.endpoints` dispatches to), so
- * `run`'s URN dispatch can resolve it by name instead of by id.
+ * target, typed with the same {@linkcode EndpointTarget} union
+ * `console.endpoints` dispatches to. Unlike `EndpointDef.target`, an
+ * alias's `target` may also carry the `endpoint` arm
+ * ({@linkcode EndpointRefTarget}) — dispatching to another Endpoint by id is
+ * legal for an alias only, so `run`'s URN dispatch can resolve it by name
+ * instead of by id.
  *
  * `name` is **immutable after first save** (HITL-3): a save that changes
  * `name` on an already-stored alias answers `409 alias_name_immutable`.
@@ -70,6 +73,7 @@ export interface AliasSummary {
   displayName: string;
   description: string;
   updatedAt: string;
+  target: EndpointTarget;
 }
 
 /**
