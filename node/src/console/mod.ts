@@ -127,6 +127,7 @@ export type {
   EndpointDef,
   EndpointInput,
   EndpointInvokeResult,
+  EndpointRefTarget,
   EndpointSecurity,
   EndpointsHost,
   EndpointSummary,

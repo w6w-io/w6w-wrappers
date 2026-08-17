@@ -68,8 +68,24 @@ export interface ActionTarget {
   with?: Record<string, unknown>;
 }
 
-/** The full discriminated union of what an Endpoint may dispatch to. */
-export type EndpointTarget = Callable | ActionTarget;
+/**
+ * The alias-only fourth arm: dispatch to another Endpoint by id.
+ * LEGAL FOR AN ALIAS'S `target` ONLY. `POST /endpoints` refuses it
+ * (api/admin/endpoints.ts's validateDefinition) and that refusal is the sole
+ * bound on Endpoint→Endpoint recursion; a regression test pins it (D-14).
+ */
+export interface EndpointRefTarget {
+  kind: "endpoint";
+  endpoint: string; // ep_…
+}
+
+/**
+ * The full discriminated union of what an Endpoint may dispatch to. Shared by
+ * `EndpointDef.target` and `AliasDef.target` — but the `endpoint` arm is
+ * legal only for the latter: an Endpoint's own target can never be another
+ * Endpoint (see {@linkcode EndpointRefTarget}).
+ */
+export type EndpointTarget = Callable | ActionTarget | EndpointRefTarget;
 
 /** The inbound auth mode an Endpoint's public exposure enforces. */
 export type EndpointAuthMode = "platform" | "none" | "basic" | "header" | "jwt";
@@ -115,9 +131,12 @@ export interface EndpointInput {
 
 /**
  * An Endpoint definition — a named, stable callable entry point that
- * dispatches to exactly one target: an app Action, a Function, or a Workflow
- * (`rfcs/endpoint.md`). Callers bind to the Endpoint id; the target beneath
- * it can change without breaking them.
+ * dispatches to a target (`rfcs/endpoint.md`). `target` is typed with the
+ * full {@linkcode EndpointTarget} union shared with `AliasDef.target`, but an
+ * Endpoint's own target can never be another Endpoint: the `endpoint` arm
+ * ({@linkcode EndpointRefTarget}) is legal only for an alias's `target`, and
+ * `POST /endpoints` refuses it here. Callers bind to the Endpoint id; the
+ * target beneath it can change without breaking them.
  *
  * `key` is **immutable after first save** — it is a public URL segment. A
  * save that changes `key` on an already-stored Endpoint answers `409
