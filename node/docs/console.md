@@ -103,7 +103,7 @@ import { W6WClient } from "@w6w/sdk";
 import "@w6w/sdk/console"; // pulls in client.console
 
 const client = new W6WClient({ baseUrl: "https://api.example.com" }); // no token — see below
-const { token, user } = await client.console.auth.login("alice", "hunter2");
+const { token, user } = await client.console.auth.login("alice@example.com", "hunter2");
 ```
 
 Five methods. `login`, `signup`, `checkAccountSlug` and `createAccount` are relocated verbatim from
@@ -111,13 +111,13 @@ the studio's own API client (`packages/studio/src/api/client.ts:249-291`), with 
 field-for-field shapes it used (`packages/studio/src/api/types.ts:10-82`) — this module does not
 redesign them, only gives them a second home. `getMe` is genuinely new here (see below).
 
-| Method                      | Route                                   | Public/authenticated                                                                               |
-| --------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `login(username, password)` | `POST /auth/login`                      | **PUBLIC** — sends no bearer (`requireAuth: false`), even on a client already holding a token      |
-| `signup(input)`             | `POST /auth/signup`                     | **PUBLIC** — sends no bearer (`requireAuth: false`)                                                |
-| `checkAccountSlug(name)`    | `GET /auth/signup/slug-available?name=` | **PUBLIC** — sends no bearer (`requireAuth: false`)                                                |
-| `createAccount(name, slug)` | `POST /accounts`                        | **AUTHENTICATED** — default `requireAuth`, re-issues the session with the new account's claim      |
-| `getMe()`                   | `GET /auth/me`                          | **AUTHENTICATED** — default `requireAuth`; returns `ConsoleMe`, not the published `Me` — see below |
+| Method                        | Route                                   | Public/authenticated                                                                               |
+| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `login(identifier, password)` | `POST /auth/login`                      | **PUBLIC** — sends no bearer (`requireAuth: false`), even on a client already holding a token      |
+| `signup(input)`               | `POST /auth/signup`                     | **PUBLIC** — sends no bearer (`requireAuth: false`)                                                |
+| `checkAccountSlug(name)`      | `GET /auth/signup/slug-available?name=` | **PUBLIC** — sends no bearer (`requireAuth: false`)                                                |
+| `createAccount(name, slug)`   | `POST /accounts`                        | **AUTHENTICATED** — default `requireAuth`, re-issues the session with the new account's claim      |
+| `getMe()`                     | `GET /auth/me`                          | **AUTHENTICATED** — default `requireAuth`; returns `ConsoleMe`, not the published `Me` — see below |
 
 The three public routes are registered server-side ABOVE `app.use("*", authGuard)`
 (`packages/server/packages/api/data/signup.ts:23-41`, `id/auth.ts:22-55`) and must never read a
@@ -183,7 +183,7 @@ to `true`:
 await client.request({
   method: "POST",
   path: "/auth/login",
-  body: { username, password },
+  body: { email, password },
   requireAuth: false,
 });
 ```

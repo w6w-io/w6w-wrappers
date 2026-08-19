@@ -169,7 +169,7 @@ export interface ConsoleMe {
  *
  * @example
  * ```ts
- * const { token } = await client.console.auth.login("user", "pass");
+ * const { token } = await client.console.auth.login("user@example.com", "pass");
  * const me = await client.console.auth.getMe();
  * if (me.tenantAdmin) { // tenant-admin surface
  * }
@@ -191,16 +191,19 @@ export class AuthApi {
    * PUBLIC — sends no bearer, even on a client that already holds one
    * (`requireAuth: false`).
    *
-   * @param username - The account username.
+   * @param identifier - The login identifier, normally the account's email. The
+   *   platform operator credential (`AUTH_USERNAME`) is NOT email-shaped and is a
+   *   legitimate value here — never validate this as an email (DECISIONS.md HITL-1).
+   *   It is sent as the `email` key: the server resolves `body.email ?? body.username`.
    * @param password - The account password.
    * @returns The token, the caller's identity, and the token's lifetime.
    * @throws {ApiError} On any non-2xx, e.g. `401` for invalid credentials.
    */
-  async login(username: string, password: string): Promise<LoginResponse> {
+  async login(identifier: string, password: string): Promise<LoginResponse> {
     const res = await this.#host.request<LoginResponse>({
       method: "POST",
       path: "/auth/login",
-      body: { username, password },
+      body: { email: identifier, password },
       requireAuth: false,
     });
     return res.body;
