@@ -138,13 +138,34 @@ Deno.test("console.auth: all five operations are functions on a constructed clie
 Deno.test("console.auth.login resolves with the payload VERBATIM — no unwrap()", async () => {
   const c = client(() => json(LOGIN));
 
-  const res = await c.client.console.auth.login("alice", "hunter2");
+  const res = await c.client.console.auth.login("alice@example.com", "hunter2");
 
   assertEquals(res, LOGIN);
   assertEquals(c.calls.length, 1);
   assertEquals(c.calls[0].method, "POST");
   assertEquals(c.calls[0].url, "https://api.example.com/auth/login");
-  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { username: "alice", password: "hunter2" });
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
+    email: "alice@example.com",
+    password: "hunter2",
+  });
+});
+
+Deno.test(
+  "console.auth.login sends the operator credential verbatim under `email` — never validated",
+  async () => {
+    // DECISIONS.md HITL-1 — the operator credential is not email-shaped; this method never validates.
+    const c = client(() => json(LOGIN));
+
+    const res = await c.client.console.auth.login("admin", "hunter2");
+
+    assertEquals(res, LOGIN);
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), { email: "admin", password: "hunter2" });
+  },
+);
+
+Deno.test("console.auth.login stays a two-argument positional method", () => {
+  const c = client(() => json(LOGIN));
+  assertEquals(c.client.console.auth.login.length, 2);
 });
 
 Deno.test("console.auth.signup resolves with the payload VERBATIM — no unwrap()", async () => {
