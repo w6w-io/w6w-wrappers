@@ -106,10 +106,11 @@ const client = new W6WClient({ baseUrl: "https://api.example.com" }); // no toke
 const { token, user } = await client.console.auth.login("alice@example.com", "hunter2");
 ```
 
-Five methods. `login`, `signup`, `checkAccountSlug` and `createAccount` are relocated verbatim from
-the studio's own API client (`packages/studio/src/api/client.ts:249-291`), with the same
+Twelve methods. `login`, `signup`, `checkAccountSlug` and `createAccount` are relocated verbatim
+from the studio's own API client (`packages/studio/src/api/client.ts:249-291`), with the same
 field-for-field shapes it used (`packages/studio/src/api/types.ts:10-82`) — this module does not
-redesign them, only gives them a second home. `getMe` is genuinely new here (see below).
+redesign them, only gives them a second home. `getMe` was added first (see below); `getProfile`
+through `setPassword` are T1.1.4's `/me/*` family, added by this task.
 
 | Method                        | Route                                   | Public/authenticated                                                                               |
 | ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -118,6 +119,13 @@ redesign them, only gives them a second home. `getMe` is genuinely new here (see
 | `checkAccountSlug(name)`      | `GET /auth/signup/slug-available?name=` | **PUBLIC** — sends no bearer (`requireAuth: false`)                                                |
 | `createAccount(name, slug)`   | `POST /accounts`                        | **AUTHENTICATED** — default `requireAuth`, re-issues the session with the new account's claim      |
 | `getMe()`                     | `GET /auth/me`                          | **AUTHENTICATED** — default `requireAuth`; returns `ConsoleMe`, not the published `Me` — see below |
+| `getProfile()`                | `GET /me/profile`                       | **AUTHENTICATED** — the real `users` row, incl. `hasPassword` — see below                          |
+| `updateProfile(input)`        | `PATCH /me/profile`                     | **AUTHENTICATED** — `{displayName}`                                                                |
+| `requestContactChange(input)` | `POST /me/contacts/change`              | **AUTHENTICATED** — `{method, value}`; parks a pending change, returns `void` (`202 {ok:true}`)    |
+| `confirmContactChange(input)` | `POST /me/contacts/confirm`             | **AUTHENTICATED** — `{method, code, promote?}`; returns the updated profile                        |
+| `removeContact(id)`           | `DELETE /me/contacts/:id`               | **AUTHENTICATED** — added per HITL-7; returns `void`                                               |
+| `promoteContact(id)`          | `POST /me/contacts/:id/primary`         | **AUTHENTICATED** — added per HITL-7; returns the updated profile                                  |
+| `setPassword(input)`          | `POST /me/password`                     | **AUTHENTICATED** — `{newPassword, currentPassword?}` — one method for both "set" and "change"     |
 
 The three public routes are registered server-side ABOVE `app.use("*", authGuard)`
 (`packages/server/packages/api/data/signup.ts:23-41`, `id/auth.ts:22-55`) and must never read a
@@ -139,7 +147,26 @@ covers `GET /auth/me` exactly for the published shape — both read the same rou
 what they promise about the body. Use `client.me()` for the published `Me`; use
 `client.console.auth.getMe()` when the caller needs `tenantAdmin`.
 
-None of these five call `unwrap()` — every response body is flat, no envelope key, exactly like
+**T1.1.4's `/me/*` family (`getProfile` through `setPassword`) is registered BELOW the auth guard**
+(`packages/server/packages/api/data/me.ts`'s own doc comment) — every one of the seven is
+AUTHENTICATED, the default `requireAuth`, unlike the three public methods above. `removeContact` and
+`promoteContact` are not part of this task's originally-pinned five; both were added because HITL-7
+rules them in and the corresponding routes exist on the merged branch (`data/me.ts:135-154`) — "if
+T1.1.4 ships routes for adding / removing / promoting a secondary contact, they get methods here
+too".
+
+**`UserProfile.hasPassword` is a rename of the wire's `passwordSet`.** `GET /me/profile` (and every
+other method here that returns a profile) answers `passwordSet` (`data/me.ts:9`,
+`packages/bll/signup.ts:555`), derived server-side from `password_hash !== null` — the hash itself
+never appears on the wire. `hasPassword` is what HITL-10's "Set a password" (`false`) vs "Change
+password" (`true`) fork reads; the rename happens in `toUserProfile()` (`src/console/auth.ts`) from
+the exact value the wire sent — never a default, never computed from anything else.
+
+`requestContactChange` and `setPassword` both resolve `void`, discarding the server's uninformative
+`{ok: true}`/`202 {ok: true}`, mirroring `console.projects.delete`/`console.schedules.delete`'s own
+convention elsewhere in this package. `removeContact` does the same with its `{ok: true}`.
+
+None of these twelve call `unwrap()` — every response body is flat, no envelope key, exactly like
 `console.reliability.list`.
 
 ## `console.dashboard.stats(params?)`
@@ -917,3 +944,73 @@ verbatim and refuses nothing.
 None of `list`/`put`/`remove` calls this package's `unwrap()` helper: `list` returns the whole body
 (`callbackUrl` rides beside `configs`, so unwrapping just `configs` would drop it), `put` reaches
 one level in itself (`res.body.config`), and `remove` discards the body entirely.
+
+## `console.passkeys.*`
+
+```ts
+import { W6WClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+// Registration (authenticated).
+const client = new W6WClient();
+const { options, challengeToken } = await client.console.passkeys.registrationOptions();
+const response = await startRegistration({ optionsJSON: options }); // e.g. @simplewebauthn/browser
+const passkey = await client.console.passkeys.registrationVerify({ challengeToken, response });
+
+// Login (public — works on a client that holds no token yet).
+const anon = new W6WClient({ baseUrl: "https://api.example.com" });
+const opts = await anon.console.passkeys.authenticationOptions();
+const assertion = await startAuthentication({ optionsJSON: opts.options });
+const { token } = await anon.console.passkeys.authenticationVerify({
+  challengeToken: opts.challengeToken,
+  response: assertion,
+});
+```
+
+Six methods, self-serve WebAuthn passkey management and login (T1.1.5). Who may hold one is a server
+decision (HITL-3: self-serve Studio users only — a partner-tenant user's IdP owns its identity) that
+this namespace has no logic for; it is a plain transport shim over whatever `PasskeyService`
+decides.
+
+| Method                        | Route                        | Public/authenticated                                                 |
+| ----------------------------- | ---------------------------- | -------------------------------------------------------------------- |
+| `registrationOptions()`       | `POST /me/passkeys/options`  | **AUTHENTICATED** — default `requireAuth`                            |
+| `registrationVerify(input)`   | `POST /me/passkeys`          | **AUTHENTICATED** — `unwrap<Passkey>(res, "passkey")`                |
+| `authenticationOptions()`     | `POST /auth/passkey/options` | **PUBLIC** — sends no bearer (`requireAuth: false`)                  |
+| `authenticationVerify(input)` | `POST /auth/passkey/verify`  | **PUBLIC** — sends no bearer (`requireAuth: false`); mints a session |
+| `list()`                      | `GET /me/passkeys`           | **AUTHENTICATED** — `unwrap<Passkey[]>(res, "passkeys")`             |
+| `revoke(id)`                  | `DELETE /me/passkeys/:id`    | **AUTHENTICATED** — `void`, server answers `204` with no body        |
+
+**The management quartet is GUARDED, the login pair is PUBLIC — split by route, mirroring the server
+file split.** `registrationOptions`/`registrationVerify`/`list`/`revoke` are registered below the
+auth guard (`packages/server/packages/api/data/passkeys.ts`'s own doc comment: "Registered BELOW the
+auth guard"); `authenticationOptions`/`authenticationVerify` are the two PUBLIC routes in
+`packages/server/packages/api/id/passkey-login.ts`'s own doc comment ("BOTH routes are PUBLIC and
+UNAUTHENTICATED by construction"). `requireAuth: false` on the login pair is the same mechanism
+`console.auth.login`/`signup`/`checkAccountSlug` are built on — without it, the login screen (the
+normal case: no session exists yet) could never call either method, since a tokenless client would
+hit `requireToken`'s `ConfigError` before `fetch` is ever called.
+
+**`authenticationVerify` mints a session, the same way `console.auth.login` does (HITL-5).** A
+verified passkey assertion is a standalone alternative to a password, not a second factor, so its
+response — `PasskeyAuthenticationVerifyResponse` — is token-bearing. It is a SEPARATE type from
+`console.auth`'s `LoginResponse`, not a reuse: `id/passkey-login.ts`'s own doc comment states the
+route is "BYTE-SHAPE IDENTICAL to `user-login.ts`'s" login body, which carries `role`, `tenant` and
+`emailVerified` on `user` — fields `LoginResponse.user` does not declare.
+
+**Discoverable credentials — no identifier anywhere on the login pair.** `authenticationOptions`
+takes no argument and sends no identifying value; the server resolves the credential's owner from
+the assertion itself (P1, `packages/bll/passkeys.ts`'s own header). A client-supplied identifier on
+the path to a session would be an account-enumeration oracle, and neither this namespace nor the
+server route it calls ever reads one.
+
+**WebAuthn ceremony payloads (`options` on the response, `response` on the input) are opaque JSON,
+typed `Record<string, unknown>`.** This package has no dependency on `@simplewebauthn` (browser or
+server) — adding one to type two pass-through fields would be a new dependency for zero behavioural
+gain. A caller feeds `options` into `navigator.credentials.create()`/`.get()` (or a helper such as
+`@simplewebauthn/browser`'s `startRegistration`/`startAuthentication`) and forwards what comes back
+as `response`; this module never inspects either shape, only relays it.
+
+None of these six methods take a `project` scoping parameter — passkeys are scoped by the caller's
+own identity (or, for the login pair, resolved from the assertion) — so `PasskeysHost` needs only
+the transport, mirroring `TokensHost`'s own host shape.

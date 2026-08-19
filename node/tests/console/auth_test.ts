@@ -27,6 +27,7 @@ import type {
   SignupResponse,
   SignupUser,
   SlugAvailabilityResponse,
+  UserProfile,
 } from "../../src/console/auth.ts";
 
 /** One recorded call to the fake transport. */
@@ -126,14 +127,278 @@ const ME: ConsoleMe = {
   versions: { composition: "server@1a2b3c4" },
 };
 
-Deno.test("console.auth: all five operations are functions on a constructed client", () => {
+/** The wire body `GET`/`PATCH /me/profile` etc. answer — carries `passwordSet`, not `hasPassword`. */
+const PROFILE_WIRE = {
+  userId: "usr_1",
+  tenant: "ten_1",
+  displayName: "Alice",
+  email: "alice@example.com",
+  emailVerified: true,
+  passwordSet: true,
+  contacts: [
+    {
+      id: "uc_1",
+      kind: "email" as const,
+      value: "alice@example.com",
+      verifiedAt: "2026-08-01T00:00:00.000Z",
+    },
+  ],
+  loginMethods: [
+    {
+      id: "cred_1",
+      kind: "password",
+      label: "",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      lastUsedAt: null,
+    },
+  ],
+  pending: [] as UserProfile["pending"],
+};
+
+/** What `console.auth`'s profile methods resolve to: `PROFILE_WIRE` with `passwordSet` renamed. */
+const PROFILE: UserProfile = {
+  userId: PROFILE_WIRE.userId,
+  tenant: PROFILE_WIRE.tenant,
+  displayName: PROFILE_WIRE.displayName,
+  email: PROFILE_WIRE.email,
+  emailVerified: PROFILE_WIRE.emailVerified,
+  hasPassword: true,
+  contacts: PROFILE_WIRE.contacts,
+  loginMethods: PROFILE_WIRE.loginMethods,
+  pending: [],
+};
+
+Deno.test("console.auth: all twelve operations are functions on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
-  for (const name of ["login", "signup", "checkAccountSlug", "createAccount", "getMe"] as const) {
+  for (
+    const name of [
+      "login",
+      "signup",
+      "checkAccountSlug",
+      "createAccount",
+      "getMe",
+      "getProfile",
+      "updateProfile",
+      "requestContactChange",
+      "confirmContactChange",
+      "removeContact",
+      "promoteContact",
+      "setPassword",
+    ] as const
+  ) {
     assertEquals(typeof c.console.auth[name], "function", `console.auth.${name} is missing`);
   }
 });
+
+Deno.test("console.auth.getProfile GETs /me/profile, renaming passwordSet to hasPassword", async () => {
+  const c = client(() => json(PROFILE_WIRE));
+
+  const res = await c.client.console.auth.getProfile();
+
+  assertEquals(res, PROFILE);
+  assertEquals(c.calls.length, 1);
+  assertEquals(c.calls[0].method, "GET");
+  assertEquals(c.calls[0].url, "https://api.example.com/me/profile");
+  assertEquals(c.calls[0].body, null);
+});
+
+Deno.test(
+  "console.auth.getProfile: hasPassword tracks the wire's passwordSet — not a default",
+  async () => {
+    const cTrue = client(() => json({ ...PROFILE_WIRE, passwordSet: true }));
+    assertEquals((await cTrue.client.console.auth.getProfile()).hasPassword, true);
+
+    const cFalse = client(() => json({ ...PROFILE_WIRE, passwordSet: false }));
+    assertEquals((await cFalse.client.console.auth.getProfile()).hasPassword, false);
+  },
+);
+
+Deno.test("console.auth.updateProfile PATCHes /me/profile with exactly {displayName}", async () => {
+  const c = client(() => json(PROFILE_WIRE));
+
+  const res = await c.client.console.auth.updateProfile({ displayName: "New Name" });
+
+  assertEquals(res, PROFILE);
+  assertEquals(c.calls[0].method, "PATCH");
+  assertEquals(c.calls[0].url, "https://api.example.com/me/profile");
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { displayName: "New Name" });
+});
+
+Deno.test(
+  "console.auth.requestContactChange POSTs /me/contacts/change and resolves void",
+  async () => {
+    const c = client(() => json({ ok: true }, 202));
+
+    const res = await c.client.console.auth.requestContactChange({
+      method: "email",
+      value: "new@example.com",
+    });
+
+    assertEquals(res, undefined);
+    assertEquals(c.calls[0].method, "POST");
+    assertEquals(c.calls[0].url, "https://api.example.com/me/contacts/change");
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
+      method: "email",
+      value: "new@example.com",
+    });
+  },
+);
+
+Deno.test(
+  "console.auth.confirmContactChange POSTs /me/contacts/confirm; promote is optional",
+  async () => {
+    const c = client(() => json(PROFILE_WIRE));
+    const res = await c.client.console.auth.confirmContactChange({
+      method: "email",
+      code: "code_placeholder_123456",
+    });
+    assertEquals(res, PROFILE);
+    assertEquals(c.calls[0].method, "POST");
+    assertEquals(c.calls[0].url, "https://api.example.com/me/contacts/confirm");
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
+      method: "email",
+      code: "code_placeholder_123456",
+    });
+
+    const c2 = client(() => json(PROFILE_WIRE));
+    await c2.client.console.auth.confirmContactChange({
+      method: "email",
+      code: "code_placeholder_123456",
+      promote: true,
+    });
+    assertEquals(JSON.parse(c2.calls[0].body ?? "null"), {
+      method: "email",
+      code: "code_placeholder_123456",
+      promote: true,
+    });
+  },
+);
+
+Deno.test("console.auth.removeContact DELETEs /me/contacts/:id and resolves void", async () => {
+  const c = client(() => json({ ok: true }));
+
+  const res = await c.client.console.auth.removeContact("uc_1");
+
+  assertEquals(res, undefined);
+  assertEquals(c.calls[0].method, "DELETE");
+  assertEquals(c.calls[0].url, "https://api.example.com/me/contacts/uc_1");
+  assertEquals(c.calls[0].body, null);
+});
+
+Deno.test(
+  "console.auth.promoteContact POSTs /me/contacts/:id/primary and returns the profile",
+  async () => {
+    const c = client(() => json(PROFILE_WIRE));
+
+    const res = await c.client.console.auth.promoteContact("uc_1");
+
+    assertEquals(res, PROFILE);
+    assertEquals(c.calls[0].method, "POST");
+    assertEquals(c.calls[0].url, "https://api.example.com/me/contacts/uc_1/primary");
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
+  },
+);
+
+Deno.test(
+  "console.auth.setPassword POSTs /me/password with newPassword, currentPassword optional",
+  async () => {
+    const c = client(() => json({ ok: true }));
+    const res = await c.client.console.auth.setPassword({ newPassword: "pw_placeholder_123" });
+    assertEquals(res, undefined);
+    assertEquals(c.calls[0].method, "POST");
+    assertEquals(c.calls[0].url, "https://api.example.com/me/password");
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), { newPassword: "pw_placeholder_123" });
+
+    const c2 = client(() => json({ ok: true }));
+    await c2.client.console.auth.setPassword({
+      newPassword: "pw_placeholder_123",
+      currentPassword: "pw_old_placeholder",
+    });
+    assertEquals(JSON.parse(c2.calls[0].body ?? "null"), {
+      newPassword: "pw_placeholder_123",
+      currentPassword: "pw_old_placeholder",
+    });
+  },
+);
+
+Deno.test(
+  "the seven /me/* methods all send the bearer — AUTHENTICATED, unlike login/signup/checkAccountSlug",
+  async () => {
+    const c1 = client(() => json(PROFILE_WIRE));
+    await c1.client.console.auth.getProfile();
+    assertEquals(c1.calls[0].headers.get("authorization"), "Bearer tok_1");
+
+    const c2 = client(() => json(PROFILE_WIRE));
+    await c2.client.console.auth.updateProfile({ displayName: "x" });
+    assertEquals(c2.calls[0].headers.get("authorization"), "Bearer tok_1");
+
+    const c3 = client(() => json({ ok: true }, 202));
+    await c3.client.console.auth.requestContactChange({ method: "email", value: "x@example.com" });
+    assertEquals(c3.calls[0].headers.get("authorization"), "Bearer tok_1");
+
+    const c4 = client(() => json(PROFILE_WIRE));
+    await c4.client.console.auth.confirmContactChange({ method: "email", code: "c" });
+    assertEquals(c4.calls[0].headers.get("authorization"), "Bearer tok_1");
+
+    const c5 = client(() => json({ ok: true }));
+    await c5.client.console.auth.removeContact("uc_1");
+    assertEquals(c5.calls[0].headers.get("authorization"), "Bearer tok_1");
+
+    const c6 = client(() => json(PROFILE_WIRE));
+    await c6.client.console.auth.promoteContact("uc_1");
+    assertEquals(c6.calls[0].headers.get("authorization"), "Bearer tok_1");
+
+    const c7 = client(() => json({ ok: true }));
+    await c7.client.console.auth.setPassword({ newPassword: "pw_placeholder_123" });
+    assertEquals(c7.calls[0].headers.get("authorization"), "Bearer tok_1");
+  },
+);
+
+Deno.test("console.auth.setPassword: the password travels in the body, never the URL", async () => {
+  const c = client(() => json({ ok: true }));
+
+  await c.client.console.auth.setPassword({
+    newPassword: "pw_placeholder_123",
+    currentPassword: "pw_old_placeholder",
+  });
+
+  assertEquals(c.calls[0].url.includes("?"), false);
+  assertEquals(c.calls[0].url.includes("pw_placeholder_123"), false);
+  assertEquals(c.calls[0].url.includes("pw_old_placeholder"), false);
+  assertStringIncludes(c.calls[0].body ?? "", "pw_placeholder_123");
+  assertStringIncludes(c.calls[0].body ?? "", "pw_old_placeholder");
+});
+
+Deno.test(
+  "console.auth.confirmContactChange: the code travels in the body, never the URL",
+  async () => {
+    const c = client(() => json(PROFILE_WIRE));
+
+    await c.client.console.auth.confirmContactChange({
+      method: "email",
+      code: "code_placeholder_123456",
+    });
+
+    assertEquals(c.calls[0].url.includes("?"), false);
+    assertEquals(c.calls[0].url.includes("code_placeholder_123456"), false);
+    assertStringIncludes(c.calls[0].body ?? "", "code_placeholder_123456");
+  },
+);
+
+Deno.test(
+  "console.auth: contact ids are percent-encoded into removeContact/promoteContact",
+  async () => {
+    const c = client(() => json({ ok: true }));
+    await c.client.console.auth.removeContact("uc/1#x");
+    assertStringIncludes(c.calls[0].url, "uc%2F1%23x");
+
+    const c2 = client(() => json(PROFILE_WIRE));
+    await c2.client.console.auth.promoteContact("uc/1#x");
+    assertStringIncludes(c2.calls[0].url, "uc%2F1%23x");
+  },
+);
 
 Deno.test("console.auth.login resolves with the payload VERBATIM — no unwrap()", async () => {
   const c = client(() => json(LOGIN));
