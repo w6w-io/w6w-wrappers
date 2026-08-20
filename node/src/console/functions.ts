@@ -39,6 +39,7 @@
 
 import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 import { unwrap } from "../types.ts";
+import type { Callable, CallableOnError, ErrorReroute, RetryPolicy } from "./endpoints.ts";
 
 /**
  * The slice of `W6WClient` this namespace needs: the transport, and nothing
@@ -68,17 +69,37 @@ export interface FunctionOutputField {
   label?: string;
 }
 
-/** What a Function is bound to: one app Action, plus the mapping around it. */
-export interface FunctionImpl {
+/** The app-Action arm — the historical shape. `kind` is ABSENT on every Function
+ *  stored before this union existed, and absent MEANS "action". */
+export interface FunctionActionImpl {
+  kind?: "action";
   uses: { app: string; action: string; connection?: string | null };
   with?: Record<string, unknown>;
   outputMap?: Record<string, unknown>;
 }
 
+/** The Function / Workflow arms — {@linkcode Callable} reused verbatim, carrying the
+ *  same two adapter maps the action arm has. */
+export type FunctionCallableImpl = Callable & {
+  with?: Record<string, unknown>;
+  outputMap?: Record<string, unknown>;
+};
+
+/** What a Function is bound to: one app Action, another Function, or a Workflow,
+ *  plus the mapping around it (D-8). */
+export type FunctionImpl = FunctionActionImpl | FunctionCallableImpl;
+
+/** The ONE discriminator every consumer branches on — never re-derive it. */
+export function isCallableImpl(impl: FunctionImpl): impl is FunctionCallableImpl {
+  return impl.kind === "function" || impl.kind === "workflow";
+}
+
 /**
  * A Function definition — a canonical, vendor-stable interface bound to one
- * swappable app Action (`rfcs/function.md`). Callers bind to `inputs`/
- * `output`; a vendor swap rewrites only `impl.uses`, so no caller breaks.
+ * swappable implementation: an app Action, or (D-8) another Function or a
+ * Workflow via {@linkcode FunctionCallableImpl} (`rfcs/function.md`). Callers
+ * bind to `inputs`/`output`; a vendor swap rewrites only `impl`, so no caller
+ * breaks.
  *
  * `valid` is **server-computed**, spliced in by {@linkcode FunctionsApi.get}
  * — see that method's doc. It is never sent by a caller on `upsert`.
@@ -92,6 +113,12 @@ export interface FunctionDef {
   inputs: FunctionInput[];
   output?: FunctionOutputField[];
   impl: FunctionImpl;
+  /** Attempt policy for this call. Absent ⇒ one attempt. */
+  retry?: RetryPolicy;
+  /** Applied only after `retry` and `reroute` are exhausted. Absent ⇒ `"fail"`. */
+  onError?: CallableOnError;
+  /** Failure re-dispatch. Absent ⇒ none. */
+  reroute?: ErrorReroute;
   /** Server-computed, spliced in by `console.functions.get` — see above. Read-only. */
   valid: boolean;
 }

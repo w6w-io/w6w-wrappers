@@ -87,6 +87,43 @@ export interface EndpointRefTarget {
  */
 export type EndpointTarget = Callable | ActionTarget | EndpointRefTarget;
 
+/**
+ * Attempt policy for a Function/Endpoint call. Absent ⇒ one attempt. Mirrors
+ * `@w6w/workflow-types`' `RetryPolicy` (the workflow step's own retry shape)
+ * field-for-field.
+ */
+export interface RetryPolicy {
+  /** Total attempts including the first. `1` means no retry. */
+  maxAttempts: number;
+  /** How the delay grows between attempts. Defaults to `"fixed"`. */
+  backoff?: "fixed" | "exponential";
+  /** Base delay in ms (the first retry waits this long). Defaults to 0. */
+  delayMs?: number;
+}
+
+/**
+ * Where a failed Function/Endpoint invocation is re-dispatched. A Function
+ * and an Endpoint have no graph, so this can never be an `Edge.when: "error"`;
+ * it is a {@linkcode Callable} reference — the same union `Endpoint.target`
+ * already uses.
+ */
+export interface ErrorReroute {
+  /** Invoked once, after `retry` is exhausted. Its output becomes the call's output. */
+  target: Callable;
+  /** Maps `{ inputs, error }` onto the reroute target's own inputs. Omitted ⇒ the
+   *  original `inputs` are passed through unchanged. */
+  with?: Record<string, unknown>;
+}
+
+/**
+ * What a failed Function/Endpoint invocation does once `retry` and `reroute`
+ * are exhausted. Deliberately NARROWER than a workflow step's `OnError`:
+ * `continue-record` has no meaning without a run's `stepErrors` state.
+ * - `fail` (default, and the meaning of absent) — the error propagates, as today.
+ * - `continue` — the invocation resolves with a `null` output instead of throwing.
+ */
+export type CallableOnError = "fail" | "continue";
+
 /** The inbound auth mode an Endpoint's public exposure enforces. */
 export type EndpointAuthMode = "platform" | "none" | "basic" | "header" | "jwt";
 
@@ -152,6 +189,12 @@ export interface EndpointDef {
   target: EndpointTarget;
   input?: EndpointInput[];
   exposure?: Exposure;
+  /** Attempt policy for this call. Absent ⇒ one attempt. */
+  retry?: RetryPolicy;
+  /** Applied only after `retry` and `reroute` are exhausted. Absent ⇒ `"fail"`. */
+  onError?: CallableOnError;
+  /** Failure re-dispatch. Absent ⇒ none. */
+  reroute?: ErrorReroute;
 }
 
 /**

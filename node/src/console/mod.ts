@@ -129,8 +129,10 @@ export { VaultApi } from "./vault.ts";
 export type { SecretValue, VaultHost, VaultSecretSummary } from "./vault.ts";
 export { TokensApi } from "./tokens.ts";
 export type { ApiToken, ApiTokenStatus, CreateTokenResponse, TokensHost } from "./tokens.ts";
-export { FunctionsApi } from "./functions.ts";
+export { FunctionsApi, isCallableImpl } from "./functions.ts";
 export type {
+  FunctionActionImpl,
+  FunctionCallableImpl,
   FunctionDef,
   FunctionImpl,
   FunctionInput,
@@ -142,6 +144,7 @@ export { EndpointsApi, SECRET_MASK } from "./endpoints.ts";
 export type {
   ActionTarget,
   Callable,
+  CallableOnError,
   EndpointAuthMode,
   EndpointDef,
   EndpointInput,
@@ -151,7 +154,9 @@ export type {
   EndpointsHost,
   EndpointSummary,
   EndpointTarget,
+  ErrorReroute,
   Exposure,
+  RetryPolicy,
 } from "./endpoints.ts";
 export { AliasesApi } from "./aliases.ts";
 export type { AliasDef, AliasesHost, AliasSummary } from "./aliases.ts";
