@@ -61,11 +61,15 @@ Outward-facing, one-time, and human:
      Trusted Publisher → add a GitHub Actions publisher for
      `w6w-io/w6w-wrappers`, workflow `release.yml`. Not "pending"; the project
      already exists, this just adds OIDC as a second way to publish it.
-   - JSR: the `@w6w` scope already exists (`@w6w/types` is on it). `@w6w/sdk`
-     is created and linked to `w6w-io/w6w-wrappers`; `@w6w/cli` still needs
-     the same — create the package under the scope on jsr.io and link it to
-     the repo (Settings → GitHub Actions on the package). Unlinked, `npx jsr
-     publish` has no OIDC binding to use.
+   - JSR: the `@w6w` scope already exists (`@w6w/types` is on it), and
+     `@w6w/sdk` is created and linked to `w6w-io/w6w-wrappers`. **`@w6w/cli` is
+     deliberately not on JSR** — the CLI is a binary (`npm i -g @w6w/cli`),
+     nothing imports it as a module, and JSR is for imported source. There is
+     no `jsr-cli` job; see the note beside `jsr-sdk` in `release.yml`. If the
+     CLI ever grows an importable surface, create the package under the scope
+     on jsr.io and link it to the repo (Settings → GitHub Actions on the
+     package) BEFORE restoring the job — unlinked, `npx jsr publish` has no
+     OIDC binding to use, and CI cannot bootstrap a package name.
    - PyPI: `w6w` — as a **pending publisher**, since the project does not exist
      yet. The first upload creates it.
 2. **Create the `pypi` GitHub environment** (Settings → Environments) on
