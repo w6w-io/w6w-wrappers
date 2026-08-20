@@ -33,7 +33,7 @@ same set of operations in every language.
 ## Quick start
 
 ```ts
-import { W6WClient, isActionRun, isFunctionRun, isWorkflowRun } from "@w6w/sdk";
+import { isActionRun, isFunctionRun, isWorkflowRun, W6WClient } from "@w6w/sdk";
 
 const client = new W6WClient(); // reads W6W_BASE_URL and W6W_TOKEN
 
@@ -48,9 +48,9 @@ const workflows = await client.workflows.list();
 
 ### Run a connection action
 
-A `conn_…` id resolves to an app action. `run` returns a `kind`-tagged envelope —
-narrow it with `isActionRun` / `isFunctionRun` / `isWorkflowRun` before reading a field, since the
-three arms use different field names on purpose (`value` vs `output` vs `runId`+`status`):
+A `conn_…` id resolves to an app action. `run` returns a `kind`-tagged envelope — narrow it with
+`isActionRun` / `isFunctionRun` / `isWorkflowRun` before reading a field, since the three arms use
+different field names on purpose (`value` vs `output` vs `runId`+`status`):
 
 ```ts
 const env = await client.run({
@@ -68,7 +68,10 @@ if (isActionRun(env)) console.log(env.value); // the action's return value
 operation:
 
 ```ts
-const env = await client.run({ urn: "fn_normalize_address", payload: { address: "1 Infinite Loop" } });
+const env = await client.run({
+  urn: "fn_normalize_address",
+  payload: { address: "1 Infinite Loop" },
+});
 if (isFunctionRun(env)) console.log(env.output);
 ```
 
@@ -110,10 +113,10 @@ await client.vars.update(v.id, { value: "c@d.e" });
 
 Two environment variables, both read only at client construction:
 
-| Variable       | Meaning                                                                                                                               | Required |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Variable       | Meaning                                                                                                                                | Required |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `W6W_BASE_URL` | The **origin** of your w6w server, e.g. `https://api.example.com`. The API is served at the root of that host, so nothing is appended. | Yes      |
-| `W6W_TOKEN`    | The bearer token, sent as `Authorization: Bearer <token>` on every request.                                                           | Yes      |
+| `W6W_TOKEN`    | The bearer token, sent as `Authorization: Bearer <token>` on every request.                                                            | Yes      |
 
 Explicit constructor arguments always win over the environment, and credentials are **instance
 state**: two clients in one process can hold different tokens and point at different servers with no
@@ -132,16 +135,16 @@ const other = new W6WClient({ baseUrl: "https://api.example.com", token: "…" }
 
 ### `W6W_BASE_URL` is an origin
 
-The API is served at the **root** of its own host — `https://api.example.com/vars`, not
-`…/api/vars` — so the client appends **nothing**. Trailing slashes never matter, and any path you
-configure is preserved verbatim, because it is indistinguishable from a real gateway prefix:
+The API is served at the **root** of its own host — `https://api.example.com/vars`, not `…/api/vars`
+— so the client appends **nothing**. Trailing slashes never matter, and any path you configure is
+preserved verbatim, because it is indistinguishable from a real gateway prefix:
 
-| `W6W_BASE_URL`                | Requests go to                  |
-| ----------------------------- | ------------------------------- |
-| `https://api.example.com`     | `https://api.example.com/…`     |
-| `https://api.example.com/`    | `https://api.example.com/…`     |
-| `https://api.example.com///`  | `https://api.example.com/…`     |
-| `https://api.example.com/gw`  | `https://api.example.com/gw/…`  |
+| `W6W_BASE_URL`               | Requests go to                 |
+| ---------------------------- | ------------------------------ |
+| `https://api.example.com`    | `https://api.example.com/…`    |
+| `https://api.example.com/`   | `https://api.example.com/…`    |
+| `https://api.example.com///` | `https://api.example.com/…`    |
+| `https://api.example.com/gw` | `https://api.example.com/gw/…` |
 
 > **Breaking in `0.2.0`.** The client used to append `/api`. If your `W6W_BASE_URL` ends in `/api`
 > because of that, **drop the suffix** — the path is now preserved rather than deduplicated, so a

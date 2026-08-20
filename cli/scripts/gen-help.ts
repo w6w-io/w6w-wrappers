@@ -107,12 +107,16 @@ const ROOT_EXAMPLES = [
 const GROUP_SUMMARIES: Record<string, string> = {
   connections: "Inspect connections",
   workflows: "List and run workflows",
+  functions: "Run functions by key or id",
+  endpoints: "Run endpoints by key or id",
   documents: "Create, read, update and delete documents",
   vars: "Create, read, update and delete variables",
 };
 
 const GROUP_EXAMPLES: Record<string, string[]> = {
   connections: ["w6w connections list"],
+  functions: ["w6w functions run send-email"],
+  endpoints: ["w6w endpoints run send-email"],
   workflows: ["w6w workflows list", "w6w workflows run wf_01HQ8N --wait"],
   documents: ["w6w documents list", "w6w documents get doc_01HQ8N"],
   vars: ["w6w vars list", "w6w vars create greeting --type string --value hello"],
@@ -123,6 +127,18 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   "me": ["w6w me", "w6w info"],
   "connections.list": ["w6w connections list", "w6w connections list --json"],
   "workflows.list": ["w6w workflows list", "w6w workflows list --project prj_01HQ8N"],
+  // The key form is shown FIRST in both: it is the address a reader actually
+  // has, and the id form is the fallback for a resource whose key they do not
+  // know. Both reach the same command — one slot, no flag.
+  "functions.run": [
+    "w6w functions run send-email",
+    `w6w functions run send-email --payload '{"to":"a@b.com"}'`,
+    "w6w functions run fn_01HQ8N --json",
+  ],
+  "endpoints.run": [
+    "w6w endpoints run send-email",
+    `w6w endpoints run send-email --payload '{"to":"a@b.com"}'`,
+  ],
   "workflows.run": [
     "w6w workflows run wf_01HQ8N --var email=a@b.com",
     "w6w workflows run wf_01HQ8N --wait --json",
@@ -192,6 +208,12 @@ const PARAM_HELP: Record<string, string> = {
   "value": "Value, validated against the variable's type",
 
   // Per-operation, where the bare name is ambiguous or the wording matters.
+  // Name-addressed run. The slot takes an id OR the key the user gave the
+  // resource — they are disjoint shapes, so there is no flag to describe here.
+  "functions.run.idOrKey": "Function key or id (e.g. send-email)",
+  "functions.run.inputs": "The Function's inputs, as a JSON object",
+  "endpoints.run.idOrKey": "Endpoint key or id (e.g. send-email)",
+  "endpoints.run.input": "The Endpoint's input, as a JSON object",
   "workflows.run.id": "Workflow id (see: w6w workflows list)",
   "workflows.run.wait": "Wait for the run to reach a terminal state",
   "workflows.run.variables": "Set a run variable (repeatable)",

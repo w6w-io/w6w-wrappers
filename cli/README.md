@@ -23,10 +23,10 @@ together. A given version means the same set of operations in every language.
 
 Two environment variables:
 
-| Variable       | Meaning                                                                                                                         | Required |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Variable       | Meaning                                                                                                                                                                                         | Required |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `W6W_BASE_URL` | The **origin** of your w6w server, e.g. `https://api.example.com`. The API is served at the root of that host, so nothing is appended — and a stale `/api` suffix from `0.1.x` must be dropped. | Yes      |
-| `W6W_TOKEN`    | Your API token, sent as `Authorization: Bearer <token>` on every request.                                                       | Yes      |
+| `W6W_TOKEN`    | Your API token, sent as `Authorization: Bearer <token>` on every request.                                                                                                                       | Yes      |
 
 Both have a flag equivalent, and **a flag always wins over the environment**: `--base-url <url>` and
 `--token <token>`.

@@ -149,7 +149,7 @@ export function joinBaseUrl(origin: string): string {
       "No w6w base URL is configured. Pass one to the client " +
         '(new W6WClient({ baseUrl: "https://api.example.com" })) or set the ' +
         `${ENV_BASE_URL} environment variable. It holds the server's origin, ` +
-        "e.g. \"https://api.example.com\" — the API is served at its root, so no " +
+        'e.g. "https://api.example.com" — the API is served at its root, so no ' +
         "path is appended.",
     );
   }

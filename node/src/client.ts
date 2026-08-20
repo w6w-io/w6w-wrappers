@@ -30,6 +30,8 @@ import { fetchMe } from "./me.ts";
 import { type RunInput, runUrn } from "./run.ts";
 import type { Me, RunEnvelope } from "./types.ts";
 import { VarsApi } from "./vars.ts";
+import { EndpointsApi } from "./endpoints.ts";
+import { FunctionsApi } from "./functions.ts";
 import { WorkflowsApi } from "./workflows.ts";
 
 /**
@@ -92,6 +94,25 @@ export class W6WClient {
   readonly workflows: WorkflowsApi;
 
   /**
+   * Run a Function by the name you gave it: `functions.run("send-email", {payload})`.
+   *
+   * The name is the first argument and may be the Function's KEY or its `fn_…`
+   * id — the server takes either in one slot, because the two shapes cannot
+   * collide. Returns the Function's output directly; the kind is already
+   * settled by the method name, so there is no envelope to unwrap.
+   */
+  readonly functions: FunctionsApi;
+
+  /**
+   * Run an Endpoint by the key you gave it: `endpoints.run("send-email", {payload})`.
+   *
+   * Same name-first shape as `functions.run`, but this one returns the
+   * `kind`-discriminated envelope: an Endpoint dispatches to an app action, a
+   * Function or a Workflow, and only the response says which answered.
+   */
+  readonly endpoints: EndpointsApi;
+
+  /**
    * Console-only namespaces: `console.reliability.list`, `console.auth.*`
    * (`login`, `signup`, `checkAccountSlug`, `createAccount`),
    * `console.dashboard.stats`, `console.projects.*` (`list`, `create`,
@@ -151,6 +172,8 @@ export class W6WClient {
     this.vars = new VarsApi(this);
     this.connections = new ConnectionsApi(this);
     this.workflows = new WorkflowsApi(this);
+    this.functions = new FunctionsApi(this);
+    this.endpoints = new EndpointsApi(this);
     this.console = new ConsoleApi(this);
   }
 

@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.2.0",
+  "contractVersion": "0.3.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "auth": "bearer",
@@ -26,7 +26,7 @@
         "python": "client.me()",
         "cli": "w6w me"
       },
-      "notes": "Fixed 2026-07-28: the wrapper calls `/auth/me` directly \u2014 the server\u2019s real, already-live identity route (verified live: 200, `{tenant, subject, account, role}`), not the not-yet-built `/api/me` alias D15 originally specced. `{tenant, subject, account, role}`. The response body is flat, NOT a `{user:{\u2026}}` envelope. The live consumer is the reference studio; a nested envelope would break it. `versions` is optional and additive \u2014 the server does not send one today, so a wrapper must tolerate it being absent entirely and must tolerate unknown keys inside it when it does. `versions.wrapper` is filled client-side from the wrapper\u2019s own package version. PRECEDENCE IS SERVER-WINS: the wrapper\u2019s own version is only a DEFAULT that any key the server supplied overrides \u2014 `{ wrapper: VERSION, ...body.versions }` in TS, `{\"wrapper\": VERSION, **(body.get(\"versions\") or {})}` in Python. Do NOT write the other order (`{**server, wrapper: VERSION}`), which would make the wrapper\u2019s value win; the two are observably different on the one field a bug report is read off. DISPLAY IS A SEPARATE RULE: a wrapper must never SHOW a version of `0.0.0` or empty \u2014 if the resolved value is `0.0.0` or empty string, it presents `\"dev\"` (D5). The two rules do not conflict, because they act at different layers: server-wins governs the VALUE carried in the returned object (which stays a faithful transcription of the wire), the display rule governs what a banner such as `w6w info` PRINTS. So a server sending `versions.wrapper: \"0.0.0\"` is carried through in the data and rendered as `dev` to the user. D8 \u2014 the operation name is `me`; `w6w info` is a CLI alias only (see `cliAlias`)."
+      "notes": "Fixed 2026-07-28: the wrapper calls `/auth/me` directly — the server’s real, already-live identity route (verified live: 200, `{tenant, subject, account, role}`), not the not-yet-built `/api/me` alias D15 originally specced. `{tenant, subject, account, role}`. The response body is flat, NOT a `{user:{…}}` envelope. The live consumer is the reference studio; a nested envelope would break it. `versions` is optional and additive — the server does not send one today, so a wrapper must tolerate it being absent entirely and must tolerate unknown keys inside it when it does. `versions.wrapper` is filled client-side from the wrapper’s own package version. PRECEDENCE IS SERVER-WINS: the wrapper’s own version is only a DEFAULT that any key the server supplied overrides — `{ wrapper: VERSION, ...body.versions }` in TS, `{\"wrapper\": VERSION, **(body.get(\"versions\") or {})}` in Python. Do NOT write the other order (`{**server, wrapper: VERSION}`), which would make the wrapper’s value win; the two are observably different on the one field a bug report is read off. DISPLAY IS A SEPARATE RULE: a wrapper must never SHOW a version of `0.0.0` or empty — if the resolved value is `0.0.0` or empty string, it presents `\"dev\"` (D5). The two rules do not conflict, because they act at different layers: server-wins governs the VALUE carried in the returned object (which stays a faithful transcription of the wire), the display rule governs what a banner such as `w6w info` PRINTS. So a server sending `versions.wrapper: \"0.0.0\"` is carried through in the data and rendered as `dev` to the user. D8 — the operation name is `me`; `w6w info` is a CLI alias only (see `cliAlias`)."
     },
     {
       "name": "connections.list",
@@ -42,7 +42,7 @@
         "python": "client.connections.list()",
         "cli": "w6w connections list"
       },
-      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 \u2014 kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_\u2026` URN to pass to `run`. Verified live."
+      "notes": "`credential` and `lastRefreshedAt` are redacted server-side and must not appear in the wrapper's list type. D4 — kept in v0.1.0 even though the 07-27 intake does not name it: without it a user has no way to discover a `conn_…` URN to pass to `run`. Verified live."
     },
     {
       "name": "workflows.list",
@@ -65,7 +65,7 @@
         "python": "client.workflows.list(project=None)",
         "cli": "w6w workflows list [--project <id>]"
       },
-      "notes": "Unpaginated today. Return a container type that can grow a cursor without a breaking change. D4 \u2014 kept in v0.1.0: it is how a user discovers a `wf_\u2026` URN to pass to `run`. Verified live."
+      "notes": "Unpaginated today. Return a container type that can grow a cursor without a breaking change. D4 — kept in v0.1.0: it is how a user discovers a `wf_…` URN to pass to `run`. Verified live."
     },
     {
       "name": "workflows.run",
@@ -106,7 +106,7 @@
             "replay"
           ],
           "closedEnum": false,
-          "$comment": "`knownValues` is DOCUMENTATION, not a constraint. `closedEnum: false` \u2014 wrappers type this as a plain string and must NOT validate against the list; the server may add a sixth value and a wrapper that hard-codes the enum would reject a request the server accepts."
+          "$comment": "`knownValues` is DOCUMENTATION, not a constraint. `closedEnum: false` — wrappers type this as a plain string and must NOT validate against the list; the server may add a sixth value and a wrapper that hard-codes the enum would reject a request the server accepts."
         },
         {
           "name": "input",
@@ -125,7 +125,7 @@
         "python": "client.workflows.run(id, wait=False, variables=None, trigger=None, input=None)",
         "cli": "w6w workflows run <id> [--wait] [--input <json>]"
       },
-      "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. `trigger` is a STRING, not an object: the server reads it as a `RunTrigger` (`\"manual\" | \"schedule\" | \"webhook\" | \"event\" | \"replay\"` today), and it defaults to 'manual' server-side when omitted. The five values are recorded in `knownValues` as documentation only \u2014 every wrapper types the param as an open string (`trigger?: string` / `trigger: str | None`) and passes it through unvalidated, so a sixth server value needs no wrapper release. `variables` and `input` are NOT interchangeable: `variables` seeds the run's variable scope, read downstream as `vars.*`; `input` is delivered to the entry trigger node's own recorded output, read downstream as `steps.<triggerId>.output.<key>` \u2014 the shape a trigger's declared fields actually arrive in. D4 \u2014 kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables`, `trigger` and `input` have no slot in the three-field `{urn, action, payload}` shape. Verified live."
+      "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. `trigger` is a STRING, not an object: the server reads it as a `RunTrigger` (`\"manual\" | \"schedule\" | \"webhook\" | \"event\" | \"replay\"` today), and it defaults to 'manual' server-side when omitted. The five values are recorded in `knownValues` as documentation only — every wrapper types the param as an open string (`trigger?: string` / `trigger: str | None`) and passes it through unvalidated, so a sixth server value needs no wrapper release. `variables` and `input` are NOT interchangeable: `variables` seeds the run's variable scope, read downstream as `vars.*`; `input` is delivered to the entry trigger node's own recorded output, read downstream as `steps.<triggerId>.output.<key>` — the shape a trigger's declared fields actually arrive in. D4 — kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables`, `trigger` and `input` have no slot in the three-field `{urn, action, payload}` shape. Verified live."
     },
     {
       "name": "documents.list",
@@ -152,7 +152,7 @@
     },
     {
       "name": "documents.get",
-      "summary": "Fetch one document by its `doc_\u2026` id.",
+      "summary": "Fetch one document by its `doc_…` id.",
       "method": "GET",
       "path": "/documents/{id}",
       "status": "required",
@@ -177,7 +177,7 @@
         "python": "client.documents.get(id, project=None)",
         "cli": "w6w documents get <id> [--project <id>]"
       },
-      "notes": "Addressed by the server-issued `doc_\u2026` id, not by `key` (D6 \u2014 wrappers mirror the server's addressing exactly). Server wraps the body as `{ document: Doc }`; the wrapper unwraps. Missing id is `404 unknown_document`."
+      "notes": "Addressed by the server-issued `doc_…` id, not by `key` (D6 — wrappers mirror the server's addressing exactly). Server wraps the body as `{ document: Doc }`; the wrapper unwraps. Missing id is `404 unknown_document`."
     },
     {
       "name": "documents.getByKey",
@@ -206,7 +206,7 @@
         "python": "client.documents.get_by_key(key, project=None)",
         "cli": "w6w documents get-by-key <key> [--project <id>]"
       },
-      "notes": "`DocumentsRepo.getByKey` already existed and was already called by `POST /documents` for its conflict check; only the HTTP route was missing. D12 (amending D6) \u2014 a user who chose a key should be able to address by it, and the alternative leaks internal `doc_\u2026` ids to users who never saw them. NO client-side list-then-filter: `packages/wrappers/README.md` \"What a wrapper is\" forbids composing two calls to make an operation useful. Same wrap/unwrap and `404 unknown_document` as `documents.get`. Server-implemented 2026-07-28: the route trims the incoming key to match what `POST /documents` stores, and creation rejects a key of exactly \".\" or \"..\" \u2014 the one class no HTTP client can round-trip through a URL path segment (percent-encoding is a no-op on `.`, and different clients disagree on dot-segment collapse)."
+      "notes": "`DocumentsRepo.getByKey` already existed and was already called by `POST /documents` for its conflict check; only the HTTP route was missing. D12 (amending D6) — a user who chose a key should be able to address by it, and the alternative leaks internal `doc_…` ids to users who never saw them. NO client-side list-then-filter: `packages/wrappers/README.md` \"What a wrapper is\" forbids composing two calls to make an operation useful. Same wrap/unwrap and `404 unknown_document` as `documents.get`. Server-implemented 2026-07-28: the route trims the incoming key to match what `POST /documents` stores, and creation rejects a key of exactly \".\" or \"..\" — the one class no HTTP client can round-trip through a URL path segment (percent-encoding is a no-op on `.`, and different clients disagree on dot-segment collapse)."
     },
     {
       "name": "documents.create",
@@ -256,7 +256,7 @@
         "python": "client.documents.create(key, content, format=None, description=None, project=None)",
         "cli": "w6w documents create <key> --content <text> [--format <f>] [--description <d>] [--project <id>]"
       },
-      "notes": "Create is addressed by `key` (D6 \u2014 mirror the server: create by key, update/delete by id). `key` is a non-empty string of at most 128 characters, unique per scope+project. `content` is raw text and is never parsed. `format` is one of text|markdown|yaml|html|json and defaults to 'text'; it is a hint only and does not gate the content. Duplicate key is `409 document_exists` \u2014 wrappers must surface that code, not swallow it into a generic error."
+      "notes": "Create is addressed by `key` (D6 — mirror the server: create by key, update/delete by id). `key` is a non-empty string of at most 128 characters, unique per scope+project. `content` is raw text and is never parsed. `format` is one of text|markdown|yaml|html|json and defaults to 'text'; it is a hint only and does not gate the content. Duplicate key is `409 document_exists` — wrappers must surface that code, not swallow it into a generic error."
     },
     {
       "name": "documents.update",
@@ -303,7 +303,7 @@
         "python": "client.documents.update(id, content=None, format=None, description=None, project=None)",
         "cli": "w6w documents update <id> [--content <text>] [--format <f>] [--description <d>] [--project <id>]"
       },
-      "notes": "Addressed by the `doc_\u2026` id, NOT by `key` (D6). `key` itself is immutable \u2014 it is not in the patch body. Every field is optional; an omitted field is left alone. Missing id is `404 unknown_document`."
+      "notes": "Addressed by the `doc_…` id, NOT by `key` (D6). `key` itself is immutable — it is not in the patch body. Every field is optional; an omitted field is left alone. Missing id is `404 unknown_document`."
     },
     {
       "name": "documents.delete",
@@ -332,7 +332,7 @@
         "python": "client.documents.delete(id, project=None)",
         "cli": "w6w documents delete <id> [--project <id>]"
       },
-      "notes": "Addressed by the `doc_\u2026` id (D6). The server returns `{ ok: true }`, but the wrapper unwraps it to NOTHING: the declared return is `void` (`Promise<void>` in TS, `None` in Python, no stdout payload in the CLI beyond an exit code). `Ok` is not a public wrapper type \u2014 see docs/implementation.md \u00a75. Deleting an unknown id is `404 unknown_document`, not a silent success \u2014 the delete is not idempotent and wrappers must not pretend otherwise."
+      "notes": "Addressed by the `doc_…` id (D6). The server returns `{ ok: true }`, but the wrapper unwraps it to NOTHING: the declared return is `void` (`Promise<void>` in TS, `None` in Python, no stdout payload in the CLI beyond an exit code). `Ok` is not a public wrapper type — see docs/implementation.md §5. Deleting an unknown id is `404 unknown_document`, not a silent success — the delete is not idempotent and wrappers must not pretend otherwise."
     },
     {
       "name": "vars.list",
@@ -348,11 +348,11 @@
         "python": "client.vars.list()",
         "cli": "w6w vars list"
       },
-      "notes": "Vars are NOT project-scoped \u2014 unlike documents, no `vars.*` route accepts `?project=` (verified: no `vars` route reads it). They are scoped by tenant/subject only. Do not add a `project` option to any `vars.*` signature; adding one later would be additive, faking one now would be a lie the server does not honour. Server wraps the body as `{ vars: Var[] }`; the wrapper unwraps."
+      "notes": "Vars are NOT project-scoped — unlike documents, no `vars.*` route accepts `?project=` (verified: no `vars` route reads it). They are scoped by tenant/subject only. Do not add a `project` option to any `vars.*` signature; adding one later would be additive, faking one now would be a lie the server does not honour. Server wraps the body as `{ vars: Var[] }`; the wrapper unwraps."
     },
     {
       "name": "vars.get",
-      "summary": "Fetch one variable by its `var_\u2026` id.",
+      "summary": "Fetch one variable by its `var_…` id.",
       "method": "GET",
       "path": "/vars/{id}",
       "status": "required",
@@ -371,7 +371,7 @@
         "python": "client.vars.get(id)",
         "cli": "w6w vars get <id>"
       },
-      "notes": "Addressed by the server-issued `var_\u2026` id, not by `name` (D6). Server wraps the body as `{ var: Var }`; the wrapper unwraps \u2014 note the singular key is `var`, which is a reserved word in TypeScript and must be read as a property, never destructured into a binding of that name. Missing id is `404 unknown_var`."
+      "notes": "Addressed by the server-issued `var_…` id, not by `name` (D6). Server wraps the body as `{ var: Var }`; the wrapper unwraps — note the singular key is `var`, which is a reserved word in TypeScript and must be read as a property, never destructured into a binding of that name. Missing id is `404 unknown_var`."
     },
     {
       "name": "vars.getByName",
@@ -394,7 +394,7 @@
         "python": "client.vars.get_by_name(name)",
         "cli": "w6w vars get-by-name <name>"
       },
-      "notes": "`VarsRepo.getByName` already existed and was already called by `POST /vars` for its conflict check; only the HTTP route was missing. D12 (amending D6) \u2014 key-addressed reads become server routes rather than client-side composition; `packages/wrappers/README.md` \"What a wrapper is\" forbids a list-then-filter workaround. Same `404 unknown_var` as `vars.get`. Server-implemented 2026-07-28: names are already regex-validated (`[a-z_][a-z0-9_]*`) at create time, which is URL-safe by construction \u2014 no extra hazard handling needed."
+      "notes": "`VarsRepo.getByName` already existed and was already called by `POST /vars` for its conflict check; only the HTTP route was missing. D12 (amending D6) — key-addressed reads become server routes rather than client-side composition; `packages/wrappers/README.md` \"What a wrapper is\" forbids a list-then-filter workaround. Same `404 unknown_var` as `vars.get`. Server-implemented 2026-07-28: names are already regex-validated (`[a-z_][a-z0-9_]*`) at create time, which is URL-safe by construction — no extra hazard handling needed."
     },
     {
       "name": "vars.create",
@@ -438,7 +438,7 @@
         "python": "client.vars.create(name, type, value, description=None)",
         "cli": "w6w vars create <name> --type <t> --value <v> [--description <d>]"
       },
-      "notes": "Create is addressed by `name` (D6 \u2014 mirror the server: create by name, update/delete by id). `name` must match `^[a-z_][a-z0-9_]*$`; violations are `400 invalid_name`. `type` is one of string|number|boolean|json and `value` is validated against it server-side (`400 invalid_type` / `400 invalid_value`). Duplicate name is `409 var_exists` \u2014 wrappers must surface that code, not swallow it into a generic error. No `project` param: vars are not project-scoped."
+      "notes": "Create is addressed by `name` (D6 — mirror the server: create by name, update/delete by id). `name` must match `^[a-z_][a-z0-9_]*$`; violations are `400 invalid_name`. `type` is one of string|number|boolean|json and `value` is validated against it server-side (`400 invalid_type` / `400 invalid_value`). Duplicate name is `409 var_exists` — wrappers must surface that code, not swallow it into a generic error. No `project` param: vars are not project-scoped."
     },
     {
       "name": "vars.update",
@@ -479,7 +479,7 @@
         "python": "client.vars.update(id, type=None, value=None, description=None)",
         "cli": "w6w vars update <id> [--type <t>] [--value <v>] [--description <d>]"
       },
-      "notes": "Addressed by the `var_\u2026` id, NOT by `name` (D6). `name` itself is immutable \u2014 it is not in the patch body. A `value` sent without a `type` is validated against the variable's EXISTING type. Missing id is `404 unknown_var`. No `project` param: vars are not project-scoped."
+      "notes": "Addressed by the `var_…` id, NOT by `name` (D6). `name` itself is immutable — it is not in the patch body. A `value` sent without a `type` is validated against the variable's EXISTING type. Missing id is `404 unknown_var`. No `project` param: vars are not project-scoped."
     },
     {
       "name": "vars.delete",
@@ -502,11 +502,76 @@
         "python": "client.vars.delete(id)",
         "cli": "w6w vars delete <id>"
       },
-      "notes": "Addressed by the `var_\u2026` id (D6). The server returns `{ ok: true }`, but the wrapper unwraps it to NOTHING: the declared return is `void` (`Promise<void>` in TS, `None` in Python, no stdout payload in the CLI beyond an exit code). `Ok` is not a public wrapper type \u2014 see docs/implementation.md \u00a75. Deleting an unknown id is `404 unknown_var`, not a silent success. No `project` param: vars are not project-scoped."
+      "notes": "Addressed by the `var_…` id (D6). The server returns `{ ok: true }`, but the wrapper unwraps it to NOTHING: the declared return is `void` (`Promise<void>` in TS, `None` in Python, no stdout payload in the CLI beyond an exit code). `Ok` is not a public wrapper type — see docs/implementation.md §5. Deleting an unknown id is `404 unknown_var`, not a silent success. No `project` param: vars are not project-scoped."
+    },
+    {
+      "name": "functions.run",
+      "summary": "Run one Function by its key (or id) and return its output.",
+      "method": "POST",
+      "path": "/functions/{idOrKey}/invoke",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "idOrKey",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "inputs",
+          "in": "body",
+          "type": "object",
+          "required": false
+        }
+      ],
+      "returns": "unknown",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.functions.run(name, opts?)",
+        "python": "client.functions.run(name, payload=None)",
+        "cli": "w6w functions run <name> [--payload <json>]"
+      },
+      "notes": "The NAME IS THE FIRST ARGUMENT in every lane, matching `workflows.run(id, opts?)`, so all three runnable kinds read alike; it is not a field inside an options object. Wrappers expose the body field as `payload` even though the wire spells it `inputs` — one word across every runnable kind, and reconciling that inconsistency is precisely the wrapper's job (the Endpoint operation below spells the same concept `input`). Returns the Function's OUTPUT, not a kind-discriminated envelope: the kind is settled by the operation name, so a discriminant would be a field the caller unwraps to learn nothing. A `null` output is a SUCCESSFUL run, not a malformed body — a Function's output is an opaque pass-through and an action that returns nothing yields `{\"output\": null}` — so a wrapper must guard on PRESENCE of the `output` key rather than on its truthiness. 422 `function_incomplete` when the Function has no runnable `impl`. The `{idOrKey}` path segment takes EITHER the resource's host-issued id or the key the user gave it, with no prefix, flag or tag to say which — the two shapes cannot collide, because an id carries a kind prefix and therefore an underscore while a key is a kebab-slug that forbids one. Resolution is id-first (a pure prefix test, no query), so this path cannot be used to probe whether a key exists by supplying something id-shaped. Two unknown KEYS answer identically and neither is echoed back — a key is short, human-chosen and guessable, so echoing it would make this an enumeration oracle; an unknown id may still be echoed, since nobody guesses a uuid. The key is unique per ACCOUNT, so within the scope a credential carries it names exactly one resource."
+    },
+    {
+      "name": "endpoints.run",
+      "summary": "Run one Endpoint by its key (or id); the envelope's kind says which arm answered.",
+      "method": "POST",
+      "path": "/endpoints/{idOrKey}/invoke",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "idOrKey",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "input",
+          "in": "body",
+          "type": "object",
+          "required": false
+        }
+      ],
+      "returns": "RunEnvelope",
+      "successStatuses": [
+        200,
+        202
+      ],
+      "naming": {
+        "ts": "client.endpoints.run(name, opts?)",
+        "python": "client.endpoints.run(name, payload=None)",
+        "cli": "w6w endpoints run <name> [--payload <json>]"
+      },
+      "notes": "Name-first, exactly like `functions.run`; wrappers expose the body field as `payload` though the wire spells it `input` (singular here, plural for a Function). UNLIKE `functions.run` this returns the kind-discriminated `RunEnvelope`, and the asymmetry is deliberate: an Endpoint dispatches to an app action, a Function or a Workflow, so only the response says which answered — the discriminant is information, not ceremony. The workflow arm returns 202, which is a NORMAL outcome and not an error. Wrappers must tolerate an unknown future `kind` rather than crashing, the same rule the unified `run` carries. The `{idOrKey}` path segment takes EITHER the resource's host-issued id or the key the user gave it, with no prefix, flag or tag to say which — the two shapes cannot collide, because an id carries a kind prefix and therefore an underscore while a key is a kebab-slug that forbids one. Resolution is id-first (a pure prefix test, no query), so this path cannot be used to probe whether a key exists by supplying something id-shaped. Two unknown KEYS answer identically and neither is echoed back — a key is short, human-chosen and guessable, so echoing it would make this an enumeration oracle; an unknown id may still be echoed, since nobody guesses a uuid. The key is unique per ACCOUNT, so within the scope a credential carries it names exactly one resource."
     },
     {
       "name": "run",
-      "summary": "Run anything addressable by URN \u2014 a connection action, a function, an endpoint or a workflow.",
+      "summary": "Run anything addressable by URN — a connection action, a function, an endpoint or a workflow.",
       "method": "POST",
       "path": "/run",
       "status": "required",
@@ -541,11 +606,11 @@
         "python": "client.run(urn, action=None, payload=None)",
         "cli": "w6w run <urn> [--action <a>] [--payload <json>]"
       },
-      "notes": "D3 \u2014 `RunEnvelope` is kind-discriminated with exactly three arms: `{kind:\"action\", value}` | `{kind:\"function\", output}` | `{kind:\"workflow\", runId, status}`. The action and function arms return 200; the workflow arm returns 202, and 202 is a NORMAL outcome, not an error \u2014 the run is queued, and `runId` is how the caller follows it. Wrappers must switch on `kind` and must tolerate an unknown future `kind` rather than crashing. `action` is optional because a workflow, function or endpoint URN has no action; it is required in practice for a `conn_\u2026` URN. `urn` resolves over the `conn_`, `wf_`, `fn_` and `ep_` arms (D16), and, additionally, an account-scoped alias name (kebab-slug, `_`-free, which is why no flag is needed to disambiguate the two); `doc_` and `var_` are NOT URN arms in v0.1.0 and are addressed by the `documents.*` / `vars.*` operations above. This is deliberately narrower than `workflows.run`: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape (D4). Server-implemented 2026-07-28: a third sibling BLL service dispatching to the same runners the dedicated invoke routes use \u2014 no new execution path, no change to core Callable."
+      "notes": "D3 — `RunEnvelope` is kind-discriminated with exactly three arms: `{kind:\"action\", value}` | `{kind:\"function\", output}` | `{kind:\"workflow\", runId, status}`. The action and function arms return 200; the workflow arm returns 202, and 202 is a NORMAL outcome, not an error — the run is queued, and `runId` is how the caller follows it. Wrappers must switch on `kind` and must tolerate an unknown future `kind` rather than crashing. `action` is optional because a workflow, function or endpoint URN has no action; it is required in practice for a `conn_…` URN. `urn` resolves over the `conn_`, `wf_`, `fn_` and `ep_` arms (D16), and, additionally, an account-scoped alias name (kebab-slug, `_`-free, which is why no flag is needed to disambiguate the two); `doc_` and `var_` are NOT URN arms in v0.1.0 and are addressed by the `documents.*` / `vars.*` operations above. This is deliberately narrower than `workflows.run`: `?wait=`, `variables` and `trigger` have no slot in the three-field `{urn, action, payload}` shape (D4). Server-implemented 2026-07-28: a third sibling BLL service dispatching to the same runners the dedicated invoke routes use — no new execution path, no change to core Callable."
     }
   ],
   "cli": {
-    "$comment": "CLI-only surface. Not API operations \u2014 requirements the CLI wrapper must satisfy. See docs/cli.md.",
+    "$comment": "CLI-only surface. Not API operations — requirements the CLI wrapper must satisfy. See docs/cli.md.",
     "binary": "w6w",
     "help": {
       "flags": [

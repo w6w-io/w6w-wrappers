@@ -24,6 +24,8 @@ from .documents import DocumentsApi
 from .me import fetch_me
 from .run import run_urn
 from .types import Me, RunEnvelope
+from .endpoints import EndpointsApi
+from .functions import FunctionsApi
 from .workflows import WorkflowsApi
 
 
@@ -111,6 +113,13 @@ class Client:
         self.vars: VarsApi = VarsApi(self.request)
         self.connections: ConnectionsApi = ConnectionsApi(self.request)
         self.workflows: WorkflowsApi = WorkflowsApi(self)
+        #: Run a Function by name: ``functions.run("send-email", payload={...})``.
+        #: The name may be the Function's key or its ``fn_…`` id.
+        self.functions: FunctionsApi = FunctionsApi(self)
+        #: Run an Endpoint by name: ``endpoints.run("send-email", payload={...})``.
+        #: Returns the kind-discriminated envelope, since an Endpoint may
+        #: dispatch to an action, a Function or a Workflow.
+        self.endpoints: EndpointsApi = EndpointsApi(self)
 
     def me(self) -> Me:
         """Fetch the caller's identity, plus the versions that answered.
