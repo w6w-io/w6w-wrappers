@@ -867,6 +867,30 @@ def _run_fields(body: Any) -> Dict[str, Any]:
 #: Discriminate with :func:`is_action_run`, :func:`is_function_run` and
 #: :func:`is_workflow_run`; anything else is a kind this release does not know,
 #: and it is handed back rather than raised.
+#:
+#: ── The invocation frame (server, 2026-08-20) ──
+#:
+#: Every arm now also carries the platform's own record of the attempt:
+#: ``invocationId`` (an ``inv_…`` id), ``status``, ``startedAt``, ``finishedAt``
+#: and ``durationMs`` — plus ``output`` on the ``action`` arm beside the
+#: existing ``value``, carrying the identical payload. All of it is **additive**,
+#: and this lane needed no code change to carry it: the envelope is a plain
+#: dict, so the new keys arrive verbatim, which is the same property the open
+#: fourth arm relies on.
+#:
+#: Two things worth keeping straight:
+#:
+#: * ``status`` here is the **platform's** verdict on the call — ``succeeded``,
+#:   ``failed`` or, on the workflow arm, ``queued``. A status the *target*
+#:   reported inside ``output`` (a SendGrid ``{"statusCode": 202}``, say) is a
+#:   different statement about a different request.
+#: * ``invocationId`` and ``runId`` are **different ids**. ``invocationId``
+#:   names this call and resolves through ``GET /invocations/{id}``; ``runId``
+#:   names the queued workflow run a call may have started.
+#:
+#: A **failed** call's 4xx body carries the same frame keys beside its
+#: ``error``, so the attempt stays lookup-able — but that body reaches callers
+#: as a raised :class:`~w6w.errors.W6WError`, not as an envelope.
 RunEnvelope = Dict[str, Any]
 
 

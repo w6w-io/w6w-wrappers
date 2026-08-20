@@ -737,6 +737,13 @@ kind-discriminated because the caller does not know what a URN will resolve to;
 here the kind is settled by the operation name, so a discriminant would be a
 field the caller unwraps to learn nothing.
 
+The wire body carries the **invocation frame** (`invocationId`, `status`,
+`startedAt`, `finishedAt`, `durationMs`) alongside `output`, exactly as the
+unified `run` does — see §19. Since this operation's contract is "hand back the
+Function's output", a wrapper keeps unwrapping `output` and needs no change;
+the frame is there for a caller who reads the raw response, and the
+`invocationId` in it resolves through `GET /invocations/{id}`.
+
 **A `null` output is a successful run**, not a malformed body: a Function's
 output is an opaque pass-through, and an action that returns nothing yields
 `{"output": null}`. Wrappers must guard on **presence** of the `output` key
@@ -813,16 +820,26 @@ an endpoint.
 | `payload` | no | Input object for the target. |
 
 **Response** — a `kind`-discriminated envelope with exactly three arms (D3), the
-same shape the endpoint-invoke route already returns:
+same shape the endpoint-invoke route already returns, wrapped in the
+**invocation frame** the server added on 2026-08-20:
 
 ```json
-{ "kind": "action", "value": { } }
+{
+  "kind": "action",
+  "value": { },
+  "output": { },
+  "invocationId": "inv_9f1c…",
+  "status": "succeeded",
+  "startedAt": "2026-08-20T09:14:02.401Z",
+  "finishedAt": "2026-08-20T09:14:02.826Z",
+  "durationMs": 425
+}
 ```
 ```json
-{ "kind": "function", "output": { } }
+{ "kind": "function", "output": { }, "invocationId": "inv_…", "status": "succeeded" }
 ```
 ```json
-{ "kind": "workflow", "runId": "run_01H…", "status": "queued" }
+{ "kind": "workflow", "runId": "run_01H…", "status": "queued", "startedAt": "…" }
 ```
 
 The `action` and `function` arms return **`200`**; the `workflow` arm returns
@@ -831,6 +848,30 @@ and `runId` is how the caller follows it.
 
 Wrappers must **switch on `kind`** and must **tolerate an unknown future `kind`**
 rather than crashing.
+
+**The frame is additive.** Nothing was renamed, removed or re-typed, so a
+wrapper written against the three-arm shape keeps working unchanged. What it
+adds:
+
+| Field | Notes |
+|---|---|
+| `invocationId` | This attempt's id, `inv_…`. Resolves through `GET /invocations/{id}` to the stored inputs, output, error and timing. **Not** the same as `runId` — see below. |
+| `status` | The **platform's** verdict on the attempt: `succeeded`, `failed`, or `queued` on the workflow arm. |
+| `startedAt` / `finishedAt` / `durationMs` | When the attempt ran, and for how long. |
+| `output` (action arm) | The action's return value under the name every arm shares. `value` carries the identical payload and is kept, now **deprecated** — new callers read `output`. |
+
+**`invocationId` is not `runId`.** `invocationId` names the CALL; `runId` names
+the queued workflow RUN a call may have started. On the workflow arm both are
+present and they mean different things, which is exactly why the existing name
+was not generalised.
+
+**`status` is not the target's status.** A SendGrid send whose `output` reads
+`{"statusCode": 202}` is SendGrid describing its own request. Whether *this*
+platform considers the call a success is `status`, and only `status`.
+
+**A failed call carries the frame too.** The `4xx` body puts `invocationId`,
+`status: "failed"` and the timing beside its `error`, so the attempt you most
+need to explain is exactly as lookup-able as one that worked.
 
 Unlike `workflows.run`, this operation has no `?wait=`, no `variables`, no
 `trigger` and no `input` — they have no slot in the three-field `{urn, action, payload}` shape
