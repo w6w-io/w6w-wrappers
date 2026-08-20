@@ -12,10 +12,20 @@
  * | `"function"` | `output` | `200` |
  * | `"workflow"` | `runId` + `status` | `202` |
  *
- * `value` and `output` are **deliberately different names** and are never
- * normalised into one field: the discrimination is the whole point of the
+ * `value` and `output` were **deliberately different names** and `value` is
+ * never removed: the discrimination is the whole point of the
  * operation (D3). `202` on the workflow arm is **success** — the run is queued
  * and `runId` is how the caller follows it.
+ *
+ *
+ * ── The invocation frame ──
+ * Since 2026-08-20 every arm also carries the platform's own record of the
+ * attempt — `invocationId` (`inv_…`), `status`, `startedAt`, `finishedAt`,
+ * `durationMs` — and the action arm carries `output` beside `value`, with the
+ * identical payload. All additive; nothing was renamed. `status` is the
+ * PLATFORM's verdict (`succeeded` | `failed` | `queued`), not one the target
+ * reported inside its own payload, and `invocationId` (this call) is not
+ * `runId` (the queued workflow run a call may have started).
  *
  * ── The unknown fourth kind ──
  * A `kind` this release has never heard of is **returned verbatim**, never

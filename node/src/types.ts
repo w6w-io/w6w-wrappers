@@ -243,15 +243,69 @@ export interface RunResult {
   stepErrors?: StepError[];
 }
 
+/**
+ * The invocation FRAME every `RunEnvelope` arm carries — the platform's own
+ * record of the attempt, as opposed to whatever the target returned.
+ *
+ * Added by the server on 2026-08-20 and purely ADDITIVE: no existing field was
+ * renamed, removed or re-typed, so code written against the three-arm shape
+ * keeps compiling and keeps working.
+ *
+ * Every field is OPTIONAL here, and that is deliberate rather than lazy: an
+ * installed SDK talks to whichever server version is deployed, and a required
+ * field would make this type a lie against any server older than the change.
+ * Treat an absent `invocationId` as "this server does not record invocations
+ * yet", never as an error.
+ */
+export interface InvocationFrame {
+  /**
+   * This attempt's id, `inv_…`. Resolves through `GET /invocations/{id}` to the
+   * stored inputs, output, error and timing.
+   *
+   * NOT the same thing as {@linkcode WorkflowRunEnvelope.runId}, and neither
+   * replaces the other: this names the CALL, `runId` names the queued workflow
+   * RUN that a call may have started. On the workflow arm both can be present
+   * and they mean different things.
+   */
+  invocationId?: string;
+  /**
+   * The PLATFORM's verdict on the attempt — `"succeeded"`, `"failed"` or, on
+   * the workflow arm, `"queued"`.
+   *
+   * Not to be confused with any status the target reported inside its own
+   * payload: a SendGrid send whose `output` reads `{statusCode: 202}` is
+   * SendGrid describing its own request, not this platform describing the call.
+   */
+  status?: "succeeded" | "failed" | "queued" | string;
+  /** When the attempt started, ISO-8601. */
+  startedAt?: string;
+  /** When it reached a terminal state, ISO-8601. */
+  finishedAt?: string;
+  /** Wall-clock duration in milliseconds. */
+  durationMs?: number;
+}
+
 /** `run` resolved a `conn_…` URN and executed an app action. HTTP `200`. */
-export interface ActionRunEnvelope {
+export interface ActionRunEnvelope extends InvocationFrame {
   kind: "action";
-  /** The action's return value. Opaque pass-through. */
+  /**
+   * The action's return value. Opaque pass-through.
+   *
+   * @deprecated Read {@linkcode ActionRunEnvelope.output} instead — it is the
+   * one payload field every arm agrees on. `value` carries the identical value
+   * and is not going away without a major bump, but new code should not reach
+   * for a name that only one arm has.
+   */
   value: unknown;
+  /**
+   * The action's return value, under the name every arm shares. Optional
+   * because a server older than 2026-08-20 sends only `value`.
+   */
+  output?: unknown;
 }
 
 /** `run` resolved a `fn_…` / `ep_…` URN and executed it. HTTP `200`. */
-export interface FunctionRunEnvelope {
+export interface FunctionRunEnvelope extends InvocationFrame {
   kind: "function";
   /** The function's output. Opaque pass-through. */
   output: unknown;
@@ -263,9 +317,14 @@ export interface FunctionRunEnvelope {
  * `202` is **success**: the run is queued, and `runId` is how the caller follows
  * it. There is no `?wait=` on this operation — use `workflows.run` for that (D4).
  */
-export interface WorkflowRunEnvelope {
+export interface WorkflowRunEnvelope extends InvocationFrame {
   kind: "workflow";
-  /** Server-issued run handle. */
+  /**
+   * Server-issued run handle — the QUEUED RUN, not the call that queued it.
+   * Follow it with `workflows.getRun`. See
+   * {@linkcode InvocationFrame.invocationId} for the other id and why they are
+   * not the same.
+   */
   runId: string;
   /** Where the run has got to; `"queued"` immediately after dispatch. */
   status: RunStatus;
@@ -286,9 +345,13 @@ export type UnknownRunEnvelope = { kind: string } & Record<string, unknown>;
 /**
  * What `client.run()` returns: three known arms plus an open one.
  *
- * `value` (action) and `output` (function) are **deliberately different names**
- * for the two synchronous arms and are never normalised into one field — the
- * discrimination is the point (D3).
+ * `value` (action) and `output` (function) were **deliberately different names**
+ * for the two synchronous arms, and the guards below still discriminate on
+ * `kind` rather than on which field is present. Since 2026-08-20 the server
+ * also sends `output` on the action arm, carrying the same value as `value` —
+ * so `output` is now the field name every arm shares and the one new code
+ * should read. `value` is kept, unchanged, for every caller written before
+ * that (D3).
  *
  * **The union is open, and narrowing on `kind` alone does not work.** Because
  * the fourth arm admits any `kind: string`, a bare `env.kind === "workflow"`

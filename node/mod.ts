@@ -89,6 +89,7 @@ export type {
   Doc,
   DocFormat,
   FunctionRunEnvelope,
+  InvocationFrame,
   Me,
   RunEnvelope,
   RunResult,

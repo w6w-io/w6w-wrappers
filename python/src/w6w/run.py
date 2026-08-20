@@ -12,10 +12,20 @@ which one it hit:
 `"workflow"`     `runId` + `status`    202
 ===============  ====================  ======
 
-`value` and `output` are **deliberately different names** and are never
-normalised into one field: the discrimination is the whole point of the
-operation (D3). `202` on the workflow arm is **success** — the run is queued and
-`runId` is how the caller follows it.
+`value` and `output` were **deliberately different names** and `value` is never
+removed: the discrimination is the whole point of the operation (D3). `202` on
+the workflow arm is **success** — the run is queued and `runId` is how the
+caller follows it.
+
+── The invocation frame ──
+Since 2026-08-20 every arm also carries the platform's own record of the
+attempt — `invocationId` (an `inv_…` id), `status`, `startedAt`, `finishedAt`,
+`durationMs` — and the action arm carries `output` beside `value`, with the
+identical payload. All of it is additive, and this lane carries it for free:
+the envelope is the parsed body itself, so new keys arrive verbatim. `status`
+is the **platform's** verdict on the call (`succeeded`/`failed`/`queued`), not
+a status the target reported inside its own payload; `invocationId` names this
+call, `runId` names the queued workflow run a call may have started.
 
 ── The unknown fourth kind ──
 A `kind` this release has never heard of is **returned verbatim**, never raised
