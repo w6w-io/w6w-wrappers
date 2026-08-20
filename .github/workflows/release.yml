@@ -295,17 +295,14 @@ jobs:
         working-directory: node
         run: npx --yes jsr publish
 
-  jsr-cli:
-    needs: [verify, test]
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-      - name: Publish @w6w/cli to JSR
-        working-directory: cli
-        run: npx --yes jsr publish
+  # `@w6w/cli` is NOT published to JSR. That is a decision, not an omission:
+  # README.md's own table lists the CLI as `@w6w/cli` (npm), binary `w6w` — a
+  # binary is installed with `npm i -g` or `deno install` from npm, and nothing
+  # imports it as a module, which is what JSR is for. The SDK above is on JSR
+  # precisely because it IS imported.
+  #
+  # A job existed here and failed every release with "package doesn't exist",
+  # because publishing would first require creating `@w6w/cli` under the scope
+  # on jsr.io by hand. Rather than create a package nobody consumes, the job is
+  # gone. Restore it beside `jsr-sdk` if the CLI ever grows an importable
+  # surface — and create the package first, since CI cannot bootstrap a name.
