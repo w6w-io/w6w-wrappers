@@ -58,6 +58,10 @@ export type { MeHost } from "./src/me.ts";
 export { ConnectionsApi } from "./src/connections.ts";
 export type { ConnectionsHost } from "./src/connections.ts";
 export { WorkflowsApi } from "./src/workflows.ts";
+export { FunctionsApi } from "./src/functions.ts";
+export type { FunctionRunOptions, FunctionsHost } from "./src/functions.ts";
+export { EndpointsApi } from "./src/endpoints.ts";
+export type { EndpointRunOptions, EndpointsHost } from "./src/endpoints.ts";
 export type {
   WorkflowListOptions,
   WorkflowRunOptions,

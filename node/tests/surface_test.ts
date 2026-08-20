@@ -75,6 +75,10 @@ const PUBLIC_SURFACE: Record<string, "function" | "string"> = {
   fetchMe: "function",
   ConnectionsApi: "function",
   WorkflowsApi: "function",
+  // Name-addressed run: `functions.run(name, {payload})` /
+  // `endpoints.run(name, {payload})`, the sibling shape of `workflows.run`.
+  FunctionsApi: "function",
+  EndpointsApi: "function",
   // T2.1.5 — execution.
   runUrn: "function",
   isActionRun: "function",

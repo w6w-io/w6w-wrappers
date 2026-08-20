@@ -90,6 +90,12 @@ PUBLIC_SURFACE = {
     "WorkflowsHost",
     "WorkflowStatus",
     "WorkflowSummary",
+    # Name-addressed run: the sibling shape of `workflows.run`, with the name
+    # as the first argument rather than a field inside an options object.
+    "FunctionsApi",
+    "FunctionsHost",
+    "EndpointsApi",
+    "EndpointsHost",
     # Execution.
     "run_urn",
     "RunRequest",

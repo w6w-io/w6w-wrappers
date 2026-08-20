@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.2.0",
+  "contractVersion": "0.3.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -921,6 +921,150 @@ export const HELP_TREE: HelpTree = {
         "w6w vars create greeting --type string --value hello",
       ],
     },
+    {
+      "name": "functions",
+      "summary": "Run functions by key or id",
+      "headline": "run functions by key or id",
+      "usage": "w6w functions <command> [options]",
+      "commands": [
+        {
+          "operation": "functions.run",
+          "path": [
+            "functions",
+            "run",
+          ],
+          "name": "run",
+          "aliases": [],
+          "summary": "Run one Function by its key (or id) and return its output.",
+          "short": "Run one Function by its key (or id) and return its output",
+          "headline": "run one Function by its key (or id) and return its output",
+          "usage": "w6w functions run --id-or-key <value> [options]",
+          "naming": "w6w functions run <name> [--payload <json>]",
+          "status": "required",
+          "params": [
+            {
+              "name": "idOrKey",
+              "kind": "flag",
+              "display": "--id-or-key <value>",
+              "description": "Function key or id (e.g. send-email)",
+              "required": true,
+            },
+            {
+              "name": "inputs",
+              "kind": "flag",
+              "display": "--inputs <value>",
+              "description": "The Function's inputs, as a JSON object",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w functions run send-email",
+            'w6w functions run send-email --payload \'{"to":"a@b.com"}\'',
+            "w6w functions run fn_01HQ8N --json",
+          ],
+          "notes": [],
+        },
+      ],
+      "options": [
+        {
+          "name": "idOrKey",
+          "kind": "flag",
+          "display": "--id-or-key <value>",
+          "description": "Function key or id (e.g. send-email)",
+          "required": true,
+        },
+        {
+          "name": "inputs",
+          "kind": "flag",
+          "display": "--inputs <value>",
+          "description": "The Function's inputs, as a JSON object",
+          "required": false,
+        },
+      ],
+      "examples": [
+        "w6w functions run send-email",
+      ],
+    },
+    {
+      "name": "endpoints",
+      "summary": "Run endpoints by key or id",
+      "headline": "run endpoints by key or id",
+      "usage": "w6w endpoints <command> [options]",
+      "commands": [
+        {
+          "operation": "endpoints.run",
+          "path": [
+            "endpoints",
+            "run",
+          ],
+          "name": "run",
+          "aliases": [],
+          "summary":
+            "Run one Endpoint by its key (or id); the envelope's kind says which arm answered.",
+          "short":
+            "Run one Endpoint by its key (or id); the envelope's kind says which arm answered",
+          "headline":
+            "run one Endpoint by its key (or id); the envelope's kind says which arm answered",
+          "usage": "w6w endpoints run --id-or-key <value> [options]",
+          "naming": "w6w endpoints run <name> [--payload <json>]",
+          "status": "required",
+          "params": [
+            {
+              "name": "idOrKey",
+              "kind": "flag",
+              "display": "--id-or-key <value>",
+              "description": "Endpoint key or id (e.g. send-email)",
+              "required": true,
+            },
+            {
+              "name": "input",
+              "kind": "flag",
+              "display": "--input <value>",
+              "description": "The Endpoint's input, as a JSON object",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w endpoints run send-email",
+            'w6w endpoints run send-email --payload \'{"to":"a@b.com"}\'',
+          ],
+          "notes": [],
+        },
+      ],
+      "options": [
+        {
+          "name": "idOrKey",
+          "kind": "flag",
+          "display": "--id-or-key <value>",
+          "description": "Endpoint key or id (e.g. send-email)",
+          "required": true,
+        },
+        {
+          "name": "input",
+          "kind": "flag",
+          "display": "--input <value>",
+          "description": "The Endpoint's input, as a JSON object",
+          "required": false,
+        },
+      ],
+      "examples": [
+        "w6w endpoints run send-email",
+      ],
+    },
   ],
   "globalFlags": [
     {
@@ -1052,6 +1196,14 @@ export const COMMAND_PATHS: string[][] = [
   [
     "vars",
     "delete",
+  ],
+  [
+    "functions",
+    "run",
+  ],
+  [
+    "endpoints",
+    "run",
   ],
 ];
 

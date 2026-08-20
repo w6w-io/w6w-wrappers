@@ -78,6 +78,8 @@ character-for-character:
 | `vars.create` | `client.vars.create(input)` | `client.vars.create(name, type, value, description=None)` | `w6w vars create <name> --type <t> --value <v> [--description <d>]` |
 | `vars.update` | `client.vars.update(id, patch)` | `client.vars.update(id, type=None, value=None, description=None)` | `w6w vars update <id> [--type <t>] [--value <v>] [--description <d>]` |
 | `vars.delete` | `client.vars.delete(id)` | `client.vars.delete(id)` | `w6w vars delete <id>` |
+| `functions.run` | `client.functions.run(name, opts?)` | `client.functions.run(name, payload=None)` | `w6w functions run <name> [--payload <json>]` |
+| `endpoints.run` | `client.endpoints.run(name, opts?)` | `client.endpoints.run(name, payload=None)` | `w6w endpoints run <name> [--payload <json>]` |
 | `run` | `client.run(input)` | `client.run(urn, action=None, payload=None)` | `w6w run <urn> [--action <a>] [--payload <json>]` |
 
 `me` additionally registers **`w6w info`** as a CLI alias (`cliAlias` in
@@ -706,7 +708,70 @@ TypeScript, `None` in Python, no stdout payload in the CLI beyond its exit code
 
 ---
 
-## 17. `run` — run anything addressable by URN
+## 17. `functions.run` — run a Function by name
+
+`POST /functions/{idOrKey}/invoke` → `200`
+
+```ts
+const output = await client.functions.run("send-email", {
+  payload: { to: "ada@example.com", subject: "Hi" },
+});
+```
+
+**The name is the first argument**, matching `workflows.run(id, opts?)`, so all
+three runnable kinds read alike. It is not a field inside an options object.
+
+**The slot takes an id OR a key**, with no prefix, flag or tag to say which. The
+two shapes cannot collide: an id carries a kind prefix and therefore an
+underscore (`fn_…`), while a key is a kebab-slug that forbids one. Resolution is
+id-first — a pure prefix test with no query — so this path cannot be used to
+probe whether a key exists by supplying something id-shaped.
+
+**Wrappers spell the body field `payload`** even though the wire spells it
+`inputs`. One word across every runnable kind; reconciling the wire's
+inconsistency is exactly what a wrapper is for (the Endpoint operation below
+spells the same concept `input`).
+
+**Returns the OUTPUT, not an envelope.** The unified `run` is
+kind-discriminated because the caller does not know what a URN will resolve to;
+here the kind is settled by the operation name, so a discriminant would be a
+field the caller unwraps to learn nothing.
+
+**A `null` output is a successful run**, not a malformed body: a Function's
+output is an opaque pass-through, and an action that returns nothing yields
+`{"output": null}`. Wrappers must guard on **presence** of the `output` key
+rather than on its truthiness — the shared "unwrap this envelope key" helper
+each lane carries rejects null and is the wrong tool here.
+
+| Failure | Status | Code |
+|---|---|---|
+| No Function of that name for the caller | `404` | `unknown_function` |
+| The Function has no runnable `impl` | `422` | `function_incomplete` |
+
+Two unknown **keys** answer identically and neither is echoed back — a key is
+short, human-chosen and guessable, so echoing it would make this an enumeration
+oracle. An unknown **id** may still be echoed; nobody guesses a uuid.
+
+## 18. `endpoints.run` — run an Endpoint by name
+
+`POST /endpoints/{idOrKey}/invoke` → `200` | `202`
+
+```ts
+const envelope = await client.endpoints.run("send-email", { payload: { to } });
+if (envelope.kind === "workflow") console.log(envelope.runId); // the async arm
+```
+
+Name-first and id-or-key, exactly as above; the body field is `payload` in every
+wrapper though the wire spells it `input` (singular here, plural for a Function).
+
+**Unlike `functions.run`, this returns the kind-discriminated `RunEnvelope`**,
+and the asymmetry is deliberate: an Endpoint dispatches to an app action, a
+Function or a Workflow, so only the response says which answered — the
+discriminant is information, not ceremony. The workflow arm returns `202`, which
+is a **normal outcome, not an error**. Wrappers must tolerate an unknown future
+`kind` rather than crashing, the same rule the unified `run` carries.
+
+## 19. `run` — run anything addressable by URN
 
 ```
 POST /run

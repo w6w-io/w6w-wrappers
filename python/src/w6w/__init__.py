@@ -60,6 +60,8 @@ from .types import (
     is_terminal_run_status,
     is_workflow_run,
 )
+from .endpoints import EndpointsApi, EndpointsHost
+from .functions import FunctionsApi, FunctionsHost
 from .workflows import WorkflowsApi, WorkflowsHost
 
 __all__ = [
@@ -82,6 +84,14 @@ __all__ = [
     "DocFormat",
     "DocumentsApi",
     "DocumentsHost",
+    # Name-addressed run (`functions.run(name, payload=...)` /
+    # `endpoints.run(...)`): the sibling shape of `workflows.run`, exported
+    # alongside their host protocols for the same reason the namespaces above
+    # are — a helper typed around `client.functions` has to name them.
+    "EndpointsApi",
+    "EndpointsHost",
+    "FunctionsApi",
+    "FunctionsHost",
     "HttpResponse",
     "Me",
     "MeRequest",
