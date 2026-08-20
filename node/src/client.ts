@@ -114,7 +114,9 @@ export class W6WClient {
 
   /**
    * Console-only namespaces: `console.reliability.list`, `console.auth.*`
-   * (`login`, `signup`, `checkAccountSlug`, `createAccount`),
+   * (`login`, `signup`, `checkAccountSlug`, `createAccount`, `getMe`,
+   * `getProfile`, `updateProfile`, `requestContactChange`,
+   * `confirmContactChange`, `removeContact`, `promoteContact`, `setPassword`),
    * `console.dashboard.stats`, `console.projects.*` (`list`, `create`,
    * `delete`), `console.schedules.*` (`get`, `upsert`, `delete`),
    * `console.apps.*` (`list`, `get`, `getAuth`, `getActions`, `getTriggers`,
@@ -130,8 +132,10 @@ export class W6WClient {
    * `disable`, `enable`, `revoke`), `console.functions.*` (`list`, `get`,
    * `upsert`), `console.endpoints.*` (`list`, `get`, `upsert`, `invoke`),
    * `console.subscriptions.*` (`list`, `listForWorkflow`, `get`, `create`,
-   * `delete`, `listEvents`, `requeueEvent`), `console.apiCalls.*` (`list`) and
-   * `console.tenantOAuthApps.*` (`list`, `put`, `remove`).
+   * `delete`, `listEvents`, `requeueEvent`), `console.apiCalls.*` (`list`),
+   * `console.tenantOAuthApps.*` (`list`, `put`, `remove`) and
+   * `console.passkeys.*` (`registrationOptions`, `registrationVerify`,
+   * `authenticationOptions`, `authenticationVerify`, `list`, `revoke`).
    * Studio-internal and unstable — not part of the published partner
    * contract, excluded from `endpoints.json` and from this package's root
    * barrel (`docs/console.md`, HITL-1). Reached only through
