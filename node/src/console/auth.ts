@@ -43,10 +43,28 @@
  * handlers, not assumed) — every method here returns `res.body` directly and
  * never calls this package's `unwrap()` helper.
  *
+ * **T1.1.4's seven `/me/*` methods added here (profile, contact
+ * change-and-confirm, promote, remove, password).** Registered BELOW the auth
+ * guard (`packages/server/packages/api/data/me.ts`'s own doc comment) — every
+ * one of the seven is AUTHENTICATED, the default `requireAuth`, unlike
+ * `login`/`signup`/`checkAccountSlug` above. `removeContact` and
+ * `promoteContact` are not in this task's pinned method list but are added
+ * per HITL-7 ("if T1.1.4 ships routes for adding / removing / promoting a
+ * secondary contact, they get methods here too") — both routes exist on the
+ * merged branch (`data/me.ts:135-154`).
+ *
+ * **`UserProfile.hasPassword` is a RENAME of the wire's `passwordSet`, not an
+ * invented field.** `GET /me/profile` answers `passwordSet` (`data/me.ts:9`,
+ * `packages/bll/signup.ts:555`, derived server-side from
+ * `password_hash !== null` — the hash itself never appears). HITL-10 needs
+ * this fact under a name Studio's "Set a password"/"Change password" fork
+ * reads directly; `toUserProfile()` below performs the rename from the exact
+ * value the wire sent, never a default and never computed from anything else.
+ *
  * @module
  */
 
-import type { HttpResponse, RequestOptions } from "../http.ts";
+import { type HttpResponse, path, type RequestOptions } from "../http.ts";
 
 /**
  * The slice of `W6WClient` this namespace needs: the transport, and nothing
@@ -165,11 +183,135 @@ export interface ConsoleMe {
 }
 
 /**
+ * One of the caller's own contact addresses (email or phone), as `GET /me/profile`
+ * lists it (`packages/bll/signup.ts`'s `ProfileContact`, `data/me.ts:9-12`).
+ */
+export interface ProfileContact {
+  id: string;
+  kind: "email" | "phone";
+  value: string;
+  /** ISO-8601 timestamp, or `null` while unverified. */
+  verifiedAt: string | null;
+}
+
+/** One of the caller's registered login methods (`data/me.ts:9-12`). */
+export interface ProfileLoginMethod {
+  id: string;
+  /** e.g. `"password"`, `"passkey"`. */
+  kind: string;
+  label: string;
+  /** ISO-8601 timestamp. */
+  createdAt: string;
+  /** ISO-8601 timestamp, or `null` if never used. */
+  lastUsedAt: string | null;
+}
+
+/** A pending, unconfirmed contact-change request (`data/me.ts:9-12`). */
+export interface ProfilePendingChange {
+  id: string;
+  method: "email" | "phone";
+  value: string;
+  /** ISO-8601 timestamp; the pending row is unusable past this point. */
+  expiresAt: string;
+  /** ISO-8601 timestamp. */
+  createdAt: string;
+}
+
+/**
+ * The `users` row and its dependent state, as `GET`/`PATCH /me/profile`,
+ * `POST /me/contacts/confirm` and `POST /me/contacts/:id/primary` all return
+ * it (`data/me.ts:6-19`). Every method on this namespace that returns a
+ * profile returns THIS shape, mapped from the wire's `passwordSet` — see this
+ * module's header for why {@linkcode UserProfile.hasPassword} is a rename,
+ * not an invented field.
+ */
+export interface UserProfile {
+  userId: string;
+  tenant: string;
+  displayName: string;
+  email: string | null;
+  emailVerified: boolean;
+  /**
+   * Whether the caller already has a local password. Read straight off the
+   * wire's `passwordSet` (`packages/bll/signup.ts:555`) — never defaulted,
+   * never computed client-side. Drives HITL-10's "Set a password" (`false`)
+   * vs "Change password" (`true`) fork.
+   */
+  hasPassword: boolean;
+  contacts: ProfileContact[];
+  loginMethods: ProfileLoginMethod[];
+  pending: ProfilePendingChange[];
+}
+
+/**
+ * `GET`/`PATCH /me/profile`'s wire shape (`data/me.ts:6-19`,
+ * `packages/bll/signup.ts:548-559`) — identical to {@linkcode UserProfile}
+ * except for the field this module renames. Not exported: callers only ever
+ * see the renamed {@linkcode UserProfile}.
+ */
+interface ProfileWire {
+  userId: string;
+  tenant: string;
+  displayName: string;
+  email: string | null;
+  emailVerified: boolean;
+  passwordSet: boolean;
+  contacts: ProfileContact[];
+  loginMethods: ProfileLoginMethod[];
+  pending: ProfilePendingChange[];
+}
+
+/** `passwordSet` → `hasPassword`. The one hop between the wire and {@linkcode UserProfile}. */
+function toUserProfile(wire: ProfileWire): UserProfile {
+  const { passwordSet, ...rest } = wire;
+  return { ...rest, hasPassword: passwordSet };
+}
+
+/** The body `updateProfile` sends (`PATCH /me/profile`, `data/me.ts:53-71`). */
+export interface UpdateProfileInput {
+  displayName: string;
+}
+
+/**
+ * The body `requestContactChange` sends (`POST /me/contacts/change`,
+ * `data/me.ts:73-98`). Parks a pending change; does not confirm it.
+ */
+export interface RequestContactChangeInput {
+  method: "email" | "phone";
+  value: string;
+}
+
+/**
+ * The body `confirmContactChange` sends (`POST /me/contacts/confirm`,
+ * `data/me.ts:100-133`). Consumes the code sent to `requestContactChange`'s
+ * `value`.
+ */
+export interface ConfirmContactChangeInput {
+  method: "email" | "phone";
+  code: string;
+  /** Promote the newly-confirmed contact to primary in the same call (D3). */
+  promote?: boolean;
+}
+
+/**
+ * The body `setPassword` sends (`POST /me/password`, `data/me.ts:156-184`).
+ * One method for HITL-10's set-and-change: `currentPassword` is a field, not
+ * a second method, because the merged route is the single `POST /me/password`
+ * — not two routes.
+ */
+export interface SetPasswordInput {
+  newPassword: string;
+  /** Required by the server when the caller already has a password (`hasPassword: true`); omit
+   * for the first-time "set a password" case. */
+  currentPassword?: string;
+}
+
+/**
  * The `console.auth` namespace on a `W6WClient`.
  *
  * @example
  * ```ts
- * const { token } = await client.console.auth.login("user", "pass");
+ * const { token } = await client.console.auth.login("user@example.com", "pass");
  * const me = await client.console.auth.getMe();
  * if (me.tenantAdmin) { // tenant-admin surface
  * }
@@ -191,16 +333,19 @@ export class AuthApi {
    * PUBLIC — sends no bearer, even on a client that already holds one
    * (`requireAuth: false`).
    *
-   * @param username - The account username.
+   * @param identifier - The login identifier, normally the account's email. The
+   *   platform operator credential (`AUTH_USERNAME`) is NOT email-shaped and is a
+   *   legitimate value here — never validate this as an email (DECISIONS.md HITL-1).
+   *   It is sent as the `email` key: the server resolves `body.email ?? body.username`.
    * @param password - The account password.
    * @returns The token, the caller's identity, and the token's lifetime.
    * @throws {ApiError} On any non-2xx, e.g. `401` for invalid credentials.
    */
-  async login(username: string, password: string): Promise<LoginResponse> {
+  async login(identifier: string, password: string): Promise<LoginResponse> {
     const res = await this.#host.request<LoginResponse>({
       method: "POST",
       path: "/auth/login",
-      body: { username, password },
+      body: { email: identifier, password },
       requireAuth: false,
     });
     return res.body;
@@ -293,5 +438,135 @@ export class AuthApi {
       path: "/auth/me",
     });
     return res.body;
+  }
+
+  /**
+   * Read the caller's own profile — the real `users` row, including
+   * {@linkcode UserProfile.hasPassword}. Distinct from `getMe()`, which reads
+   * session claims: this reads the actual database row (`data/me.ts:43-51`).
+   *
+   * AUTHENTICATED — the default `requireAuth` applies.
+   *
+   * @returns The caller's profile.
+   * @throws {ApiError} `404 no_user_profile` when there is no `users` row for this principal.
+   */
+  async getProfile(): Promise<UserProfile> {
+    const res = await this.#host.request<ProfileWire>({ method: "GET", path: "/me/profile" });
+    return toUserProfile(res.body);
+  }
+
+  /**
+   * Patch the caller's display name.
+   *
+   * AUTHENTICATED — the default `requireAuth` applies.
+   *
+   * @param input - The new display name.
+   * @returns The updated profile (`data/me.ts:53-71`).
+   * @throws {ApiError} `400 invalid_body`/`invalid_display_name`.
+   */
+  async updateProfile(input: UpdateProfileInput): Promise<UserProfile> {
+    const res = await this.#host.request<ProfileWire>({
+      method: "PATCH",
+      path: "/me/profile",
+      body: input,
+    });
+    return toUserProfile(res.body);
+  }
+
+  /**
+   * Park a pending email/phone change and send its confirmation code. Does
+   * NOT confirm the change — see {@linkcode confirmContactChange}.
+   *
+   * AUTHENTICATED — the default `requireAuth` applies.
+   *
+   * @param input - The contact method and the new value.
+   * @returns Nothing: the server answers `202` with `{ok: true}`, which carries no information a
+   *   caller can use (`data/me.ts:73-98`).
+   * @throws {ApiError} `400 invalid_body`/`invalid_email`, `409 email_taken`.
+   */
+  async requestContactChange(input: RequestContactChangeInput): Promise<void> {
+    await this.#host.request<unknown>({
+      method: "POST",
+      path: "/me/contacts/change",
+      body: input,
+    });
+  }
+
+  /**
+   * Consume the code from {@linkcode requestContactChange} and confirm the
+   * pending change. Optionally promotes the newly-confirmed contact to
+   * primary in the same call (D3).
+   *
+   * AUTHENTICATED — the default `requireAuth` applies.
+   *
+   * @param input - The contact method, the code, and an optional promote flag.
+   * @returns The updated profile (`data/me.ts:100-133`).
+   * @throws {ApiError} `400 invalid_body`/`invalid_code`, `404 contact_not_found`.
+   */
+  async confirmContactChange(input: ConfirmContactChangeInput): Promise<UserProfile> {
+    const res = await this.#host.request<ProfileWire>({
+      method: "POST",
+      path: "/me/contacts/confirm",
+      body: input,
+    });
+    return toUserProfile(res.body);
+  }
+
+  /**
+   * Remove one of the caller's own (non-primary) contacts. Added per HITL-7
+   * — `DELETE /me/contacts/:id` exists on the merged branch (`data/me.ts:135-144`).
+   *
+   * AUTHENTICATED — the default `requireAuth` applies.
+   *
+   * @param id - The contact id.
+   * @returns Nothing: the server answers `{ok: true}`, which carries no information a caller can
+   *   use, mirroring `console.projects.delete`/`console.schedules.delete` in this same package.
+   * @throws {ApiError} `404 contact_not_found`.
+   */
+  async removeContact(id: string): Promise<void> {
+    await this.#host.request<unknown>({ method: "DELETE", path: path`/me/contacts/${id}` });
+  }
+
+  /**
+   * Promote one of the caller's own secondary contacts to primary. Added per
+   * HITL-7 — `POST /me/contacts/:id/primary` exists on the merged branch
+   * (`data/me.ts:146-154`).
+   *
+   * AUTHENTICATED — the default `requireAuth` applies.
+   *
+   * @param id - The contact id.
+   * @returns The updated profile.
+   * @throws {ApiError} `404 contact_not_found`, `403 contact_not_verified`.
+   */
+  async promoteContact(id: string): Promise<UserProfile> {
+    const res = await this.#host.request<ProfileWire>({
+      method: "POST",
+      path: path`/me/contacts/${id}/primary`,
+      body: {},
+    });
+    return toUserProfile(res.body);
+  }
+
+  /**
+   * Set or change the caller's password (HITL-10) — one method, since the
+   * merged route is the single `POST /me/password`, not two. Omit
+   * `currentPassword` for the first-time "set a password" case
+   * (`hasPassword: false`); the server requires it once a password already
+   * exists.
+   *
+   * AUTHENTICATED — the default `requireAuth` applies.
+   *
+   * @param input - The new password, plus the current one when required.
+   * @returns Nothing: the server answers `{ok: true}`, which carries no information a caller can
+   *   use (`data/me.ts:156-184`).
+   * @throws {ApiError} `400 invalid_body`/`invalid_password`/`current_password_required`,
+   *   `403 invalid_current_password`.
+   */
+  async setPassword(input: SetPasswordInput): Promise<void> {
+    await this.#host.request<unknown>({
+      method: "POST",
+      path: "/me/password",
+      body: input,
+    });
   }
 }

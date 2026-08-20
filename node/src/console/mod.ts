@@ -27,6 +27,7 @@ import { ConnectionsApi } from "./connections.ts";
 import { DashboardApi } from "./dashboard.ts";
 import { EndpointsApi } from "./endpoints.ts";
 import { FunctionsApi } from "./functions.ts";
+import { PasskeysApi } from "./passkeys.ts";
 import { ReliabilityApi } from "./reliability.ts";
 import { ProjectsApi } from "./projects.ts";
 import { SavedTestsApi } from "./saved-tests.ts";
@@ -42,15 +43,33 @@ export { AuthApi } from "./auth.ts";
 export type {
   AccountWire,
   AuthHost,
+  ConfirmContactChangeInput,
   ConsoleMe,
   CreateAccountResponse,
   LoginResponse,
+  ProfileContact,
+  ProfileLoginMethod,
+  ProfilePendingChange,
+  RequestContactChangeInput,
+  SetPasswordInput,
   SignupInput,
   SignupResponse,
   SignupUser,
   SlugAvailabilityResponse,
+  UpdateProfileInput,
   User,
+  UserProfile,
 } from "./auth.ts";
+export { PasskeysApi } from "./passkeys.ts";
+export type {
+  AuthenticationVerifyInput,
+  Passkey,
+  PasskeyAuthenticationVerifyResponse,
+  PasskeyCeremonyOptions,
+  PasskeysHost,
+  PasskeyUser,
+  RegistrationVerifyInput,
+} from "./passkeys.ts";
 export { DashboardApi } from "./dashboard.ts";
 export type { DashboardHost, DashboardStats, DashboardStatsParams } from "./dashboard.ts";
 export { ReliabilityApi } from "./reliability.ts";
@@ -211,6 +230,8 @@ export class ConsoleApi {
   readonly apiCalls: ApiCallsApi;
   /** `console.tenantOAuthApps.*` — the caller's OWN tenant, never a tenant of its choosing. */
   readonly tenantOAuthApps: TenantOAuthAppsApi;
+  /** `console.passkeys.*`. */
+  readonly passkeys: PasskeysApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
@@ -234,5 +255,6 @@ export class ConsoleApi {
     this.subscriptions = new SubscriptionsApi(host);
     this.apiCalls = new ApiCallsApi(host);
     this.tenantOAuthApps = new TenantOAuthAppsApi(host);
+    this.passkeys = new PasskeysApi(host);
   }
 }
