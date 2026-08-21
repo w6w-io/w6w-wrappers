@@ -154,6 +154,7 @@ export type {
   EndpointsHost,
   EndpointSummary,
   EndpointTarget,
+  ErrorHandlerTarget,
   ErrorReroute,
   Exposure,
   RetryPolicy,
