@@ -102,14 +102,30 @@ export interface RetryPolicy {
 }
 
 /**
- * Where a failed Function/Endpoint invocation is re-dispatched. A Function
- * and an Endpoint have no graph, so this can never be an `Edge.when: "error"`;
- * it is a {@linkcode Callable} reference — the same union `Endpoint.target`
- * already uses.
+ * What an {@linkcode ErrorReroute} may dispatch to: a Function, a Workflow, or
+ * an app Action directly.
+ *
+ * Deliberately NOT {@linkcode EndpointTarget} — that union has a fourth arm
+ * (`{kind:"endpoint"}`), and an Endpoint is an inbound surface. Rerouting a
+ * failure into one would re-enter through the front door and re-run that
+ * Endpoint's own auth, rate limit and error policy, including its own reroute.
+ */
+export type ErrorHandlerTarget = Callable | ActionTarget;
+
+/**
+ * Where a failed Function/Endpoint invocation — or a failed workflow RUN — is
+ * re-dispatched. A Function and an Endpoint have no graph, so this can never
+ * be an `Edge.when: "error"`.
+ *
+ * ⚠️ Widened 2026-08-21: the target is {@linkcode ErrorHandlerTarget}, not
+ * {@linkcode Callable}. It was Function-or-Workflow only, which left the most
+ * obvious handler there is (post to Slack, send me an email) expressible only
+ * by first wrapping the action in a Function. The `Callable` arms stay first
+ * in the union, so every reroute stored before the widening keeps its type.
  */
 export interface ErrorReroute {
   /** Invoked once, after `retry` is exhausted. Its output becomes the call's output. */
-  target: Callable;
+  target: ErrorHandlerTarget;
   /** Maps `{ inputs, error }` onto the reroute target's own inputs. Omitted ⇒ the
    *  original `inputs` are passed through unchanged. */
   with?: Record<string, unknown>;
