@@ -105,20 +105,41 @@ export interface PlanLimits {
   readonly support: SupportLevel;
 }
 
+/** Which cadence a {@link PlanPricePoint} recurs on. */
+export type BillingInterval = "month" | "year";
+
 /**
- * The `price` arm of a plan — exactly the eight fields `plans-route.ts`'s
- * `toWirePlan` allowlists. Never `productId`/`base`/`metered`: the rail
- * (Stripe) is an implementation detail and the product id / lookup key are
- * server configuration, not published pricing.
+ * One published price point. `unitAmount` is integer cents charged per ONE
+ * `interval` — an annual point's amount is what is charged once a year, NOT a
+ * monthly equivalent, so `$500/yr` arrives as `50000` beside a monthly `5000`.
+ *
+ * Both figures are authored server-side and neither is derived from the other.
+ * A client may compute a saving percentage from the pair for DISPLAY; nothing
+ * should reconstruct a price from one and a rate.
+ */
+export interface PlanPricePoint {
+  readonly unitAmount: number;
+  readonly interval: BillingInterval;
+}
+
+/**
+ * The `price` arm of a plan — exactly what `plans-route.ts`'s `toWirePlan`
+ * allowlists. Never `productId`/`lookupKey`/`metered`: the rail (Stripe) is an
+ * implementation detail and the product id / lookup key are server
+ * configuration, not published pricing.
+ *
+ * Only the `billable` arm carries price data. `none` (Free) and
+ * `contact-sales` (Enterprise) carry no amount, no interval and no currency.
  */
 export type PlanPrice =
   | { readonly kind: "none" }
   | { readonly kind: "contact-sales" }
   | {
     readonly kind: "billable";
-    readonly unitAmount: number;
     readonly currency: "usd";
-    readonly interval: "month";
+    readonly monthly: PlanPricePoint;
+    /** `null` when the plan is offered monthly only. */
+    readonly annual: PlanPricePoint | null;
   };
 
 /** One entry in the checked-in plan catalog, as `GET /commerce/plans` returns it. */
