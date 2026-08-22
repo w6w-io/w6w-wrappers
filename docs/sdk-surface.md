@@ -10,7 +10,7 @@ of them answers this one:
 - [`cli.md`](./cli.md) — *what `w6w --help` prints,* and what each exit code means.
 
 This file is the **client-side catalog**: every symbol a wrapper publishes, what
-it is for, and how it behaves. It covers the seventeen operations *and* the
+it is for, and how it behaves. It covers the twenty-nine operations *and* the
 things around them that are equally part of the published surface — `request`,
 `path`, `joinBaseUrl`, the error classes, the run predicates, `UNSET` — none of
 which appear in `endpoints.json`, because `endpoints.json` catalogs API
@@ -190,6 +190,50 @@ Three rules both operations obey:
   Returned, never raised. Turning it into an exit code is the CLI's job.
 - **No client-side polling, ever.** There is no timer, sleep or retry anywhere
   in either package. The server's `?wait=true` is the mechanism.
+
+### Definitions — the workflow and Function lifecycle
+
+| TS | Python | Returns |
+|---|---|---|
+| `client.workflows.get(id)` | `client.workflows.get(id)` | `WorkflowDetail` |
+| `client.workflows.create(definition, opts?)` | `client.workflows.create(definition, project=None)` | `WorkflowSaveResult` |
+| `client.workflows.update(id, definition, opts?)` | `client.workflows.update(id, definition, project=None, if_unmodified_since=None)` | `WorkflowSaveResult` |
+| `client.workflows.archive(id)` | `client.workflows.archive(id)` | the definition |
+| `client.workflows.delete(id)` | `client.workflows.delete(id)` | `void` / `None` |
+| `client.functions.list()` | `client.functions.list()` | `FunctionSummary[]` / `List[FunctionSummary]` |
+| `client.functions.get(id)` | `client.functions.get(id)` | `FunctionDetail` |
+| `client.functions.create(definition)` | `client.functions.create(definition)` | `{id, key}` / `SaveResult` |
+| `client.functions.update(id, definition)` | `client.functions.update(id, definition)` | `{id, key}` / `SaveResult` |
+| `client.functions.delete(id)` | `client.functions.delete(id)` | `void` / `None` |
+
+**The definition itself is opaque in both languages** — `Record<string, unknown>`
+/ `dict`. A workflow's `steps[]` carry node types the engine owns and extends,
+and a Function's `impl` is a union the server extends (app Action, another
+Function, a Workflow); modelling either would make the wrapper reject a document
+a newer server accepts. What the SDKs *do* model is the envelope around it:
+`WorkflowDetail`, `WorkflowSaveResult`, `FunctionDetail`, `FunctionSummary`.
+
+Four rules all ten obey:
+
+- **`create` and `update` are the same route.** The server has one upsert per
+  domain and no PATCH. What separates the two methods is that `create` mints the
+  `id` the server requires and never generates, and `update` pins the one you
+  addressed — overriding any `id` in the body, so `update("wf_a", defOfB)`
+  cannot silently write to B.
+- **`update` is a full replacement.** A field left out is a field removed. Read,
+  edit, send the whole thing back.
+- **Reads keep their extra field outside the definition.** `workflows.get`'s
+  `updatedAt` and `functions.get`'s `valid` are siblings of the document, never
+  spliced into it — they are not part of the stored document, and the read is
+  the input to the write.
+- **Deleting a workflow takes two calls.** `archive` then `delete`; the SDK does
+  not do the first for you when the server answers `409 workflow_not_archived`.
+  A Function deletes in one.
+
+The asymmetries between the two domains are the server's, not the wrappers':
+workflows take `?project=` and an `x-w6w-if-unmodified-since` precondition;
+Functions take neither, and no request on that domain carries a project even when
+the client has a default.
 
 ### Documents — project-scoped
 

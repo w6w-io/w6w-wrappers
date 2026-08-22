@@ -9,8 +9,9 @@ contract and release together, so `w6w==X` gives you the same operations as
 `@w6w/sdk@X`.
 
 **Status: pre-release.** The full surface is in — `me`, `run`,
-`connections.list`, `workflows.list` / `workflows.run`, and the complete
-`documents.*` and `vars.*` CRUD. Below `1.0.0`, breaking changes may arrive in a
+`connections.list`, the complete `workflows.*` and `functions.*` lifecycle
+(list/get/create/update/delete, plus `run` and `workflows.archive`), and the
+complete `documents.*` and `vars.*` CRUD. Below `1.0.0`, breaking changes may arrive in a
 minor bump — that grace ends at `1.0.0`.
 
 MIT licensed — see [LICENSE](./LICENSE).

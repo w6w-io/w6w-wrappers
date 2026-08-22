@@ -25,6 +25,19 @@
  * documented partner story exists yet either) — that promotion, if it ever
  * happens, is a dedicated future project.
  *
+ * **That promotion has since happened, and this namespace deliberately stayed.**
+ * At contract `0.5.0` the definition lifecycle left `outOfScope` and landed on
+ * the BASE namespace in all three lanes — `client.workflows.get`/`create`/
+ * `update`/`archive`/`delete` (`../workflows.ts`). The two surfaces now overlap
+ * on four routes, and the split is by SHAPE, not by capability: the base methods
+ * take a definition and answer the wire's own envelope, while these keep the
+ * shapes studio's components are already written against (`upsert`'s single
+ * definition-plus-precondition argument, `get`'s three-field body). New callers
+ * — and every partner — want `client.workflows.*`. What is still ONLY here is
+ * the run history: `listRuns` and `getRun` stay console-only, and
+ * `endpoints.json` names `workflows.listRuns` in `outOfScope` so that stays
+ * deliberate rather than accidental.
+ *
  * **`list` and `run` are NOT part of this domain.** Both already exist on the
  * BASE namespace (`client.workflows.list()`/`client.workflows.run()`,
  * `../workflows.ts`) and studio reuses them verbatim — adding a duplicate

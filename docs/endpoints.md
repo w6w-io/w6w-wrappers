@@ -89,14 +89,14 @@ intake keeps working at the command line.
 Every CLI command must also answer `--help` at group and command level, generated
 from `endpoints.json` — see [cli.md](./cli.md).
 
-**Status field.** All seventeen operations now carry `"status": "required"`.
+**Status field.** All twenty-nine operations now carry `"status": "required"`.
 `documents.getByKey`, `vars.getByName` and `run` were implemented server-side
 2026-07-28; `me` was fixed the same day to call the server's real `/auth/me`
 route directly rather than wait on a never-built `/me` alias.
 `me`'s `serverImplemented` stays `"partial"` — identity is fully live, but the
 optional `versions` block does not exist server-side yet, and every wrapper
 tolerates its absence. `status` records **server** readiness, not wrapper
-obligation — all seventeen are implemented and tested
+obligation — all twenty-nine are implemented and tested
 against a mocked transport in every wrapper
 (see [implementation.md §10](./implementation.md#10-conformance-runner)).
 
@@ -885,17 +885,328 @@ reason is in [implementation.md §3](./implementation.md#3-error-model).
 
 ---
 
+## 20. `workflows.get` — fetch a workflow definition
+
+```
+GET /workflows/:id
+```
+
+`status: required` · served today
+
+**No envelope.** The response body *is* the payload, all three fields of it —
+there is no key to unwrap, and a wrapper's `unwrap` helper does not apply here.
+
+**Response `200`**
+
+```json
+{
+  "workflow": { "manifestVersion": "2", "id": "wf_01H…", "name": "welcome-email", "steps": [] },
+  "sourceRef": null,
+  "updatedAt": "2026-07-22T18:03:00.000Z"
+}
+```
+
+`workflow` is the stored definition overlaid with the authoritative `status` and
+`tags` columns, so a freshly created workflow that carries neither inline still
+reports its real lifecycle state. It stays **opaque** in every lane
+(`Record<string, unknown>` in TS, `dict` in Python): `steps[]` carry node types
+the engine owns and extends, and a wrapper that modelled them would reject a
+workflow a newer server accepts.
+
+**`updatedAt` is a top-level sibling of `workflow`, never a field inside it.**
+The definition is the portable document — it can be exported, re-imported, or
+committed to a repo — and a server timestamp must not enter it. It is also the
+optimistic-concurrency token §22 takes as `ifUnmodifiedSince`.
+
+Missing id is `404 unknown_workflow`.
+
+---
+
+## 21. `workflows.create` — create a workflow
+
+```
+POST /workflows[?project=<id>]
+```
+
+`status: required` · served today · **`201`**
+
+The create half of the server's single upsert route, which is why §21 and §22
+share a method and a path.
+
+**The server does not mint ids.** `validateDefinition` rejects a body with no
+`id` as `400 invalid_workflow`, so every wrapper mints one client-side
+(`wf_<uuid>`) when the definition carries none, and forwards an `id` the caller
+supplied untouched. That is not a convenience: without it the most natural call
+there is — "create this workflow" — fails.
+
+The definition is sent **verbatim as the body**, never wrapped in an envelope
+key. `manifestVersion` must be `"2"`. A definition whose `trigger.cron` is set
+also (re)applies a schedule, reported back as `scheduled`.
+
+**Response `201`**
+
+```json
+{
+  "workflow": { "id": "wf_01H…", "name": "welcome-email" },
+  "scheduled": false,
+  "updatedAt": "2026-07-22T18:03:00.000Z"
+}
+```
+
+`scheduled: false` does not mean "not scheduled" — it means "not scheduled by
+*this* call"; a workflow that already had a schedule is not re-scheduled.
+
+`400 unknown_project` when `project` names a project the account does not own;
+`409 workflow_conflict` when another `(tenant, subject)` already owns that id.
+
+---
+
+## 22. `workflows.update` — overwrite a workflow
+
+```
+POST /workflows[?project=<id>]
+x-w6w-if-unmodified-since: <updatedAt>
+```
+
+`status: required` · served today · **`201`**
+
+**A full replacement, not a patch.** The server stores what it is given, so a
+field left out is a field removed. Read with §20, change what you mean to
+change, send the whole thing back.
+
+`id` comes from the operation's **first argument** and is pinned into the body,
+overriding any `id` the definition carries. Trusting the body instead makes
+`update("wf_a", defOfB)` silently write to B and answer with B's id, which reads
+like success.
+
+`ifUnmodifiedSince` is the optimistic-concurrency precondition. It is a
+**header**, not a query parameter, and it is sent **only when a value was
+given** — never as an empty or `"null"` string, which the server answers
+`400 invalid_precondition`, an error naming something the caller never asked
+for. Pass the exact `updatedAt` from §20 or a prior save.
+
+Two 409s, and the difference matters: `409 workflow_stale` means the precondition
+did not match and **is** recoverable by reloading and re-saving;
+`409 workflow_conflict` means someone else owns the id and is **not**.
+
+Response is §21's, with the new `updatedAt`.
+
+---
+
+## 23. `workflows.archive` — archive a workflow
+
+```
+POST /workflows/:id/archive
+```
+
+`status: required` · served today
+
+One-way: there is no unarchive route on this domain. **Idempotent** — archiving
+an already-archived workflow re-returns it unchanged rather than erroring, so a
+wrapper must not special-case the second call.
+
+**Response `200`** — envelope key `workflow`; the wrapper unwraps. Same merged
+shape §20 returns.
+
+This is a **precondition of §24**, not a convenience: the delete refuses
+anything still `draft` or `active`.
+
+Missing id is `404 unknown_workflow`.
+
+---
+
+## 24. `workflows.delete` — delete an archived workflow
+
+```
+DELETE /workflows/:id
+```
+
+`status: required` · served today
+
+The server returns `{ "ok": true }` and the wrapper unwraps it to **nothing** —
+declared return is `void` (`Promise<void>` in TS, `None` in Python, no stdout
+payload in the CLI beyond an exit code), the same pin §10 carries. `Ok` is not a
+public wrapper type.
+
+The workflow's runs, schedules and subscriptions cascade-delete server-side.
+
+**Archive first.** A workflow that is not `archived` yet is
+`409 workflow_not_archived`, and a wrapper must **not** catch that and archive on
+the caller's behalf: a two-step destructive path completed silently is how a
+caller deletes something they only meant to look at.
+
+Deleting an unknown id is `404 unknown_workflow`, not a silent success.
+
+---
+
+## 25. `functions.list` — list Functions
+
+```
+GET /functions
+```
+
+`status: required` · served today
+
+The discovery operation for this domain, in for the same reason §2 and §3 are
+(D4): it is how a caller finds the `key` to pass to §17.
+
+**No `project` parameter.** Unlike workflows and documents this route reads no
+`?project=` at all, and sending one would be inventing a parameter.
+
+**Response `200`** — envelope key `functions`; the wrapper unwraps.
+
+```json
+{
+  "functions": [
+    {
+      "id": "fn_01H…",
+      "key": "send-email",
+      "displayName": "Send email",
+      "description": "Sends one transactional email.",
+      "updatedAt": "2026-07-22T18:03:00.000Z",
+      "valid": true
+    }
+  ]
+}
+```
+
+Shape is `FunctionSummary`. `valid` is server-computed by the same predicate the
+invoke path guards with, so runnability needs no second call. `displayName` falls
+back to `key` server-side and is never a substitute for it — `key` is what §17
+takes. Unpaginated today, same as §3.
+
+---
+
+## 26. `functions.get` — fetch a Function definition
+
+```
+GET /functions/:idOrKey
+```
+
+`status: required` · served today
+
+Takes an `fn_…` id **or** a `key`, the same either-or §17 takes and for the same
+reason: an id carries an underscore and a key's grammar forbids one, so the two
+cannot collide.
+
+**Response `200`**
+
+```json
+{
+  "function": { "manifestVersion": "1", "id": "fn_01H…", "key": "send-email", "inputs": [] },
+  "valid": true
+}
+```
+
+Wrappers **must keep `valid` a top-level sibling** rather than splicing it into
+the definition: it is computed per request, it is not part of the stored document
+(`rfcs/function.md`), and folding it in would put it inside the object a caller
+sends straight back to §28. (The console surface's own `console.functions.get`
+does splice it, for the studio's sake. That is not this surface.)
+
+The definition stays **opaque**: its `impl` is a union the server extends — an
+app Action, another Function, or a Workflow since D-8 — and the whole point of a
+Function is that `impl` is the part you swap.
+
+Missing id is `404 unknown_function`.
+
+---
+
+## 27. `functions.create` — create a Function
+
+```
+POST /functions
+```
+
+`status: required` · served today · **`201`**
+
+The create half of the server's single upsert route. **The server does not mint
+ids** — wrappers mint `fn_<uuid>` when the definition carries none, exactly as
+§21 does.
+
+**`key` is not minted.** It is the name the Function is *called* by, so it is the
+caller's to choose. The server validates it on **first save only** (3–39
+characters, starts lowercase, lowercase letters/digits/single hyphens, no `_`),
+deliberately leaving legacy keys alone on update; that grammar is what keeps
+`/functions/:idOrKey/invoke` unambiguous.
+
+**`impl` is optional.** A Function with none is a valid draft that stores fine
+and answers `valid: false`. Wrappers must not require it.
+
+**Response `201`** — envelope key `function`; the wrapper unwraps to
+`{ id, key }`.
+
+Two distinct 409s, and a wrapper must surface both rather than flattening them:
+`409 function_conflict` is an ownership clash on the id;
+`409 function_key_conflict` is the key already being taken.
+
+---
+
+## 28. `functions.update` — overwrite a Function
+
+```
+POST /functions
+```
+
+`status: required` · served today · **`201`**
+
+The update half of the same upsert route as §27. **A full replacement, not a
+patch** — read with §26, change what you mean to change, send the whole thing
+back. `id` comes from the first argument and is pinned into the body.
+
+There is **no concurrency precondition on this route** — workflows have one,
+Functions do not — so the write is last-write-wins, and no wrapper should invent
+a header the server does not read.
+
+Do not send `valid` back: it is not part of the stored document, which is exactly
+why §26 leaves it outside the definition.
+
+---
+
+## 29. `functions.delete` — delete a Function
+
+```
+DELETE /functions/:idOrKey
+```
+
+`status: required` · served today
+
+The server returns `{ "ok": true }` and the wrapper unwraps it to **nothing**
+(`void` / `None` / exit code), same pin as §10. **Not idempotent**: deleting an
+id that is not there is `404 unknown_function`, and wrappers must not pretend
+otherwise.
+
+There is **no archive step** on this domain — unlike a workflow, a Function
+deletes in one call.
+
+**Nothing checks for callers first.** A Function may be referenced by an
+Endpoint, by a Workflow step, or by another Function's `impl` (D-8), and the
+server does not walk those references — they break at call time.
+
+---
+
 ## Explicitly out of scope for this version
 
 Named so nobody adds them ad hoc in one language — this list is the `outOfScope`
 array in `endpoints.json`, all twelve entries:
 
-apps, functions, endpoints, projects, vault, tokens, schedules, triggers,
-subscriptions, tenants, `runs.get`, and
-**all write operations on connections and workflows**.
+apps, endpoints, projects, vault, tokens, schedules, triggers, subscriptions,
+tenants, `runs.get`, `workflows.listRuns`, and
+**all write operations on connections**.
 
 They all exist on the API. They are not in the wrappers until they are in
 `endpoints.json`.
 
 > `vars` was on this list in the 07-24 contract and is **no longer** — the full
 > `vars.*` CRUD is in scope at v0.1.0 (§§11–16).
+>
+> **`functions` and every workflow write left this list at contract `0.5.0`**
+> (§§20–29). The entry that covered them read "all write operations on
+> connections and workflows", and the two halves turned out not to belong
+> together: a connection write is an interactive studio flow (an OAuth round
+> trip, a live credential test), and half of one in an SDK is worse than none,
+> while a workflow or Function write is a plain stateless POST/DELETE over an
+> already-resolved body. Connections stay. `workflows.listRuns` is new to the
+> list rather than newly excluded — the run-history surface is deliberately still
+> console-only, and naming it here is what keeps it from arriving by association
+> with the definition operations that did land.

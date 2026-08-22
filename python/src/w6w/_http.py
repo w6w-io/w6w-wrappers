@@ -262,6 +262,7 @@ def _request(
     url_path: str,
     query: Optional[Mapping[str, Any]] = None,
     body: Optional[Any] = None,
+    headers: Optional[Mapping[str, str]] = None,
 ) -> HttpResponse:
     """Perform one request and map its outcome.
 
@@ -306,6 +307,10 @@ def _request(
     :param query: Query parameters; `None` values are dropped.
     :param body: Request body. Serialised as JSON when not `None`; a bodiless
         request sends no `Content-Type`.
+    :param headers: Extra request headers, for the routes that take a
+        precondition. Applied **after** the credential and content type, but
+        `Authorization` is re-pinned afterwards so a caller cannot replace the
+        client's own credential through this seam.
     :returns: The status and parsed body.
     :raises ConfigError: When no token is configured — raised *before* the
         transport is touched.
@@ -314,13 +319,23 @@ def _request(
     url = build_url(config, url_path, query)
     # Resolved per request rather than at construction: a client with no token
     # is constructible (so a CLI's --help works offline) and fails here instead.
-    headers: Dict[str, str] = {"Authorization": "Bearer " + require_token(config)}
+    token = require_token(config)
+    request_headers: Dict[str, str] = {"Authorization": "Bearer " + token}
     payload: Optional[bytes] = None
     if body is not None:
-        headers["Content-Type"] = "application/json"
+        request_headers["Content-Type"] = "application/json"
         payload = json.dumps(body).encode("utf-8")
+    if headers:
+        request_headers.update(headers)
+        # The credential is re-pinned AFTER the caller's headers, not before.
+        # `request` is a public seam (`Client.request`), so without this an
+        # `Authorization` key in the mapping — passed by mistake or by a helper
+        # that forwards whatever it was given — would silently send a different
+        # credential than the client was constructed with, and the failure
+        # would look like a server-side auth bug.
+        request_headers["Authorization"] = "Bearer " + token
 
-    request = Request(url, data=payload, headers=headers, method=method)
+    request = Request(url, data=payload, headers=request_headers, method=method)
 
     try:
         response = transport(request)

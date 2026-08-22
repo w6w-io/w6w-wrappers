@@ -756,7 +756,7 @@ process. `deno test` and `python3 -m unittest` both run the suite in-process.
 
 ### Required tests
 
-For **every operation in `endpoints.json` — all seventeen, `required` and
+For **every operation in `endpoints.json` — all twenty-nine, `required` and
 `planned` alike**:
 
 1. **Success path.** Assert the request the wrapper *made* (method, resolved URL
@@ -897,7 +897,7 @@ rule in the same words — "asserts the client exposes **every** operation in
 the mechanics. The two documents agree; if they ever drift, **this one is the
 pinned spec** and `parity.md` follows it.
 
-The reason is that this project implements all seventeen operations **ahead of the
+The reason is that this project implements all twenty-nine operations **ahead of the
 server**: four are `planned` because the server work is fenced, not
 because the wrappers are unfinished. **`status` records *server* readiness, not
 wrapper obligation.** A wrapper that omitted `run` or `documents.getByKey` "because
@@ -906,8 +906,8 @@ siblings, and the drift would only be discovered when the fence clears — which
 precisely the failure the lockstep bet exists to prevent.
 
 So: `status` tells a **user** whether calling the operation will reach a live
-route today. It tells an **implementer** nothing. Implement all seventeen; test
-all seventeen against a mocked transport; assert all seventeen in conformance.
+route today. It tells an **implementer** nothing. Implement all twenty-nine; test
+all twenty-nine against a mocked transport; assert all twenty-nine in conformance.
 
 One more claim this section does not make: `react/` is exempt from this runner
 not through `required`/`planned` bookkeeping but because it is a

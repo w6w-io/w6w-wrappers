@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.4.0",
+  "contractVersion": "0.5.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "auth": "bearer",
@@ -126,6 +126,151 @@
         "cli": "w6w workflows run <id> [--wait] [--input <json>]"
       },
       "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. `trigger` is a STRING, not an object: the server reads it as a `RunTrigger` (`\"manual\" | \"schedule\" | \"webhook\" | \"event\" | \"replay\"` today), and it defaults to 'manual' server-side when omitted. The five values are recorded in `knownValues` as documentation only — every wrapper types the param as an open string (`trigger?: string` / `trigger: str | None`) and passes it through unvalidated, so a sixth server value needs no wrapper release. `variables` and `input` are NOT interchangeable: `variables` seeds the run's variable scope, read downstream as `vars.*`; `input` is delivered to the entry trigger node's own recorded output, read downstream as `steps.<triggerId>.output.<key>` — the shape a trigger's declared fields actually arrive in. D4 — kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables`, `trigger` and `input` have no slot in the three-field `{urn, action, payload}` shape. Verified live."
+    },
+    {
+      "name": "workflows.get",
+      "summary": "Fetch one workflow's stored definition.",
+      "method": "GET",
+      "path": "/workflows/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "WorkflowDetail",
+      "naming": {
+        "ts": "client.workflows.get(id)",
+        "python": "client.workflows.get(id)",
+        "cli": "w6w workflows get <id>"
+      },
+      "notes": "Addressed by the `wf_…` id. The response body IS the payload — `{workflow, sourceRef, updatedAt}`, with no envelope key to peel, so `unwrap` does not apply here. `workflow` is the stored definition overlaid with the authoritative `status` and `tags` columns, and it stays OPAQUE in every lane (`Record<string, unknown>` / `dict`): its `steps[]` carry node types the engine owns and extends, and a wrapper that modelled them would reject a workflow a newer server accepts. **`updatedAt` is a TOP-LEVEL SIBLING of `workflow`, never a field inside it** — the definition is the portable document and a server timestamp must not enter it; it is also the optimistic-concurrency token that `workflows.update` takes as `ifUnmodifiedSince`. Missing id is `404 unknown_workflow`."
+    },
+    {
+      "name": "workflows.create",
+      "summary": "Create a workflow definition.",
+      "method": "POST",
+      "path": "/workflows",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "definition",
+          "in": "body",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "WorkflowSaveResult",
+      "successStatuses": [
+        201
+      ],
+      "naming": {
+        "ts": "client.workflows.create(definition, opts?)",
+        "python": "client.workflows.create(definition, project=None)",
+        "cli": "w6w workflows create --definition <json> [--project <id>]"
+      },
+      "notes": "Addressed by nothing — this is the create half of the server's single upsert route (`POST /workflows`), which is why `create` and `update` share a method and a path here. THE SERVER DOES NOT MINT IDS: `validateDefinition` rejects a body with no `id` as `400 invalid_workflow`, so every wrapper mints one client-side (`wf_<uuid>`) when the definition carries none, and forwards an `id` the caller supplied untouched. That is not a convenience — without it the most natural call there is fails. `definition` is sent VERBATIM as the body, never wrapped in an envelope key. `manifestVersion` must be `\"2\"`. A definition whose `trigger.cron` is set also (re)applies a schedule, reported back as `scheduled`."
+    },
+    {
+      "name": "workflows.update",
+      "summary": "Overwrite a workflow definition.",
+      "method": "POST",
+      "path": "/workflows",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "definition",
+          "in": "body",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "project",
+          "in": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "ifUnmodifiedSince",
+          "in": "header",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "WorkflowSaveResult",
+      "successStatuses": [
+        201
+      ],
+      "naming": {
+        "ts": "client.workflows.update(id, definition, opts?)",
+        "python": "client.workflows.update(id, definition, project=None, if_unmodified_since=None)",
+        "cli": "w6w workflows update <id> --definition <json> [--project <id>] [--if-unmodified-since <ts>]"
+      },
+      "notes": "The update half of the same upsert route as `workflows.create`. **A FULL REPLACEMENT, NOT A PATCH** — the server stores what it is given, so a field left out is a field removed; read with `workflows.get`, change what you mean to change, send the whole thing back. `id` comes from the FIRST ARGUMENT and is pinned into the body, overriding any `id` the definition carries: trusting the body makes `update(\"wf_a\", defOfB)` silently write to B. `ifUnmodifiedSince` is the optimistic-concurrency precondition, sent as the `x-w6w-if-unmodified-since` HEADER (not a query param) and ONLY when a value was given — never as an empty or \"null\" string, which the server answers `400 invalid_precondition`. Pass the exact `updatedAt` from `workflows.get` or a prior save; a stale one is `409 workflow_stale`, which IS recoverable by reloading and re-saving, unlike `409 workflow_conflict`, which is not."
+    },
+    {
+      "name": "workflows.archive",
+      "summary": "Archive a workflow — the required step before deleting it.",
+      "method": "POST",
+      "path": "/workflows/{id}/archive",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "WorkflowDefinition",
+      "naming": {
+        "ts": "client.workflows.archive(id)",
+        "python": "client.workflows.archive(id)",
+        "cli": "w6w workflows archive <id>"
+      },
+      "notes": "One-way: there is no unarchive route on this domain. Idempotent — archiving an already-archived workflow re-returns it unchanged rather than erroring, so a wrapper must not special-case the second call. Returns the definition under a `workflow` envelope, in the same merged shape `workflows.get` returns. This is a PRECONDITION of `workflows.delete`, not a convenience: the delete refuses anything still `draft` or `active`. Missing id is `404 unknown_workflow`."
+    },
+    {
+      "name": "workflows.delete",
+      "summary": "Delete an archived workflow.",
+      "method": "DELETE",
+      "path": "/workflows/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "void",
+      "naming": {
+        "ts": "client.workflows.delete(id)",
+        "python": "client.workflows.delete(id)",
+        "cli": "w6w workflows delete <id>"
+      },
+      "notes": "Addressed by the `wf_…` id. The server returns `{ok: true}` and the wrapper unwraps it to NOTHING — declared return is `void` (`Promise<void>` in TS, `None` in Python, no stdout payload in the CLI beyond an exit code), the same pin `documents.delete` carries; `Ok` is not a public wrapper type. The workflow's runs, schedules and subscriptions cascade-delete server-side. **ARCHIVE FIRST**: a workflow that is not `archived` yet is `409 workflow_not_archived`, and a wrapper must NOT catch that and archive on the caller's behalf — a two-step destructive path completed silently is how a caller deletes something they only meant to look at. Deleting an unknown id is `404 unknown_workflow`, not a silent success."
     },
     {
       "name": "documents.list",
@@ -537,6 +682,126 @@
       "notes": "The NAME IS THE FIRST ARGUMENT in every lane, matching `workflows.run(id, opts?)`, so all three runnable kinds read alike; it is not a field inside an options object. Wrappers expose the body field as `payload` even though the wire spells it `inputs` — one word across every runnable kind, and reconciling that inconsistency is precisely the wrapper's job (the Endpoint operation below spells the same concept `input`). Returns the Function's OUTPUT, not a kind-discriminated envelope: the kind is settled by the operation name, so a discriminant would be a field the caller unwraps to learn nothing. A `null` output is a SUCCESSFUL run, not a malformed body — a Function's output is an opaque pass-through and an action that returns nothing yields `{\"output\": null}` — so a wrapper must guard on PRESENCE of the `output` key rather than on its truthiness. 422 `function_incomplete` when the Function has no runnable `impl`. The `{idOrKey}` path segment takes EITHER the resource's host-issued id or the key the user gave it, with no prefix, flag or tag to say which — the two shapes cannot collide, because an id carries a kind prefix and therefore an underscore while a key is a kebab-slug that forbids one. Resolution is id-first (a pure prefix test, no query), so this path cannot be used to probe whether a key exists by supplying something id-shaped. Two unknown KEYS answer identically and neither is echoed back — a key is short, human-chosen and guessable, so echoing it would make this an enumeration oracle; an unknown id may still be echoed, since nobody guesses a uuid. The key is unique per ACCOUNT, so within the scope a credential carries it names exactly one resource. INVOCATION FRAME (server, 2026-08-20): the 200 body is now `{kind:\"function\", output, invocationId, status, startedAt, finishedAt, durationMs}`. `output` keeps its name, its position and its opaque-pass-through meaning, so the \"guard on PRESENCE of `output`\" rule above is unchanged and a wrapper that unwraps `output` needs no change at all. The added fields are the attempt's own record: `invocationId` resolves through `GET /invocations/{id}` to the stored inputs, output and timing, and a FAILED call's 4xx body carries the same fields beside its `error`."
     },
     {
+      "name": "functions.list",
+      "summary": "List the caller's Function definitions.",
+      "method": "GET",
+      "path": "/functions",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [],
+      "returns": "FunctionSummary[]",
+      "naming": {
+        "ts": "client.functions.list()",
+        "python": "client.functions.list()",
+        "cli": "w6w functions list"
+      },
+      "notes": "The discovery operation for this domain, in for the same reason `workflows.list` and `connections.list` are (D4): it is how a caller finds the `key` to pass to `functions.run`. Unpaginated today, same as `workflows.list`. **NO `project` PARAM** — unlike workflows and documents this route reads no `?project=` at all (`admin/functions.ts` calls `repo.list(scope)` with none), and sending one would be inventing a parameter. Each row already carries `valid`, computed server-side by the same predicate the invoke path guards with, so runnability needs no second call. `displayName` falls back to `key` server-side and is never a substitute for it: `key` is what `functions.run` takes."
+    },
+    {
+      "name": "functions.get",
+      "summary": "Fetch one Function's stored definition.",
+      "method": "GET",
+      "path": "/functions/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "FunctionDetail",
+      "naming": {
+        "ts": "client.functions.get(id)",
+        "python": "client.functions.get(id)",
+        "cli": "w6w functions get <id>"
+      },
+      "notes": "Takes an `fn_…` id OR a `key`, the same either-or `functions.run` takes and for the same reason: an id carries an underscore and a key's grammar forbids one, so the two cannot collide. Returns `{function, valid}` and wrappers MUST keep `valid` a top-level sibling rather than splicing it into the definition — it is computed per request, it is not part of the stored document (`rfcs/function.md`), and folding it in would put it inside the object a caller sends straight back to `functions.update`. (`console.functions.get` does splice it, for studio's sake; that is the console surface, not this one.) The definition stays OPAQUE: its `impl` is a union the server extends — an app Action, another Function, or a Workflow since D-8 — and the whole point of a Function is that `impl` is the part you swap. Missing id is `404 unknown_function`."
+    },
+    {
+      "name": "functions.create",
+      "summary": "Create a Function definition.",
+      "method": "POST",
+      "path": "/functions",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "definition",
+          "in": "body",
+          "type": "object",
+          "required": true
+        }
+      ],
+      "returns": "SaveResult",
+      "successStatuses": [
+        201
+      ],
+      "naming": {
+        "ts": "client.functions.create(definition)",
+        "python": "client.functions.create(definition)",
+        "cli": "w6w functions create --definition <json>"
+      },
+      "notes": "The create half of the server's single upsert route (`POST /functions`). THE SERVER DOES NOT MINT IDS — `validateDefinition` rejects a body with no `id` — so wrappers mint `fn_<uuid>` when the definition carries none, exactly as `workflows.create` does. `key` is NOT minted: it is the name the Function is CALLED by, so it is the caller's to choose. The server validates `key` on FIRST SAVE ONLY (3–39 chars, starts lowercase, lowercase letters/digits/single hyphens, no `_`), deliberately leaving legacy keys alone on update; that grammar is what keeps `/functions/{idOrKey}/invoke` unambiguous. `impl` is OPTIONAL — a Function with none is a valid draft that stores fine and answers `valid: false`, and wrappers must not require it. Returns `{id, key}` under a `function` envelope. `409 function_conflict` is an ownership clash on the id; `409 function_key_conflict` is the key already being taken — two distinct codes, and a wrapper must surface both rather than flattening them."
+    },
+    {
+      "name": "functions.update",
+      "summary": "Overwrite a Function definition.",
+      "method": "POST",
+      "path": "/functions",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "body",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "definition",
+          "in": "body",
+          "type": "object",
+          "required": true
+        }
+      ],
+      "returns": "SaveResult",
+      "successStatuses": [
+        201
+      ],
+      "naming": {
+        "ts": "client.functions.update(id, definition)",
+        "python": "client.functions.update(id, definition)",
+        "cli": "w6w functions update <id> --definition <json>"
+      },
+      "notes": "The update half of the same upsert route as `functions.create`. **A FULL REPLACEMENT, NOT A PATCH** — read with `functions.get`, change what you mean to change, send the whole thing back. `id` comes from the FIRST ARGUMENT and is pinned into the body, overriding any `id` the definition carries. There is NO concurrency precondition on this route — workflows have one, Functions do not — so the write is last-write-wins and no wrapper should invent a header the server does not read. Do not send `valid` back: it is not part of the stored document, which is exactly why `functions.get` leaves it outside the definition."
+    },
+    {
+      "name": "functions.delete",
+      "summary": "Delete a Function.",
+      "method": "DELETE",
+      "path": "/functions/{id}",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "void",
+      "naming": {
+        "ts": "client.functions.delete(id)",
+        "python": "client.functions.delete(id)",
+        "cli": "w6w functions delete <id>"
+      },
+      "notes": "Takes an `fn_…` id or a `key`. The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. NOT idempotent: deleting an id that is not there is `404 unknown_function`, and wrappers must not pretend otherwise. There is NO archive step on this domain — unlike a workflow, a Function deletes in one call. **Nothing checks for callers first**: a Function may be referenced by an Endpoint, by a Workflow step, or by another Function's `impl` (D-8), and the server does not walk those references — they break at call time."
+    },
+    {
       "name": "endpoints.run",
       "summary": "Run one Endpoint by its key (or id); the envelope's kind says which arm answered.",
       "method": "POST",
@@ -670,7 +935,6 @@
   },
   "outOfScope": [
     "apps",
-    "functions",
     "endpoints",
     "projects",
     "vault",
@@ -680,6 +944,7 @@
     "subscriptions",
     "tenants",
     "runs.get",
-    "all write operations on connections and workflows"
+    "workflows.listRuns",
+    "all write operations on connections"
   ]
 }

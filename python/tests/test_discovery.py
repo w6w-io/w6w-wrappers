@@ -159,18 +159,20 @@ class SurfaceTest(unittest.TestCase):
         self.assertTrue(callable(instance.connections.list))
         self.assertTrue(callable(instance.workflows.list))
 
-    def test_neither_namespace_exposes_a_write_operation(self) -> None:
-        # `endpoints.json` puts every connection write and every workflow write
-        # out of scope for this version: they are interactive studio flows, and
-        # half of one in an SDK is worse than none. `workflows.run` is not a
-        # write in that sense — it triggers a definition rather than editing one
-        # — so it is contracted, present, and covered by `test_workflows_run.py`.
+    def test_connections_exposes_no_write_operation(self) -> None:
+        # `endpoints.json` still puts every connection write out of scope: they
+        # are interactive studio flows (an OAuth round trip, a live credential
+        # test), and half of one in an SDK is worse than none.
+        #
+        # Workflows are no longer asserted here — their write half is contracted
+        # now (`workflows.create`/`update`/`archive`/`delete`) because it is a
+        # plain stateless POST/DELETE with no flow to conduct. Connections did
+        # not come with it.
         instance = Client(base_url="https://api.example.com", token="t")
 
         for name in ("create", "update", "delete", "test"):
             with self.subTest(operation=name):
                 self.assertFalse(hasattr(instance.connections, name))
-                self.assertFalse(hasattr(instance.workflows, name))
 
 
 class ConnectionsListTest(unittest.TestCase):
