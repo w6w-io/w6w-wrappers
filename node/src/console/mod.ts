@@ -23,6 +23,7 @@ import { AliasesApi } from "./aliases.ts";
 import { ApiCallsApi } from "./api-calls.ts";
 import { AppsApi } from "./apps.ts";
 import { AuthApi } from "./auth.ts";
+import { CommerceApi } from "./commerce.ts";
 import { ConnectionsApi } from "./connections.ts";
 import { DashboardApi } from "./dashboard.ts";
 import { EndpointsApi } from "./endpoints.ts";
@@ -72,6 +73,23 @@ export type {
 } from "./passkeys.ts";
 export { DashboardApi } from "./dashboard.ts";
 export type { DashboardHost, DashboardStats, DashboardStatsParams } from "./dashboard.ts";
+export { CommerceApi } from "./commerce.ts";
+export type {
+  CommerceHost,
+  CommerceSubscription,
+  MonitorLimit,
+  Plan,
+  PlanCapabilities,
+  PlanLimits,
+  BillingInterval,
+  PlanPrice,
+  PlanPricePoint,
+  PlanQuotas,
+  Quota,
+  RetentionLimit,
+  SelfHostLicence,
+  SupportLevel,
+} from "./commerce.ts";
 export { ReliabilityApi } from "./reliability.ts";
 export type {
   ReliabilityErrorMix,
@@ -206,6 +224,8 @@ export class ConsoleApi {
   readonly auth: AuthApi;
   /** `console.dashboard.*`. */
   readonly dashboard: DashboardApi;
+  /** `console.commerce.*`. */
+  readonly commerce: CommerceApi;
   /** `console.projects.*`. */
   readonly projects: ProjectsApi;
   /** `console.schedules.*`. */
@@ -246,6 +266,7 @@ export class ConsoleApi {
     this.reliability = new ReliabilityApi(host);
     this.auth = new AuthApi(host);
     this.dashboard = new DashboardApi(host);
+    this.commerce = new CommerceApi(host);
     this.projects = new ProjectsApi(host);
     this.schedules = new SchedulesApi(host);
     this.apps = new AppsApi(host);
