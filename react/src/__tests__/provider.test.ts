@@ -7,7 +7,10 @@
  * `useRunWorkflow` case (T1.1.2) pins its `wait: true` default — and that a
  * caller's explicit `wait: false` survives it — by reading the `?wait=`
  * query param on the wire, since that is the only externally observable
- * effect of what gets passed to `client.workflows.run`.
+ * effect of what gets passed to `client.workflows.run`. The
+ * `useUpdateWorkflow` case reads the precondition HEADER for the same reason:
+ * the hook's whole job is passing its third argument through to the SDK, and
+ * the wire is where that is observable.
  *
  * Real React reconciliation (jsdom + `react-dom/client` + `act`) is used
  * deliberately for the memoization test below: it asserts the SAME
@@ -22,7 +25,7 @@ import { JSDOM } from "jsdom";
 import { act, createElement } from "react";
 import { type Root, createRoot } from "react-dom/client";
 import { W6WProvider, useW6WClient } from "../W6WProvider.tsx";
-import { useCreateVar, useMe, useRunWorkflow } from "../hooks.ts";
+import { useCreateVar, useMe, useRunWorkflow, useUpdateWorkflow } from "../hooks.ts";
 
 // React 18.3+'s `act` warns ("not configured to support act(...)") unless this
 // flag is set — required once per process, not per test.
@@ -288,4 +291,45 @@ test("useRunWorkflow defaults to wait: true, but does not clobber an explicit wa
       /wait=true/,
       "an explicit wait: false must not be clobbered into ?wait=true",
     );
+  }));
+
+test("useUpdateWorkflow passes its options through — the precondition reaches the wire", () =>
+  withRoot(async (root) => {
+    // The definition lifecycle's one non-obvious hook. A pass-through that
+    // dropped `options` would look identical from the component's side — the
+    // save still succeeds — and would silently turn every optimistic-concurrency
+    // save into a last-write-wins one. The header is where that shows.
+    const fake = fakeFetch(() =>
+      json({ workflow: { id: "wf_1", name: "nightly" }, scheduled: false, updatedAt: "t2" }, 201),
+    );
+
+    let captured: ReturnType<typeof useUpdateWorkflow> | null = null;
+    function Probe() {
+      captured = useUpdateWorkflow();
+      return null;
+    }
+
+    act(() => {
+      root.render(
+        createElement(
+          W6WProvider,
+          { baseUrl: "https://api.example.com", token: "tok_1", fetch: fake.fetch },
+          createElement(Probe),
+        ),
+      );
+    });
+    assert.ok(captured);
+
+    let saved: { updatedAt: string } | undefined;
+    await act(async () => {
+      saved = await (captured as ReturnType<typeof useUpdateWorkflow>).call(
+        "wf_1",
+        { manifestVersion: "2", name: "nightly", steps: [] },
+        { ifUnmodifiedSince: "t1" },
+      );
+    });
+
+    assert.equal(saved?.updatedAt, "t2");
+    assert.equal(fake.calls.length, 1);
+    assert.equal(fake.calls[0]?.headers.get("x-w6w-if-unmodified-since"), "t1");
   }));
