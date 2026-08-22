@@ -5,8 +5,11 @@
  * anywhere (`package.json` carries none — see README).
  *
  * Built only over the PUBLIC, non-`console` surface (`me`, `documents`,
- * `vars`, `connections`, `workflows`, `run`) — `console.*` is studio-internal
- * and unstable (see README), so no hook here reaches for it.
+ * `vars`, `connections`, `workflows`, `functions`, `run`) — `console.*` is
+ * studio-internal and unstable (see README), so no hook here reaches for it.
+ * The workflow and Function definition lifecycles moved onto that public
+ * surface at contract `0.5.0`, which is why hooks for them live here now
+ * rather than being unreachable without `console.*`.
  *
  * Cancellation: `@w6w/sdk`'s transport has no `AbortSignal` to hook into
  * (`node/src/http.ts`), so a read hook can only IGNORE a result that resolves
@@ -21,16 +24,23 @@ import type {
   DocumentCreateInput,
   DocumentOptions,
   DocumentPatch,
+  FunctionDefinition,
+  FunctionDetail,
+  FunctionSummary,
   Me,
   RunEnvelope,
   RunInput,
   Var,
   VarCreateInput,
   VarPatch,
+  WorkflowDefinition,
+  WorkflowDetail,
   WorkflowListOptions,
   WorkflowRunOptions,
   WorkflowRunResult,
+  WorkflowSaveResult,
   WorkflowSummary,
+  WorkflowWriteOptions,
 } from "@w6w/sdk";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useW6WClient } from "./W6WProvider.tsx";
@@ -204,6 +214,34 @@ export function useWorkflows(options?: WorkflowListOptions): ReadResult<Workflow
   return useAsync(fetcher);
 }
 
+/**
+ * One workflow's stored definition, plus the two things that are not in it.
+ *
+ * `data.updatedAt` is the optimistic-concurrency token: hand it to
+ * {@linkcode useUpdateWorkflow}'s `ifUnmodifiedSince` and a save that would
+ * clobber someone else's edit is refused instead of winning silently. That is
+ * the whole reason this is a read hook and not just a fetch — the token has to
+ * survive from the read to the write, and a component that re-reads on every
+ * render would keep handing itself a fresh one.
+ */
+export function useWorkflow(id: string): ReadResult<WorkflowDetail> {
+  const client = useW6WClient();
+  const fetcher = useCallback(() => client.workflows.get(id), [client, id]);
+  return useAsync(fetcher);
+}
+
+export function useFunctions(): ReadResult<FunctionSummary[]> {
+  const client = useW6WClient();
+  const fetcher = useCallback(() => client.functions.list(), [client]);
+  return useAsync(fetcher);
+}
+
+export function useFunction(id: string): ReadResult<FunctionDetail> {
+  const client = useW6WClient();
+  const fetcher = useCallback(() => client.functions.get(id), [client, id]);
+  return useAsync(fetcher);
+}
+
 // ── mutations ────────────────────────────────────────────────────────────
 
 export function useCreateDocument(): MutationResult<[DocumentCreateInput, DocumentOptions?], Doc> {
@@ -264,4 +302,85 @@ export function useRunWorkflow(): MutationResult<[string, WorkflowRunOptions?], 
 export function useRun(): MutationResult<[RunInput], RunEnvelope> {
   const client = useW6WClient();
   return useMutationResource((input: RunInput) => client.run(input));
+}
+
+/**
+ * ── The definition lifecycle ──
+ *
+ * Ten hooks over the same ten SDK methods, and three properties they inherit
+ * from it rather than invent:
+ *
+ * 1. **`create` mints the id.** The server requires one in the body and never
+ *    generates it, so `create({name, steps})` works and the `wf_…`/`fn_…` id
+ *    comes back in the result.
+ * 2. **`update` is a full replacement, not a patch.** This is the one place
+ *    these differ from `useUpdateDocument`/`useUpdateVar`, whose second
+ *    argument is a `Patch` of the fields to change. Here it is the whole
+ *    definition: read with {@linkcode useWorkflow} / {@linkcode useFunction},
+ *    spread, change, send. A component that passed only the changed fields
+ *    would delete the rest.
+ * 3. **Deleting a workflow is two calls**, `archive` then `delete`. No hook
+ *    here chains them — a UI that offers "delete" should offer the archive
+ *    step too, because that is the step a user can still change their mind
+ *    after.
+ *
+ * None of them refetch a list on success, matching every other mutation hook
+ * in this file: this lane carries no cache to invalidate (no react-query, by
+ * design — see README), so a component pairs the mutation with the read hook's
+ * own `refetch`.
+ */
+export function useCreateWorkflow(): MutationResult<
+  [WorkflowDefinition, WorkflowWriteOptions?],
+  WorkflowSaveResult
+> {
+  const client = useW6WClient();
+  return useMutationResource((definition: WorkflowDefinition, options?: WorkflowWriteOptions) =>
+    client.workflows.create(definition, options),
+  );
+}
+
+export function useUpdateWorkflow(): MutationResult<
+  [string, WorkflowDefinition, WorkflowWriteOptions?],
+  WorkflowSaveResult
+> {
+  const client = useW6WClient();
+  return useMutationResource(
+    (id: string, definition: WorkflowDefinition, options?: WorkflowWriteOptions) =>
+      client.workflows.update(id, definition, options),
+  );
+}
+
+export function useArchiveWorkflow(): MutationResult<[string], WorkflowDefinition> {
+  const client = useW6WClient();
+  return useMutationResource((id: string) => client.workflows.archive(id));
+}
+
+export function useDeleteWorkflow(): MutationResult<[string], void> {
+  const client = useW6WClient();
+  return useMutationResource((id: string) => client.workflows.delete(id));
+}
+
+export function useCreateFunction(): MutationResult<
+  [FunctionDefinition],
+  { id: string; key: string }
+> {
+  const client = useW6WClient();
+  return useMutationResource((definition: FunctionDefinition) =>
+    client.functions.create(definition),
+  );
+}
+
+export function useUpdateFunction(): MutationResult<
+  [string, FunctionDefinition],
+  { id: string; key: string }
+> {
+  const client = useW6WClient();
+  return useMutationResource((id: string, definition: FunctionDefinition) =>
+    client.functions.update(id, definition),
+  );
+}
+
+export function useDeleteFunction(): MutationResult<[string], void> {
+  const client = useW6WClient();
+  return useMutationResource((id: string) => client.functions.delete(id));
 }

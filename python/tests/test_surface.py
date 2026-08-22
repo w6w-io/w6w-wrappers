@@ -52,6 +52,13 @@ _CONTRACT = _REPO_ROOT.parent / "endpoints.json"
 #: export to `__init__.py` **and** its name here, in the same change — that is
 #: the point, not friction.
 PUBLIC_SURFACE = {
+    # The Function and Workflow definition lifecycle: the list/get projections,
+    # and what the two upsert routes answer with.
+    "FunctionDetail",
+    "FunctionSummary",
+    "SaveResult",
+    "WorkflowDetail",
+    "WorkflowSaveResult",
     # The version, in lockstep across all three wrappers.
     "__version__",
     # Transport core: the client, its configuration, its seams, the errors.
@@ -273,16 +280,22 @@ class NoExtraOperationsTest(unittest.TestCase):
         self.assertEqual(root, {"me", "run"})
         self.assertEqual(_public_callables(_client()) - root, {"request", "transport"})
 
-    def test_no_write_operation_exists_on_connections_or_workflows(self) -> None:
-        # `endpoints.json` puts every connection write and every workflow write
-        # out of scope for this version: they are interactive studio flows, and
-        # half of one in an SDK is worse than none.
+    def test_no_write_operation_exists_on_connections(self) -> None:
+        # `endpoints.json` still puts every connection write out of scope: they
+        # are interactive studio flows (an OAuth round trip, a live credential
+        # test), and half of one in an SDK is worse than none.
+        #
+        # Workflows used to be named here too. They are not any more: the write
+        # half of that domain is a plain stateless POST/DELETE over an
+        # already-resolved body — nothing interactive to conduct — so it left
+        # `outOfScope` and became `workflows.create`/`update`/`archive`/`delete`
+        # in the contract. Connections did NOT come with it, and this test is
+        # what keeps that distinction from eroding by association.
         client = _client()
 
         for name in ("create", "update", "delete", "test"):
             with self.subTest(operation=name):
                 self.assertFalse(hasattr(client.connections, name))
-                self.assertFalse(hasattr(client.workflows, name))
 
 
 class BarrelTest(unittest.TestCase):

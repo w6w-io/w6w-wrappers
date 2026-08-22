@@ -128,8 +128,44 @@ data-fetching library.
 | `useDeleteVar()` | `client.vars.delete()` |
 | `useConnections()` | `client.connections.list()` |
 | `useWorkflows(options?)` | `client.workflows.list()` |
+| `useWorkflow(id)` | `client.workflows.get()` |
+| `useCreateWorkflow()` | `client.workflows.create()` |
+| `useUpdateWorkflow()` | `client.workflows.update()` |
+| `useArchiveWorkflow()` | `client.workflows.archive()` |
+| `useDeleteWorkflow()` | `client.workflows.delete()` |
 | `useRunWorkflow()` | `client.workflows.run()`, defaults `wait: true` |
+| `useFunctions()` | `client.functions.list()` |
+| `useFunction(id)` | `client.functions.get()` |
+| `useCreateFunction()` | `client.functions.create()` |
+| `useUpdateFunction()` | `client.functions.update()` |
+| `useDeleteFunction()` | `client.functions.delete()` |
 | `useRun()` | `client.run()` (the generic URN dispatch) |
+
+Three things the definition hooks inherit from the SDK rather than invent:
+
+- **`create` mints the id.** The server requires one in the body and never
+  generates it, so `useCreateWorkflow().call({name, steps})` works and the
+  `wf_…` / `fn_…` id comes back in the result.
+- **`update` is a full replacement, not a patch.** This is the one place they
+  differ from `useUpdateDocument`/`useUpdateVar`, whose second argument is a
+  patch of just the fields to change. Read with `useWorkflow`/`useFunction`,
+  spread, change, send the whole thing back — passing only the changed fields
+  deletes the rest. `useUpdateWorkflow()`'s third argument carries
+  `ifUnmodifiedSince`: hand it the `updatedAt` from `useWorkflow` and a save
+  that would clobber someone else's edit is refused with `409 workflow_stale`
+  rather than winning silently.
+- **Deleting a workflow is two calls**, `useArchiveWorkflow` then
+  `useDeleteWorkflow`. Nothing chains them for you: the archive step is the one
+  a user can still change their mind after.
+
+No mutation hook refetches a list on success — this package carries no cache to
+invalidate, so pair one with the matching read hook's own `refetch`.
+
+`client.functions.run()` has **no** hook, and neither does `endpoints.run()` —
+that predates the definition hooks and is unchanged by them. `useRun()` reaches
+a Function by its `fn_…` id today (the server dispatches it through the same
+service the dedicated invoke route uses); calling one by the `key` a user gave
+it still means `useW6WClient().functions.run("send-email", …)`.
 
 `useRunWorkflow()`'s `call` defaults `wait: true` when the caller's options omit
 `wait`: `workflows.run` without `wait` (`node/src/workflows.ts`) leaves the caller

@@ -188,6 +188,7 @@ class Client:
         path: str,
         query: Optional[Mapping[str, Any]] = None,
         body: Optional[Any] = None,
+        headers: Optional[Mapping[str, str]] = None,
     ) -> HttpResponse:
         """Perform one request against this client's server, with its credential.
 
@@ -204,6 +205,9 @@ class Client:
         :param path: Base-relative path with a leading slash.
         :param query: Query parameters; `None` values are dropped.
         :param body: Request body, serialised as JSON when not `None`.
+        :param headers: Extra request headers, for the routes that take a
+            precondition. `Authorization` cannot be overridden through this
+            argument — the client's own credential is always the one sent.
         :returns: The status and parsed body.
         :raises ConfigError: When no token is configured, naming `W6W_TOKEN`.
         :raises ApiError: On a transport failure, a non-JSON error body, or an
@@ -216,4 +220,5 @@ class Client:
             path,
             query=query,
             body=body,
+            headers=headers,
         )

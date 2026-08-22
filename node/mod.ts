@@ -59,14 +59,23 @@ export { ConnectionsApi } from "./src/connections.ts";
 export type { ConnectionsHost } from "./src/connections.ts";
 export { WorkflowsApi } from "./src/workflows.ts";
 export { FunctionsApi } from "./src/functions.ts";
-export type { FunctionRunOptions, FunctionsHost } from "./src/functions.ts";
+export type {
+  FunctionDefinition,
+  FunctionDetail,
+  FunctionRunOptions,
+  FunctionsHost,
+} from "./src/functions.ts";
 export { EndpointsApi } from "./src/endpoints.ts";
 export type { EndpointRunOptions, EndpointsHost } from "./src/endpoints.ts";
 export type {
+  WorkflowDefinition,
+  WorkflowDetail,
   WorkflowListOptions,
   WorkflowRunOptions,
   WorkflowRunResult,
+  WorkflowSaveResult,
   WorkflowsHost,
+  WorkflowWriteOptions,
 } from "./src/workflows.ts";
 
 // Execution (T2.1.5): the URN-addressed `run`. `client.run(input)` is a method
@@ -89,6 +98,7 @@ export type {
   Doc,
   DocFormat,
   FunctionRunEnvelope,
+  FunctionSummary,
   InvocationFrame,
   Me,
   RunEnvelope,

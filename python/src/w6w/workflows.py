@@ -1,8 +1,21 @@
-"""`client.workflows.*` — discovery and the typed run.
+"""`client.workflows.*` — discovery, the typed run, and the definition lifecycle.
 
-Two operations: `list` and `run`. `list` earns its place in a minimal surface for
-the same reason `connections.list` does (D4): it is how a caller discovers a
-`wf_…` id to pass to `run`.
+Seven operations: `list` and `run`, plus `get`, `create`, `update`, `archive` and
+`delete`. `list` earns its place in a minimal surface for the same reason
+`connections.list` does (D4): it is how a caller discovers a `wf_…` id to pass to
+`run`.
+
+── The write path, and the two things the server does NOT do ──
+1. **It does not mint ids.** `POST /workflows` requires `id` in the body, so
+   `create` mints one (:func:`w6w.types.mint_id`) when the definition has none.
+   Every consumer that talked to this route directly had already written that
+   itself — studio's `newWorkflowId` is the same four lines.
+2. **It does not patch.** There is ONE write route and it stores what it is
+   given, so `update` is a full replacement. `create` and `update` are the same
+   POST; what differs is that one mints the id and the other pins it.
+
+Deleting is two calls, `archive` then `delete`, and this module keeps it that way
+— see :meth:`WorkflowsApi.delete`.
 
 ── `run`, and the three things this API gets called wrong ──
 1. **`202` is success.** No `wait` → the run is queued and the server answers
@@ -47,7 +60,22 @@ from typing import Any, Dict, List, Mapping, Optional, Protocol
 from ._config import ResolvedConfig
 from ._http import HttpResponse, path
 from .errors import ApiError
-from .types import WorkflowRunResult, WorkflowSummary, require_object, unwrap_list
+from .types import (
+    WorkflowDetail,
+    WorkflowRunResult,
+    WorkflowSaveResult,
+    WorkflowSummary,
+    mint_id,
+    require_object,
+    unwrap_list,
+    unwrap_object,
+)
+
+#: The precondition header the write path sends when `if_unmodified_since` is
+#: given. Deliberately not the standard `If-Unmodified-Since`: that header's
+#: HTTP-date format has one-second granularity, and two saves inside one second
+#: is the exact case this guards (`admin/workflows.ts`).
+PRECONDITION_HEADER = "x-w6w-if-unmodified-since"
 
 
 class WorkflowsHost(Protocol):
@@ -72,6 +100,7 @@ class WorkflowsHost(Protocol):
         path: str,
         query: Optional[Mapping[str, Any]] = None,
         body: Optional[Any] = None,
+        headers: Optional[Mapping[str, str]] = None,
     ) -> HttpResponse:
         """Perform one request.
 
@@ -79,6 +108,7 @@ class WorkflowsHost(Protocol):
         :param path: Base-relative path.
         :param query: Query parameters; `None` values are dropped.
         :param body: Request body, serialised as JSON.
+        :param headers: Extra request headers — the write path's precondition.
         :returns: The status and parsed body.
         """
         ...  # pragma: no cover - a protocol body is never executed.
@@ -96,6 +126,19 @@ class WorkflowsApi:
         run = client.workflows.run(active[0].id, wait=True)
         if run.status == "failed":
             print(run.error)  # data, not an exception
+
+        # The definition lifecycle: create, read-modify-write, then retire.
+        saved = client.workflows.create(
+            {"manifestVersion": "2", "name": "Nightly sync", "steps": []}
+        )
+        current = client.workflows.get(saved.id)
+        client.workflows.update(
+            saved.id,
+            {**current.workflow, "name": "Nightly sync (EU)"},
+            if_unmodified_since=current.updatedAt,
+        )
+        client.workflows.archive(saved.id)
+        client.workflows.delete(saved.id)
     """
 
     def __init__(self, host: WorkflowsHost) -> None:
@@ -240,6 +283,196 @@ class WorkflowsApi:
                 body,
             )
         return WorkflowRunResult.from_wire(body, response.status)
+
+    def get(self, id: str) -> WorkflowDetail:
+        """Fetch one workflow's stored definition.
+
+        `workflow` is the definition the server has, overlaid with the
+        authoritative `status` and `tags` columns — so a freshly created
+        workflow that carries neither inline still reports its real lifecycle
+        state.
+
+        **`updatedAt` is a top-level sibling of `workflow`, never a field inside
+        it.** It is also the optimistic-concurrency token: hand it straight back
+        to :meth:`update` as `if_unmodified_since` and a save that would clobber
+        someone else's is refused instead.
+
+        The definition itself stays a plain `dict`. A workflow's body is
+        `steps[]` of node types the engine owns and extends
+        (`rfcs/node-types.md`); a dataclass over that would reject a workflow a
+        newer server accepts, and would need a release every time a node type
+        gained a field. What this lane *does* model is the envelope around it.
+
+        :param id: The `wf_…` id, percent-encoded into the path by
+            :func:`w6w.path`.
+        :returns: The definition, its source ref, and the concurrency token.
+        :raises ConfigError: When no token is configured.
+        :raises ApiError: `404 unknown_workflow` when there is no such id.
+        """
+        response = self._host.request("GET", path("/workflows/{id}", id=id))
+        # No envelope key to peel — this route's body IS the payload, all three
+        # fields of it. `require_object` still guards the shape, so a body that
+        # is not an object raises here rather than yielding a detail whose
+        # fields are all empty strings.
+        return WorkflowDetail.from_wire(require_object(response, "a workflow"))
+
+    def create(
+        self,
+        definition: Mapping[str, Any],
+        project: Optional[str] = None,
+    ) -> WorkflowSaveResult:
+        """Create a workflow.
+
+        **The id is minted client-side when the definition does not carry one.**
+        The server requires an `id` in the body and never generates one
+        (`admin/workflows.ts`'s `validateDefinition`), so a `create` that simply
+        forwarded the caller's mapping would answer `400 invalid_workflow` for
+        the most natural call there is. A caller that wants to choose its own id
+        still can: an `id` already present is forwarded untouched, which is what
+        makes this usable for a seeded or imported definition.
+
+        `create` and :meth:`update` reach the SAME upsert route, and the server
+        does not distinguish them — the distinction is in what each does to the
+        body, and it is a real one: `create` mints an id, `update` pins the one
+        you addressed. Posting a definition whose id already exists therefore
+        OVERWRITES it; this method does not pre-check, because a
+        check-then-write is two round trips that still race.
+
+        :param definition: The whole workflow definition, forwarded verbatim
+            apart from a minted `id`.
+        :param project: Project to scope this write to; defaults to the
+            client's.
+        :returns: The new workflow's id and name, whether a schedule was
+            applied, and the first `updatedAt`.
+        :raises ConfigError: When no token is configured.
+        :raises ApiError: `400 invalid_workflow` — missing `name`/`steps`, or a
+            wrong `manifestVersion`.
+        :raises ApiError: `400 unknown_project` — `project` names a project this
+            account does not own.
+        :raises ApiError: `409 workflow_conflict` — another `(tenant, subject)`
+            already owns that id.
+        """
+        body = dict(definition)
+        if not isinstance(body.get("id"), str) or not body["id"]:
+            body["id"] = mint_id("wf")
+        return self._save(body, project, None)
+
+    def update(
+        self,
+        id: str,
+        definition: Mapping[str, Any],
+        project: Optional[str] = None,
+        if_unmodified_since: Optional[str] = None,
+    ) -> WorkflowSaveResult:
+        """Overwrite a workflow's stored definition.
+
+        **This is a full replacement, not a patch.** The server has one write
+        route for workflows and it stores what it is given, so a field left out
+        of `definition` is a field removed from the workflow — the same
+        semantics as the studio's own save. Read with :meth:`get`, change what
+        you mean to change, and send the whole thing back.
+
+        `id` is taken from the FIRST ARGUMENT and pinned into the body,
+        overriding any `id` the definition carries. The alternative — trusting
+        the body — makes ``update("wf_a", def_of_b)`` silently write to B while
+        reading as a write to A.
+
+        :param id: The `wf_…` id to write to.
+        :param definition: The whole replacement definition.
+        :param project: Project to scope this write to; defaults to the
+            client's.
+        :param if_unmodified_since: The exact `updatedAt` this client last saw
+            (from :meth:`get`, or a previous save). When given, the server
+            refuses the write with `409 workflow_stale` if the stored row has
+            moved on since. Omitted, the save is last-write-wins and the header
+            is never sent at all — never as an empty string, which the server
+            would reject as `400 invalid_precondition`.
+        :returns: The workflow's id and name, whether a schedule was
+            (re)applied, and the new `updatedAt`.
+        :raises ConfigError: When no token is configured.
+        :raises ApiError: `400 invalid_workflow` / `400 invalid_precondition`.
+        :raises ApiError: `409 workflow_conflict` — another `(tenant, subject)`
+            owns this id. NOT recoverable by reloading.
+        :raises ApiError: `409 workflow_stale` — the precondition did not match
+            the stored `updatedAt`. IS recoverable by reloading and re-saving.
+        """
+        body = dict(definition)
+        body["id"] = id
+        return self._save(body, project, if_unmodified_since)
+
+    def archive(self, id: str) -> Dict[str, Any]:
+        """Archive a workflow.
+
+        One-way: there is no unarchive route on this domain. Idempotent —
+        archiving an already-archived workflow re-returns it unchanged rather
+        than erroring.
+
+        This is a required step, not a convenience: :meth:`delete` refuses a
+        workflow that is still `draft` or `active`.
+
+        :param id: The `wf_…` id.
+        :returns: The archived definition, with `status` and `tags` merged in as
+            :meth:`get` returns them.
+        :raises ConfigError: When no token is configured.
+        :raises ApiError: `404 unknown_workflow` when there is no such id.
+        """
+        response = self._host.request("POST", path("/workflows/{id}/archive", id=id))
+        return unwrap_object(response, "workflow")
+
+    def delete(self, id: str) -> None:
+        """Delete an archived workflow, and everything that hangs off it.
+
+        The workflow's runs, schedules and subscriptions cascade-delete
+        server-side — there is nothing for the caller to clean up, and nothing
+        to undo.
+
+        **Archive first.** Deleting a workflow whose status is not `archived` is
+        `409 workflow_not_archived`, which this method deliberately does NOT
+        catch and retry through :meth:`archive`: a two-step destructive path
+        that a wrapper silently completes for you is how a caller deletes
+        something they only meant to look at.
+
+        Returns nothing. The server's `{"ok": true}` carries no information a
+        caller can use, and `Ok` is not a public type of this package
+        (`docs/implementation.md` §5).
+
+        :param id: The `wf_…` id.
+        :raises ConfigError: When no token is configured.
+        :raises ApiError: `404 unknown_workflow` when there is no such id.
+        :raises ApiError: `409 workflow_not_archived` when it exists but has not
+            been archived yet.
+        """
+        self._host.request("DELETE", path("/workflows/{id}", id=id))
+
+    def _save(
+        self,
+        body: Dict[str, Any],
+        project: Optional[str],
+        if_unmodified_since: Optional[str],
+    ) -> WorkflowSaveResult:
+        """The one POST both :meth:`create` and :meth:`update` go through.
+
+        Private, and shared rather than duplicated, because the precondition
+        header has a rule that is easy to get subtly wrong twice: it is sent
+        only when a value was actually given, NEVER as an empty or `"None"`
+        string. The server parses whatever arrives and answers
+        `400 invalid_precondition` for a value it cannot read, so a stray header
+        turns a fine save into an error naming something the caller never asked
+        for.
+
+        :param body: The complete definition, id already resolved.
+        :param project: The per-call project, if any.
+        :param if_unmodified_since: The precondition token, if any.
+        :returns: The server's save result.
+        """
+        response = self._host.request(
+            "POST",
+            "/workflows",
+            query={"project": self._project(project)},
+            body=body,
+            headers={PRECONDITION_HEADER: if_unmodified_since} if if_unmodified_since else None,
+        )
+        return WorkflowSaveResult.from_wire(require_object(response, "a save result"))
 
 
 def _run_body(

@@ -39,6 +39,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Mapping, Optional, Union
+from uuid import uuid4
 
 from ._http import HttpResponse
 from .errors import ApiError
@@ -934,3 +935,199 @@ def is_terminal_run_status(status: str) -> bool:
     :returns: `True` for `succeeded`, `failed` and `canceled`.
     """
     return status in _TERMINAL_RUN_STATUSES
+
+
+@dataclass(frozen=True)
+class FunctionSummary:
+    """One Function definition, as the list route projects it.
+
+    `key` is the name the Function is **called** by —
+    `client.functions.run(key)` — and `displayName` is the label a human reads;
+    the server falls back to the key when no display name was set, so
+    `displayName` is never empty and never a substitute for `key`.
+
+    There is no `status` here, and no lifecycle to have one: a Function is
+    either runnable or it is not, which is what :attr:`valid` answers.
+    """
+
+    #: Server-issued id, `fn_…`.
+    id: str
+    #: The callable name, e.g. `"send-email"`. Kebab-case, never contains `_`.
+    key: str
+    #: Human-facing label; falls back to `key` server-side.
+    displayName: str
+    #: Free-text description; `""` when unset.
+    description: str
+    #: ISO-8601 timestamp. A string, deliberately.
+    updatedAt: str
+    #: Whether this Function can actually be run — server-computed, from the
+    #: same single predicate the invoke path guards with
+    #: (`db/repos/functions.ts`'s `is_function_valid`). A draft with no `impl`
+    #: is `False`, and running it is `422 function_incomplete`.
+    valid: bool
+
+    @classmethod
+    def from_wire(cls, body: Any) -> "FunctionSummary":
+        """Build a :class:`FunctionSummary`, ignoring unknown keys.
+
+        :param body: One parsed item of the `functions` array.
+        :returns: The Function summary.
+        """
+        raw_valid = body.get("valid") if isinstance(body, dict) else None
+        return cls(
+            id=_text(body, "id"),
+            key=_text(body, "key"),
+            displayName=_text(body, "displayName"),
+            description=_text(body, "description"),
+            updatedAt=_text(body, "updatedAt"),
+            # A missing `valid` reads as `False`, never `True`: the field gates
+            # whether a caller offers this Function as runnable, and the safe
+            # default for an answer the server did not give is "no".
+            valid=raw_valid if isinstance(raw_valid, bool) else False,
+        )
+
+
+@dataclass(frozen=True)
+class WorkflowDetail:
+    """What `workflows.get` returns: the definition, plus what is not in it.
+
+    **`updatedAt` is a top-level sibling of `workflow`, never a field inside
+    it**, and that placement is load-bearing rather than incidental: the
+    definition is the portable document (it can be exported, re-imported, or
+    committed to a repo) and a server timestamp must not enter it.
+    """
+
+    #: The stored definition, overlaid with the authoritative `status` and
+    #: `tags`. A plain dict: see :meth:`w6w.WorkflowsApi.get`.
+    workflow: Dict[str, Any]
+    #: Where this workflow was imported from, when it was imported at all.
+    sourceRef: Optional[str]
+    #: ISO-8601. The optimistic-concurrency token — hand it back to
+    #: :meth:`w6w.WorkflowsApi.update` as `if_unmodified_since`.
+    updatedAt: str
+
+    @classmethod
+    def from_wire(cls, body: Any) -> "WorkflowDetail":
+        """Build a :class:`WorkflowDetail`, ignoring unknown keys.
+
+        :param body: The parsed response body.
+        :returns: The workflow detail.
+        """
+        return cls(
+            workflow=_mapping(body, "workflow"),
+            sourceRef=_nullable_text(body, "sourceRef"),
+            updatedAt=_text(body, "updatedAt"),
+        )
+
+
+@dataclass(frozen=True)
+class WorkflowSaveResult:
+    """What both `workflows.create` and `workflows.update` return.
+
+    `id` and `name` are lifted out of the wire's nested `{"workflow": {...}}`
+    and onto this class: every caller wants the id, and a one-key wrapper class
+    whose only job is to hold two strings is a level of indirection with nothing
+    in it.
+    """
+
+    #: The saved workflow's `wf_…` id — the one to pass to `run`.
+    id: str
+    #: The saved workflow's machine name.
+    name: str
+    #: `True` when this save also (re)applied a schedule from the definition's
+    #: `trigger.cron`. A workflow that already had one is not re-scheduled, so
+    #: `False` does not mean "not scheduled" — it means "not scheduled by THIS
+    #: call".
+    scheduled: bool
+    #: The new concurrency token, so a caller can chain saves without re-reading.
+    updatedAt: str
+
+    @classmethod
+    def from_wire(cls, body: Any) -> "WorkflowSaveResult":
+        """Build a :class:`WorkflowSaveResult`, ignoring unknown keys.
+
+        :param body: The parsed response body.
+        :returns: The save result.
+        """
+        workflow = _mapping(body, "workflow")
+        raw_scheduled = body.get("scheduled") if isinstance(body, dict) else None
+        return cls(
+            id=_text(workflow, "id"),
+            name=_text(workflow, "name"),
+            scheduled=raw_scheduled if isinstance(raw_scheduled, bool) else False,
+            updatedAt=_text(body, "updatedAt"),
+        )
+
+
+@dataclass(frozen=True)
+class FunctionDetail:
+    """What `functions.get` returns: the definition, plus the server's verdict.
+
+    :attr:`valid` stays a **sibling** of :attr:`function` rather than being
+    spliced into it. It is computed per request, it is not part of the stored
+    document (`rfcs/function.md`), and folding it in would put it inside the
+    object a caller sends straight back to :meth:`w6w.FunctionsApi.update`.
+    """
+
+    #: The stored definition, verbatim. A plain dict: see
+    #: :meth:`w6w.FunctionsApi.get`.
+    function: Dict[str, Any]
+    #: Whether the Function can be run.
+    valid: bool
+
+    @classmethod
+    def from_wire(cls, body: Any) -> "FunctionDetail":
+        """Build a :class:`FunctionDetail`, ignoring unknown keys.
+
+        :param body: The parsed response body.
+        :returns: The Function detail.
+        """
+        raw_valid = body.get("valid") if isinstance(body, dict) else None
+        return cls(
+            function=_mapping(body, "function"),
+            valid=raw_valid if isinstance(raw_valid, bool) else False,
+        )
+
+
+@dataclass(frozen=True)
+class SaveResult:
+    """What `functions.create` and `functions.update` return: the two ids.
+
+    Deliberately NOT reused for workflows, whose save answers three more fields
+    (:class:`WorkflowSaveResult`). One class covering both would have to make
+    `scheduled` and `updatedAt` optional, and a field that is absent for half
+    the callers is a field nobody can rely on.
+    """
+
+    #: The saved Function's `fn_…` id.
+    id: str
+    #: The saved Function's `key` — the name `functions.run` takes.
+    key: str
+
+    @classmethod
+    def from_wire(cls, body: Any) -> "SaveResult":
+        """Build a :class:`SaveResult`, ignoring unknown keys.
+
+        :param body: The parsed `function` envelope payload.
+        :returns: The save result.
+        """
+        return cls(id=_text(body, "id"), key=_text(body, "key"))
+
+
+def mint_id(prefix: str) -> str:
+    """Mint a client-side id for a definition the caller is creating.
+
+    **Both `POST /workflows` and `POST /functions` REQUIRE an `id` in the body
+    and never generate one** (`admin/workflows.ts`'s and `admin/functions.ts`'s
+    `validateDefinition`: "`id` is required."). The id is synthetic and never
+    user-facing — the display name is what a user sees and edits — so a caller
+    writing ``create({"name": ..., "steps": [...]})`` should not have to know
+    that, and every consumer that did know it ended up writing the same helper
+    (studio's `newWorkflowId`/`newFunctionId`). This is that helper, once, and
+    it is the same shape the `node` lane mints so the two lanes produce
+    interchangeable ids.
+
+    :param prefix: The kind prefix, without its underscore: `"wf"` or `"fn"`.
+    :returns: A new id of the form `wf_…` / `fn_…`.
+    """
+    return "{prefix}_{uuid}".format(prefix=prefix, uuid=uuid4())

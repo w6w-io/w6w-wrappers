@@ -106,8 +106,8 @@ const ROOT_EXAMPLES = [
 /** Summary shown for each group, in root help and in that group's own headline. */
 const GROUP_SUMMARIES: Record<string, string> = {
   connections: "Inspect connections",
-  workflows: "List and run workflows",
-  functions: "Run functions by key or id",
+  workflows: "List, run and edit workflows",
+  functions: "Run and edit functions",
   endpoints: "Run endpoints by key or id",
   documents: "Create, read, update and delete documents",
   vars: "Create, read, update and delete variables",
@@ -144,6 +144,28 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
     "w6w workflows run wf_01HQ8N --wait --json",
     `w6w workflows run wf_01HQ8N --input '{"email":"a@b.com"}'`,
   ],
+  // The definition lifecycle. `--definition` takes a JSON object as a string;
+  // the examples show the shell idiom that makes that bearable for a real
+  // definition, since this lane reads no files.
+  "workflows.get": ["w6w workflows get wf_01HQ8N", "w6w workflows get wf_01HQ8N --json"],
+  "workflows.create": [
+    `w6w workflows create --definition '{"manifestVersion":"2","name":"nightly","steps":[]}'`,
+    `w6w workflows create --definition "$(cat workflow.json)" --project prj_01HQ8N`,
+  ],
+  "workflows.update": [
+    `w6w workflows update wf_01HQ8N --definition "$(cat workflow.json)"`,
+    `w6w workflows update wf_01HQ8N --definition "$(cat workflow.json)" --if-unmodified-since 2026-08-22T09:00:00.000Z`,
+  ],
+  "workflows.archive": ["w6w workflows archive wf_01HQ8N"],
+  "workflows.delete": ["w6w workflows archive wf_01HQ8N", "w6w workflows delete wf_01HQ8N"],
+  "functions.list": ["w6w functions list", "w6w functions list --json"],
+  "functions.get": ["w6w functions get send-email", "w6w functions get fn_01HQ8N --json"],
+  "functions.create": [
+    `w6w functions create --definition '{"manifestVersion":"1","key":"send-email","inputs":[]}'`,
+    `w6w functions create --definition "$(cat function.json)"`,
+  ],
+  "functions.update": [`w6w functions update fn_01HQ8N --definition "$(cat function.json)"`],
+  "functions.delete": ["w6w functions delete fn_01HQ8N"],
   "documents.list": ["w6w documents list", "w6w documents list --project prj_01HQ8N"],
   "documents.get": ["w6w documents get doc_01HQ8N"],
   "documents.getByKey": ["w6w documents get-by-key onboarding-email"],
@@ -229,6 +251,19 @@ const PARAM_HELP: Record<string, string> = {
   "vars.delete.id": "Variable id (see: w6w vars list)",
   "vars.getByName.name": "Variable name, as chosen at creation",
   "vars.create.name": "Variable name to create (must match ^[a-z_][a-z0-9_]*$)",
+  // The definition lifecycle. `definition` is the same word in both domains and
+  // means the same thing, so it is a bare fallback; the id help differs per
+  // domain because the two point a caller at different list commands.
+  "definition": "The whole definition, as a JSON object",
+  "ifUnmodifiedSince":
+    "Refuse the write if the workflow changed since this updatedAt (see: w6w workflows get)",
+  "workflows.get.id": "Workflow id (see: w6w workflows list)",
+  "workflows.update.id": "Workflow id (see: w6w workflows list)",
+  "workflows.archive.id": "Workflow id (see: w6w workflows list)",
+  "workflows.delete.id": "Workflow id (see: w6w workflows list)",
+  "functions.get.id": "Function id or key (see: w6w functions list)",
+  "functions.update.id": "Function id or key (see: w6w functions list)",
+  "functions.delete.id": "Function id or key (see: w6w functions list)",
   "run.urn":
     "conn_… | wf_… | fn_… | ep_… | an alias name (see: w6w connections list, w6w workflows list)",
   "run.action": "Action to invoke (connection URNs only)",
@@ -243,6 +278,14 @@ const PARAM_HELP: Record<string, string> = {
 const FLAG_OVERRIDES: Record<string, { flag: string; placeholder: string | null }> = {
   "workflows.run.variables": { flag: "--var", placeholder: "<key=value>" },
   "workflows.run.trigger": { flag: "--trigger", placeholder: "<json>" },
+  // Kebab-case, so the flag reads like every other one; the contract's own
+  // parameter name is camelCase because that is the HEADER it maps to. Without
+  // this entry the two spellings do not match and the placeholder silently
+  // degrades to `<value>`.
+  "workflows.update.ifUnmodifiedSince": {
+    flag: "--if-unmodified-since",
+    placeholder: "<ts>",
+  },
 };
 
 /** Descriptions and value placeholders for the contract's global flags. */

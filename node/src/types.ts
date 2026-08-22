@@ -198,6 +198,37 @@ export interface WorkflowSummary {
 }
 
 /**
+ * A Function definition, as the list route projects it.
+ *
+ * `key` is the name the Function is CALLED by — `client.functions.run(key)` —
+ * and `displayName` is the label a human reads; the server falls back to the
+ * key when no display name was set, so `displayName` is never empty and never a
+ * substitute for `key`.
+ *
+ * There is no `status` here, and no lifecycle to have one: a Function is either
+ * runnable or not, which is what {@linkcode FunctionSummary.valid} answers.
+ */
+export interface FunctionSummary {
+  /** Server-issued id, `fn_…`. */
+  id: string;
+  /** The callable name, e.g. `"send-email"`. Kebab-case, never contains `_`. */
+  key: string;
+  /** Human-readable label; falls back to `key` server-side. */
+  displayName: string;
+  /** Free-text description; `""` when unset. */
+  description: string;
+  /** ISO-8601 timestamp. */
+  updatedAt: string;
+  /**
+   * Whether this Function can actually be run — server-computed, from the same
+   * single predicate the invoke path guards with (`db/repos/functions.ts`'s
+   * `isFunctionValid`). A draft with no `impl` is `false`, and running it is
+   * `422 function_incomplete`.
+   */
+  valid: boolean;
+}
+
+/**
  * Lifecycle state of a run.
  *
  * `queued` and `running` are in-flight; `succeeded`, `failed` and `canceled`
@@ -469,4 +500,32 @@ export function unwrap<T>(res: HttpResponse<unknown>, key: string): T {
     `Server returned a ${res.status} with no "${key}" in the response body.`,
     body,
   );
+}
+
+/**
+ * Mint a client-side id for a definition the caller is creating.
+ *
+ * **Both `POST /workflows` and `POST /functions` REQUIRE an `id` in the body
+ * and never generate one** (`admin/workflows.ts`'s and `admin/functions.ts`'s
+ * `validateDefinition`: "`id` is required."). The id is synthetic and never
+ * user-facing — the display name is what a user sees and edits — so a caller
+ * writing `create({name: "…", steps: […]})` should not have to know that, and
+ * every consumer that does know it has ended up writing the same four lines
+ * (studio's `newWorkflowId`/`newFunctionId`, `WorkflowsPage.tsx:141` and
+ * `FunctionsPage.tsx:49`). This is that function, once.
+ *
+ * `crypto.randomUUID` is present on every runtime this package supports (Node
+ * 19+, Deno, Bun, browsers) but is guarded anyway, byte-for-byte as studio
+ * guards it: the fallback keeps `create` working on an older Node rather than
+ * throwing a `TypeError` from inside the SDK, and the ids only need to be
+ * unique per scope, not unguessable — the server owns ownership, not the id.
+ *
+ * @param prefix - The kind prefix, without its underscore: `"wf"` or `"fn"`.
+ * @returns A new id of the form `wf_…` / `fn_…`.
+ */
+export function mintId(prefix: string): string {
+  const uuid = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : Math.floor(Math.random() * 1e16).toString(36);
+  return `${prefix}_${uuid}`;
 }

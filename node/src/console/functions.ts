@@ -25,6 +25,15 @@
  * no invoke method lives here, and none should be added later without
  * re-litigating this reasoning.
  *
+ * **The base namespace now carries this lifecycle too.** At contract `0.5.0`
+ * `functions` left `endpoints.json`'s `outOfScope` and
+ * `client.functions.list`/`get`/`create`/`update`/`delete` landed in all three
+ * lanes (`../functions.ts`). These three stay for studio's sake and differ in
+ * shape, deliberately: `get` here splices `valid` INTO the definition (what
+ * studio's editor binds to), while the base `get` keeps it a sibling so a
+ * read-modify-write round trip cannot carry it back into a save. New callers,
+ * and every partner, want `client.functions.*`.
+ *
  * Three methods relocate from the studio's `// Functions` comment block
  * (`packages/studio/src/api/client.ts:255-268`): `listFunctions`→`list`,
  * `getFunction`→`get`, `saveFunction`→`upsert`.

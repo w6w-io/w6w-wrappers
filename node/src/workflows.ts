@@ -1,9 +1,22 @@
 /**
- * `client.workflows.*` — discovery and the typed run.
+ * `client.workflows.*` — discovery, the typed run, and the definition lifecycle.
  *
- * Two operations: `list` (T2.1.4) and `run` (T2.1.5). `list` earns its place in
- * a minimal surface for the same reason `connections.list` does (D4): it is how
- * a caller discovers a `wf_…` id to pass to `run`.
+ * Seven operations: `list` (T2.1.4) and `run` (T2.1.5), plus `get`, `create`,
+ * `update`, `archive` and `delete`. `list` earns its place in a minimal surface
+ * for the same reason `connections.list` does (D4): it is how a caller
+ * discovers a `wf_…` id to pass to `run`.
+ *
+ * ── The write path, and the two things the server does NOT do ──
+ * 1. **It does not mint ids.** `POST /workflows` requires `id` in the body, so
+ *    `create` mints one (`mintId("wf")`) when the definition has none. Every
+ *    consumer that talked to this route directly had already written that
+ *    themselves — studio's `newWorkflowId` is the same four lines.
+ * 2. **It does not patch.** There is ONE write route and it stores what it is
+ *    given, so `update` is a full replacement. `create` and `update` are the
+ *    same POST; what differs is that one mints the id and the other pins it.
+ *
+ * Deleting is two calls, `archive` then `delete`, and this module keeps it that
+ * way — see {@linkcode WorkflowsApi.delete}.
  *
  * ── `run`, and the three things this API gets called wrong ──
  * 1. **`202` is success.** No `wait` → the run is queued and the server answers
@@ -49,11 +62,21 @@ import { ApiError } from "./errors.ts";
 import { type HttpResponse, path, type RequestOptions } from "./http.ts";
 import {
   isTerminalRunStatus,
+  mintId,
   type RunResult,
   type RunStatus,
   unwrap,
   type WorkflowSummary,
 } from "./types.ts";
+
+/**
+ * The precondition header the write path sends when `ifUnmodifiedSince` is given.
+ *
+ * Deliberately not the standard `If-Unmodified-Since`: that header's HTTP-date
+ * format has one-second granularity, and two saves inside one second is the
+ * exact case this guards (`admin/workflows.ts`).
+ */
+const PRECONDITION_HEADER = "x-w6w-if-unmodified-since";
 
 /**
  * The slice of `W6WClient` this namespace needs: the transport, plus the
@@ -144,6 +167,64 @@ export interface WorkflowRunResult extends RunResult {
 }
 
 /**
+ * A workflow definition — the portable document, kept OPAQUE.
+ *
+ * `Record<string, unknown>` and not a modelled shape, on purpose. A workflow's
+ * body is `steps[]` of node types the engine owns and extends
+ * (`rfcs/node-types.md`); a wrapper that froze that shape would reject a
+ * workflow a newer server accepts, and would have to ship a release every time
+ * a node type gained a field. What the wrapper *does* pin is the envelope
+ * around it — {@linkcode WorkflowDetail}, {@linkcode WorkflowSaveResult} —
+ * because that is the part the wrapper is responsible for.
+ *
+ * The one field this package reads out of it is `id`, in
+ * {@linkcode WorkflowsApi.create}, to decide whether to mint one.
+ */
+export type WorkflowDefinition = Record<string, unknown>;
+
+/** What `workflows.get` returns: the definition, plus the two things that are not in it. */
+export interface WorkflowDetail {
+  /** The stored definition, overlaid with the authoritative `status` and `tags`. */
+  workflow: WorkflowDefinition;
+  /** Where this workflow was imported from, when it was imported at all. */
+  sourceRef: string | null;
+  /**
+   * ISO-8601. The optimistic-concurrency token — pass it back as
+   * {@linkcode WorkflowWriteOptions.ifUnmodifiedSince} to make the next save
+   * conditional.
+   */
+  updatedAt: string;
+}
+
+/** What both `workflows.create` and `workflows.update` return. */
+export interface WorkflowSaveResult {
+  /** The saved workflow's id and display name. */
+  workflow: { id: string; name: string };
+  /**
+   * `true` when this save also (re)applied a schedule from the definition's
+   * `trigger.cron`. A workflow that already had one is not re-scheduled, so
+   * `false` does not mean "not scheduled" — it means "not scheduled by THIS
+   * call".
+   */
+  scheduled: boolean;
+  /** The new concurrency token, so a caller can chain saves without a re-`get`. */
+  updatedAt: string;
+}
+
+/** Per-call options for `workflows.create` and `workflows.update`. */
+export interface WorkflowWriteOptions {
+  /** Project id to scope this write to; overrides the client's default. */
+  project?: string;
+  /**
+   * The exact `updatedAt` this client last saw. When given, the server refuses
+   * the write with `409 workflow_stale` if the stored row has moved on since —
+   * recoverable by re-reading and re-saving. Omitted, the save is
+   * last-write-wins.
+   */
+  ifUnmodifiedSince?: string | null;
+}
+
+/**
  * The `workflows` namespace on a `W6WClient`.
  *
  * @example
@@ -152,6 +233,21 @@ export interface WorkflowRunResult extends RunResult {
  *
  * const run = await client.workflows.run(active[0].id, { wait: true });
  * if (run.status === "failed") console.error(run.error); // data, not an exception
+ *
+ * // The definition lifecycle: create, read-modify-write, then retire.
+ * const { workflow } = await client.workflows.create({
+ *   manifestVersion: "2",
+ *   name: "Nightly sync",
+ *   steps: [],
+ * });
+ * const current = await client.workflows.get(workflow.id);
+ * await client.workflows.update(
+ *   workflow.id,
+ *   { ...current.workflow, name: "Nightly sync (EU)" },
+ *   { ifUnmodifiedSince: current.updatedAt },
+ * );
+ * await client.workflows.archive(workflow.id);
+ * await client.workflows.delete(workflow.id);
  * ```
  */
 export class WorkflowsApi {
@@ -263,5 +359,181 @@ export class WorkflowsApi {
       terminal: isTerminalRunStatus(status),
       httpStatus: res.status,
     };
+  }
+
+  /**
+   * Fetch one workflow's stored definition.
+   *
+   * `workflow` is the definition the server has, overlaid with the
+   * authoritative `status` and `tags` columns — so a freshly created workflow
+   * that carries neither inline still reports its real lifecycle state.
+   *
+   * **`updatedAt` is a TOP-LEVEL SIBLING of `workflow`, never a field inside
+   * it**, and that placement is load-bearing rather than incidental: the
+   * definition is the portable document (it can be exported, re-imported, or
+   * committed to a repo) and a server timestamp must not enter it. It is also
+   * the optimistic-concurrency token — hand it straight back to
+   * {@linkcode update} as `ifUnmodifiedSince` and a save that would clobber
+   * someone else's is refused instead.
+   *
+   * @param id - The `wf_…` id, percent-encoded into the path.
+   * @returns The definition, its source ref, and the concurrency token.
+   * @throws {ApiError} `404 unknown_workflow` when there is no such id.
+   */
+  async get(id: string): Promise<WorkflowDetail> {
+    const res = await this.#host.request<WorkflowDetail>({
+      method: "GET",
+      path: path`/workflows/${id}`,
+    });
+    // No envelope key to peel — this route's body IS the payload, all three
+    // fields of it. `unwrap` would be wrong here, not merely unnecessary:
+    // there is no key it could name.
+    return res.body;
+  }
+
+  /**
+   * Create a workflow.
+   *
+   * **The id is minted client-side when the definition does not carry one.**
+   * The server requires an `id` in the body and never generates one
+   * (`admin/workflows.ts`'s `validateDefinition`), so a `create` that simply
+   * forwarded the caller's object would answer `400 invalid_workflow` for the
+   * most natural call there is — `create({name, steps})`. A caller that wants
+   * to choose its own id still can: an `id` already present is forwarded
+   * untouched, which is what makes this method usable for a seeded or
+   * imported definition.
+   *
+   * `create` and {@linkcode update} reach the SAME upsert route, and the
+   * server does not distinguish them — the distinction is in what each one
+   * does to the body, and it is a real one: `create` mints an id, `update`
+   * pins the one you addressed. Posting a definition whose id already exists
+   * therefore OVERWRITES it; this method does not pre-check, because a
+   * check-then-write is two round trips that still race.
+   *
+   * @param definition - The whole workflow definition, forwarded verbatim apart from a minted `id`.
+   * @param options - `project` scopes the write to one project.
+   * @returns The new workflow's id and name, whether a schedule was applied, and the first `updatedAt`.
+   * @throws {ApiError} `400 invalid_workflow` — missing `name`/`steps`, or a wrong `manifestVersion`.
+   * @throws {ApiError} `400 unknown_project` — `project` names a project this account does not own.
+   * @throws {ApiError} `409 workflow_conflict` — another `(tenant, subject)` already owns that id.
+   */
+  async create(
+    definition: WorkflowDefinition,
+    options?: WorkflowWriteOptions,
+  ): Promise<WorkflowSaveResult> {
+    const body = typeof definition.id === "string" && definition.id.length > 0
+      ? definition
+      : { ...definition, id: mintId("wf") };
+    return await this.#save(body, options);
+  }
+
+  /**
+   * Overwrite a workflow's stored definition.
+   *
+   * **This is a full replacement, not a patch.** The server has one write
+   * route for workflows and it stores what it is given, so a field left out of
+   * `definition` is a field removed from the workflow — the same semantics as
+   * the studio's own save. Read with {@linkcode get}, change what you mean to
+   * change, and send the whole thing back.
+   *
+   * `id` is taken from the FIRST ARGUMENT and pinned into the body, overriding
+   * any `id` the definition carries. The alternative — trusting the body —
+   * makes `update("wf_a", defOfB)` silently write to B while reading as a
+   * write to A.
+   *
+   * Pass `options.ifUnmodifiedSince` (the `updatedAt` from {@linkcode get} or
+   * from a previous save) to make the write conditional. Without it the save
+   * is last-write-wins.
+   *
+   * @param id - The `wf_…` id to write to.
+   * @param definition - The whole replacement definition.
+   * @param options - `project` scopes the write; `ifUnmodifiedSince` is the concurrency precondition.
+   * @returns The workflow's id and name, whether a schedule was (re)applied, and the new `updatedAt`.
+   * @throws {ApiError} `400 invalid_workflow` / `400 invalid_precondition`.
+   * @throws {ApiError} `409 workflow_conflict` — another `(tenant, subject)` owns this id. NOT recoverable by reloading.
+   * @throws {ApiError} `409 workflow_stale` — the precondition did not match the stored `updatedAt`. IS recoverable by reloading and re-saving.
+   */
+  async update(
+    id: string,
+    definition: WorkflowDefinition,
+    options?: WorkflowWriteOptions,
+  ): Promise<WorkflowSaveResult> {
+    return await this.#save({ ...definition, id }, options);
+  }
+
+  /**
+   * Archive a workflow.
+   *
+   * One-way: there is no unarchive route on this domain. Idempotent —
+   * archiving an already-archived workflow re-returns it unchanged rather than
+   * erroring.
+   *
+   * This is a required step, not a convenience: {@linkcode delete} refuses a
+   * workflow that is still `draft` or `active`.
+   *
+   * @param id - The `wf_…` id.
+   * @returns The archived definition, with `status` and `tags` merged in as {@linkcode get} returns them.
+   * @throws {ApiError} `404 unknown_workflow` when there is no such id.
+   */
+  async archive(id: string): Promise<WorkflowDefinition> {
+    const res = await this.#host.request<unknown>({
+      method: "POST",
+      path: path`/workflows/${id}/archive`,
+    });
+    return unwrap<WorkflowDefinition>(res, "workflow");
+  }
+
+  /**
+   * Delete an archived workflow, and everything that hangs off it.
+   *
+   * The workflow's runs, schedules and subscriptions cascade-delete server-side
+   * — there is nothing for the caller to clean up, and nothing to undo.
+   *
+   * **Archive first.** Deleting a workflow whose status is not `archived` is
+   * `409 workflow_not_archived`, which this method deliberately does NOT catch
+   * and retry through {@linkcode archive}: a two-step destructive path that an
+   * SDK silently completes for you is how a caller deletes something they only
+   * meant to look at.
+   *
+   * Returns nothing. The server's `{ok: true}` carries no information a caller
+   * can use, and `Ok` is not a public type of this package
+   * (`docs/implementation.md` §5).
+   *
+   * @param id - The `wf_…` id.
+   * @throws {ApiError} `404 unknown_workflow` when there is no such id.
+   * @throws {ApiError} `409 workflow_not_archived` when it exists but has not been archived yet.
+   */
+  async delete(id: string): Promise<void> {
+    await this.#host.request<unknown>({ method: "DELETE", path: path`/workflows/${id}` });
+  }
+
+  /**
+   * The one POST both {@linkcode create} and {@linkcode update} go through.
+   *
+   * Private, and shared rather than duplicated, because the precondition
+   * header has a rule that is easy to get subtly wrong twice: it is sent only
+   * when a value was actually given, NEVER as an empty or `"null"` string. The
+   * server parses whatever arrives and answers `400 invalid_precondition` for
+   * a value it cannot read, so a stray header turns a fine save into an error
+   * that names something the caller never asked for.
+   *
+   * @param body - The complete definition, id already resolved.
+   * @param options - The write options as given by the public method.
+   * @returns The server's save result, verbatim.
+   */
+  async #save(
+    body: WorkflowDefinition,
+    options?: WorkflowWriteOptions,
+  ): Promise<WorkflowSaveResult> {
+    const res = await this.#host.request<WorkflowSaveResult>({
+      method: "POST",
+      path: "/workflows",
+      query: { project: options?.project ?? this.#host.config.project ?? undefined },
+      body,
+      ...(options?.ifUnmodifiedSince
+        ? { headers: { [PRECONDITION_HEADER]: options.ifUnmodifiedSince } }
+        : {}),
+    });
+    return res.body;
   }
 }

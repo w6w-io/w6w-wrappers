@@ -21,6 +21,7 @@ import { DOCUMENT_COMMANDS } from "./documents.ts";
 import { VAR_COMMANDS } from "./vars.ts";
 import { ME_COMMANDS } from "./me.ts";
 import { CONNECTION_COMMANDS } from "./connections.ts";
+import { FUNCTION_COMMANDS } from "./functions.ts";
 import { NAMED_RUN_COMMANDS } from "./named-run.ts";
 import { WORKFLOW_COMMANDS } from "./workflows.ts";
 import { RUN_COMMANDS } from "./run.ts";
@@ -29,6 +30,7 @@ export { DOCUMENT_COMMANDS } from "./documents.ts";
 export { VAR_COMMANDS } from "./vars.ts";
 export { ME_COMMANDS } from "./me.ts";
 export { CONNECTION_COMMANDS } from "./connections.ts";
+export { FUNCTION_COMMANDS } from "./functions.ts";
 export { NAMED_RUN_COMMANDS } from "./named-run.ts";
 export { WORKFLOW_COMMANDS } from "./workflows.ts";
 export { RUN_COMMANDS } from "./run.ts";
@@ -40,6 +42,7 @@ export const COMMANDS: CommandRegistry = {
   ...ME_COMMANDS,
   ...CONNECTION_COMMANDS,
   ...WORKFLOW_COMMANDS,
+  ...FUNCTION_COMMANDS,
   ...NAMED_RUN_COMMANDS,
   ...RUN_COMMANDS,
 };

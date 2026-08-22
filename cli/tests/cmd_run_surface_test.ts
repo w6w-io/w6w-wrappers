@@ -26,7 +26,9 @@ import { HELP_TREE, main } from "../mod.ts";
 import {
   COMMANDS,
   CONNECTION_COMMANDS,
+  FUNCTION_COMMANDS,
   ME_COMMANDS,
+  NAMED_RUN_COMMANDS,
   RUN_COMMANDS,
   WORKFLOW_COMMANDS,
 } from "../src/commands/index.ts";
@@ -431,11 +433,21 @@ Deno.test("every root-level command (me, run) in the help tree is registered", (
   assertEquals(Object.keys(RUN_COMMANDS), ["run"]);
 });
 
-Deno.test("every `w6w connections` / `w6w workflows` command in the help tree is registered, and no others", () => {
+Deno.test("every `w6w connections` / `w6w workflows` / `w6w functions` command in the help tree is registered, and no others", () => {
+  // `functions` is assembled from TWO registries, and that is the point of
+  // listing it here: `functions run` lives in `named-run.ts` beside its twin
+  // `endpoints run`, while the rest of the group lives in `functions.ts`. A
+  // reader of the help tree sees one group either way, so the check is against
+  // the union — which is also what would catch a command landing in neither.
+  const functionsGroup = {
+    ...FUNCTION_COMMANDS,
+    "functions run": NAMED_RUN_COMMANDS["functions run"],
+  };
   for (
     const [groupName, registry] of [
       ["connections", CONNECTION_COMMANDS],
       ["workflows", WORKFLOW_COMMANDS],
+      ["functions", functionsGroup],
     ] as const
   ) {
     const group = HELP_TREE.groups.find((candidate) => candidate.name === groupName);
@@ -447,5 +459,9 @@ Deno.test("every `w6w connections` / `w6w workflows` command in the help tree is
     }
   }
   assertEquals(Object.keys(CONNECTION_COMMANDS).length, 1);
-  assertEquals(Object.keys(WORKFLOW_COMMANDS).length, 2);
+  // Seven and five: the two run commands (`workflows run`, `functions run`)
+  // plus the definition lifecycle each domain now carries. `functions` counts
+  // five here because its `run` is registered elsewhere — see above.
+  assertEquals(Object.keys(WORKFLOW_COMMANDS).length, 7);
+  assertEquals(Object.keys(FUNCTION_COMMANDS).length, 5);
 });

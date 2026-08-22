@@ -48,12 +48,14 @@ USAGE
   w6w <command> [options]
 
 COMMANDS
-  me                     Show the current user and w6w component versions
-  run                    Run anything addressable by a URN
+  me                     Caller identity plus w6w component versions
+  run                    Run anything addressable by URN
   connections            Inspect connections
-  workflows              List and run workflows
+  workflows              List, run and edit workflows
   documents              Create, read, update and delete documents
   vars                   Create, read, update and delete variables
+  functions              Run and edit functions
+  endpoints              Run endpoints by key or id
 
 GLOBAL OPTIONS
   --base-url <url>       API base URL (env: W6W_BASE_URL)
