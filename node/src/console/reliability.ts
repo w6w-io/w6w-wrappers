@@ -57,6 +57,38 @@ export interface ReliabilityUptimeDay {
   errors: ReliabilityErrorMix;
 }
 
+/**
+ * Per-component detail inside a `ReliabilityVendorStatus.components` map. No
+ * `@w6w/types` dependency here — this is the SDK's own local copy, the same
+ * deliberate pattern `ReliabilityState` already follows.
+ */
+export interface ReliabilityComponentReport {
+  state: ReliabilityState;
+  message?: string;
+}
+
+/**
+ * One entry in a vendor's own incident history. Field-for-field with core's
+ * `HealthTimelineEntry` — see `ReliabilityComponentReport` for why this is a
+ * local copy rather than an import.
+ */
+export interface ReliabilityTimelineEntry {
+  /** Stable identity, when the source states one — an incident id, not a title. */
+  id?: string;
+  title: string;
+  state: ReliabilityState;
+  /** Component ids (matching `ReliabilityVendorStatus.components`) this entry is about. */
+  components?: string[];
+  /** ISO 8601 — when the incident began. */
+  startedAt?: string;
+  /** ISO 8601 — when the incident was last updated. */
+  updatedAt?: string;
+  /** ISO 8601 — when the incident was resolved. Absent means "not stated". */
+  resolvedAt?: string;
+  /** Link to the vendor's own incident/status page entry, when it has one. */
+  link?: string;
+}
+
 /** The vendor's own verdict for one service. See `ReliabilityService.vendorStatus`. */
 export interface ReliabilityVendorStatus {
   state: ReliabilityState;
@@ -65,6 +97,16 @@ export interface ReliabilityVendorStatus {
   checkedAt: string;
   /** Keys of the checks behind a non-`ok` verdict. Empty when `ok`. */
   attributedTo: string[];
+  /** Every surface every public check named, worst-state-wins on collision.
+   *  `null` = no public check reported a breakdown at all. */
+  components: Record<string, ReliabilityComponentReport> | null;
+  /** Vendor incident history, newest first. `null` = no public check publishes history
+   *  (Stripe); `[]` = one does and there is nothing in it. The two are DIFFERENT FACTS
+   *  and the studio renders them differently. */
+  timeline: ReliabilityTimelineEntry[] | null;
+  /** The vendor's own status PAGE (not the feed URL), for a link out. `null` when the
+   *  App declares nothing to derive one from. */
+  statusPageUrl: string | null;
 }
 
 /** One row of the service board — a single external service the account calls. */

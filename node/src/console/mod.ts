@@ -92,11 +92,13 @@ export type {
 } from "./commerce.ts";
 export { ReliabilityApi } from "./reliability.ts";
 export type {
+  ReliabilityComponentReport,
   ReliabilityErrorMix,
   ReliabilityHost,
   ReliabilityService,
   ReliabilityServices,
   ReliabilityState,
+  ReliabilityTimelineEntry,
   ReliabilityUptimeDay,
   ReliabilityVendorStatus,
 } from "./reliability.ts";
