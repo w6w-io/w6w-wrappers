@@ -51,6 +51,7 @@ export type {
   ProfileContact,
   ProfileLoginMethod,
   ProfilePendingChange,
+  RefreshResponse,
   RequestContactChangeInput,
   SetPasswordInput,
   SignupInput,
@@ -75,9 +76,18 @@ export { DashboardApi } from "./dashboard.ts";
 export type { DashboardHost, DashboardStats, DashboardStatsParams } from "./dashboard.ts";
 export { CommerceApi } from "./commerce.ts";
 export type {
+  ChangeSubscriptionInput,
+  CheckoutInput,
+  CheckoutInterval,
+  CheckoutResult,
   CommerceHost,
   CommerceSubscription,
+  ConfirmCheckoutInput,
+  ContactSalesInput,
+  ContactSalesResult,
   MonitorLimit,
+  SubscriptionChangePreview,
+  SubscriptionChangeResult,
   Plan,
   PlanCapabilities,
   PlanLimits,

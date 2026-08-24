@@ -89,6 +89,12 @@ export interface LoginResponse {
   expiresIn: number;
 }
 
+/** `POST /auth/refresh` → 200 (`id/auth.ts`'s `refreshHandler`). */
+export interface RefreshResponse {
+  token: string;
+  expiresIn: number;
+}
+
 /** The signed-up user, as `POST /auth/signup` returns it (`data/signup.ts:147-152`). */
 export interface SignupUser {
   id: string;
@@ -347,6 +353,27 @@ export class AuthApi {
       path: "/auth/login",
       body: { email: identifier, password },
       requireAuth: false,
+    });
+    return res.body;
+  }
+
+  /**
+   * Mint a fresh token for the CURRENT session — same identity (subject,
+   * tenant, role, account, any admin claim), just a renewed lifetime. The
+   * sliding-session mechanism: a client that keeps calling this while a
+   * user is active never sees the original token's `exp` arrive.
+   *
+   * AUTHENTICATED — the default `requireAuth` applies (a caller with no
+   * token has no session to extend).
+   *
+   * @returns The new token and its lifetime in seconds.
+   * @throws {ApiError} `401` if the CURRENT token is already invalid/expired
+   *   — refreshing cannot resurrect a session that has already lapsed.
+   */
+  async refresh(): Promise<RefreshResponse> {
+    const res = await this.#host.request<RefreshResponse>({
+      method: "POST",
+      path: "/auth/refresh",
     });
     return res.body;
   }

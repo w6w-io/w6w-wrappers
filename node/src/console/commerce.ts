@@ -169,6 +169,76 @@ export interface CommerceSubscription {
   readonly canUpgrade: boolean;
 }
 
+/** Which cadence a checkout is for — mirrors `PlanPrice`'s own `BillingInterval`. */
+export type CheckoutInterval = "month" | "year";
+
+/** `client.console.commerce.checkout()`'s input. */
+export interface CheckoutInput {
+  readonly planKey: string;
+  readonly interval: CheckoutInterval;
+}
+
+/**
+ * `POST /commerce/checkout`'s response — a hosted Stripe payment page URL,
+ * and NOTHING else: never a raw Checkout Session id, price id or product id
+ * (the server's own D-3 rule — no Stripe id crosses the wire in either
+ * direction).
+ */
+export interface CheckoutResult {
+  readonly url: string;
+}
+
+/** `client.console.commerce.confirmCheckout()`'s input — the `checkout_session_id` the browser was redirected back with. */
+export interface ConfirmCheckoutInput {
+  readonly sessionId: string;
+}
+
+/**
+ * `POST /commerce/contact-sales`'s input. `account` is never sent by the
+ * caller — the server stamps it from the bearer's own principal.
+ */
+export interface ContactSalesInput {
+  readonly name: string;
+  readonly email: string;
+  readonly company?: string;
+  readonly message: string;
+}
+
+/** `POST /commerce/contact-sales`'s response. */
+export interface ContactSalesResult {
+  readonly id: string;
+}
+
+/** `client.console.commerce.previewSubscriptionChange()` / `.changeSubscription()`'s shared input. */
+export interface ChangeSubscriptionInput {
+  readonly planKey: string;
+  readonly interval: CheckoutInterval;
+}
+
+/**
+ * `POST /commerce/subscription/preview`'s response — what Stripe would
+ * charge (positive) or credit (negative) TODAY for this change, in integer
+ * cents. Never a raw Stripe invoice object; never rounded/clamped — a large
+ * negative value here is a large credit, expected when moving off a
+ * part-used ANNUAL plan (Stripe carries the excess forward to future
+ * invoices automatically — see the server's `SubscriptionChangeService`).
+ */
+export interface SubscriptionChangePreview {
+  readonly amountDueCents: number;
+  readonly currency: string;
+}
+
+/**
+ * `POST /commerce/subscription/change`'s response. `subscription` here is
+ * NARROWER than {@link CommerceSubscription} — no `canUpgrade` — the server
+ * has no reason to recompute it against the wire's own move; re-fetch
+ * `subscription()` if the caller needs it refreshed.
+ */
+export interface SubscriptionChangeResult {
+  readonly subscription: { readonly plan: string; readonly status: string };
+  readonly charge: SubscriptionChangePreview;
+}
+
 /**
  * The `console.commerce` namespace on a `W6WClient`.
  *
@@ -223,5 +293,97 @@ export class CommerceApi {
       path: "/commerce/subscription",
     });
     return unwrap<CommerceSubscription>(res, "subscription");
+  }
+
+  /**
+   * Open a live Stripe Checkout Session for a billable plan/interval.
+   * AUTHENTICATED — the account is resolved server-side from the bearer.
+   *
+   * @returns The hosted payment page URL. Redirect the browser to it
+   *   (`window.location.href = url`); do not fetch it.
+   * @throws {ApiError} `409 plan_not_billable` for a `contact-sales`/`none`
+   *   plan or an interval the plan doesn't offer; `409 price_not_synced` if
+   *   the catalog says billable but Stripe has no matching active price yet.
+   */
+  async checkout(input: CheckoutInput): Promise<CheckoutResult> {
+    const res = await this.#host.request<{ checkout: CheckoutResult }>({
+      method: "POST",
+      path: "/commerce/checkout",
+      body: input,
+    });
+    return unwrap<CheckoutResult>(res, "checkout");
+  }
+
+  /**
+   * Confirm a Checkout Session on return from Stripe (the
+   * `checkout_session_id` query param `checkout()`'s success URL carries
+   * back). Verified against Stripe itself, never trusted from the URL alone
+   * — see the server's `CheckoutService` for what this deliberately does not
+   * cover (no webhook yet: a session completed after the tab closed is
+   * invisible to it).
+   *
+   * @returns The confirmed subscription.
+   * @throws {ApiError} `404 checkout_session_not_found`; `403
+   *   checkout_session_mismatch` if the session belongs to a different
+   *   account; `409 checkout_not_paid` if payment hasn't completed yet.
+   */
+  async confirmCheckout(input: ConfirmCheckoutInput): Promise<CommerceSubscription> {
+    const res = await this.#host.request<{ subscription: CommerceSubscription }>({
+      method: "POST",
+      path: "/commerce/checkout/confirm",
+      body: { sessionId: input.sessionId },
+    });
+    return unwrap<CommerceSubscription>(res, "subscription");
+  }
+
+  /**
+   * Submit an Enterprise "contact sales" lead. AUTHENTICATED — captured
+   * durably server-side regardless of whether outbound mail is configured
+   * (see the server's `ContactSalesService`).
+   */
+  async contactSales(input: ContactSalesInput): Promise<ContactSalesResult> {
+    const res = await this.#host.request<{ lead: ContactSalesResult }>({
+      method: "POST",
+      path: "/commerce/contact-sales",
+      body: input,
+    });
+    return unwrap<ContactSalesResult>(res, "lead");
+  }
+
+  /**
+   * Preview what moving the CALLER'S OWN existing subscription to a
+   * different plan/interval would charge or credit TODAY, without applying
+   * anything. AUTHENTICATED.
+   *
+   * @throws {ApiError} `409 no_active_subscription` if the account has no
+   *   active Stripe subscription to change — use {@link checkout} instead.
+   */
+  async previewSubscriptionChange(
+    input: ChangeSubscriptionInput,
+  ): Promise<SubscriptionChangePreview> {
+    const res = await this.#host.request<{ preview: SubscriptionChangePreview }>({
+      method: "POST",
+      path: "/commerce/subscription/preview",
+      body: input,
+    });
+    return unwrap<SubscriptionChangePreview>(res, "preview");
+  }
+
+  /**
+   * Apply the change {@link previewSubscriptionChange} previewed — moves the
+   * caller's existing Stripe subscription to the new plan/interval with
+   * proration, and charges/credits the net difference immediately.
+   * AUTHENTICATED.
+   *
+   * @throws {ApiError} `409 no_active_subscription` if the account has no
+   *   active Stripe subscription to change — use {@link checkout} instead.
+   */
+  async changeSubscription(input: ChangeSubscriptionInput): Promise<SubscriptionChangeResult> {
+    const res = await this.#host.request<SubscriptionChangeResult>({
+      method: "POST",
+      path: "/commerce/subscription/change",
+      body: input,
+    });
+    return res.body;
   }
 }
