@@ -122,8 +122,17 @@ export interface ReliabilityService {
   openAdvisories: number;
   /** Non-null while an outage is still open. */
   ongoingOutageId: string | null;
-  /** Null when the account has never called this service. Drives the server's
-   * recency ordering (`?limit=N`) — the client never re-sorts by it. */
+  /**
+   * Null when the account has never called this service.
+   *
+   * Breaks ties in the server's ordering — but only WITHIN an urgency tier. The
+   * server sorts a board by how urgent each row is first (anything degraded or
+   * down on either signal, then anything the window shows trouble in, then the
+   * rest) and by `lastCallAt` descending, nulls last, inside each tier. That
+   * matters most under `?limit=N`: a purely recency-ordered cap can cut the
+   * degraded services the board exists to surface. The client never re-sorts by
+   * this or anything else.
+   */
   lastCallAt: string | null;
   /**
    * Gap-free, exactly `window.days` entries, ONE PER CALENDAR DAY, OLDEST FIRST —
@@ -146,6 +155,26 @@ export interface ReliabilityService {
    * board renders them differently.
    */
   vendorStatus: ReliabilityVendorStatus | null;
+  /**
+   * Which urgency tier the server sorted this row into — and the field a UI
+   * should GROUP on rather than re-deriving the tier from `state`,
+   * `ongoingOutageId` and `vendorStatus` itself.
+   *
+   *   `now`    — degraded or down right now, on YOUR CALLS or PER THE VENDOR.
+   *              Either signal alone is enough: a service can be answering you
+   *              perfectly while its vendor publishes an incident.
+   *   `recent` — clear now, but this window holds a failed stretch or an open
+   *              advisory.
+   *   `none`   — clear.
+   *
+   * `unknown` on either signal is NOT attention: on your calls it means the
+   * window held none (idle, not broken), and on the vendor it means the status
+   * page could not be read — a gap in our reading, not a finding about them.
+   *
+   * This drives the `?limit=N` cut, which is why it is worth having on the
+   * wire: a capped board keeps the most urgent rows, not the most recent ones.
+   */
+  attention: "now" | "recent" | "none";
 }
 
 /**
