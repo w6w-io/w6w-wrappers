@@ -35,6 +35,12 @@
  * so writing a second pagination loop here would be exactly the "third client
  * for these routes" C-2 exists to prevent.
  *
+ * `listTriggerApps`/`getAppTriggers`/`listSubscriptionsForWorkflow`/
+ * `createSubscription` are REQUIRED here even though `@w6w/ui`'s own
+ * declaration marks them optional (`?`) — plan.md D-2: optional-in-`ui` lets
+ * a partner on an older `@w6w/react` degrade instead of crashing, while every
+ * consumer of THIS adapter gets a real implementation.
+ *
  * @module
  */
 import { ApiError, type ConnectionSummary, type W6WClient } from "@w6w/sdk";
@@ -46,7 +52,9 @@ import type {
   InvokeOptions,
   SavedTest,
   StepTest,
+  Subscription,
   TestRunSummary,
+  TriggerDef,
 } from "@w6w/sdk/console";
 
 /**
@@ -175,6 +183,22 @@ export interface W6WApi {
 
   /** List the saved test fixtures for a workflow step. */
   listStepTests(workflowId: string, stepId: string): Promise<StepTest[]>;
+
+  /** List the apps whose latest version declares at least one trigger. */
+  listTriggerApps(): Promise<AppSummary[]>;
+
+  /** List an app's declared triggers, to pick from in the Triggers tab. */
+  getAppTriggers(appId: string): Promise<TriggerDef[]>;
+
+  /** List the subscriptions (trigger bindings) already bound to one workflow. */
+  listSubscriptionsForWorkflow(workflowId: string): Promise<Subscription[]>;
+
+  /** Bind an app's trigger to a workflow. */
+  createSubscription(
+    appId: string,
+    triggerKey: string,
+    input: { workflowId: string; connectionId?: string | null; params?: Record<string, unknown> },
+  ): Promise<Subscription>;
 }
 
 /**
@@ -267,5 +291,22 @@ export function createW6WUiAdapter(client: W6WClient): W6WApi {
 
     listStepTests: (workflowId, stepId) =>
       withApiErrorBody(() => client.console.stepTests.list(workflowId, stepId)),
+
+    // Same predicate studio's own facade uses (T2.1.1), so the two embedding
+    // paths cannot disagree on which apps have a trigger to offer.
+    listTriggerApps: () =>
+      withApiErrorBody(async () => {
+        const apps = await client.console.apps.list();
+        return apps.filter((a) => (a.triggerCount ?? 0) > 0);
+      }),
+
+    getAppTriggers: (appId) => withApiErrorBody(() => client.console.apps.getTriggers(appId)),
+
+    listSubscriptionsForWorkflow: (workflowId) =>
+      withApiErrorBody(() => client.console.subscriptions.listForWorkflow(workflowId)),
+
+    // `input` is forwarded verbatim as the whole POST body.
+    createSubscription: (appId, triggerKey, input) =>
+      withApiErrorBody(() => client.console.subscriptions.create(appId, triggerKey, input)),
   };
 }

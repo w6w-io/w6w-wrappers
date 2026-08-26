@@ -131,6 +131,8 @@ export interface AppSummary {
    * `GET /apps/:id/auths` read just to know whether OAuth is on the table.
    */
   supportsOAuth?: boolean;
+  /** How many triggers this app's latest version declares. 0 when it declares none. */
+  triggerCount?: number;
   /**
    * Ownership sentinels: neither set -> global · `tenant` set, `subject` empty
    * -> tenant-owned · both -> user-owned. Projected server-side by `wireOwner`
