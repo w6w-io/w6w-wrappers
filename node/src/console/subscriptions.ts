@@ -26,16 +26,13 @@
  * `console.apps`'s/`console.functions`' identical treatment of their own
  * zero-caller methods.
  *
- * **`webhookUrl` is a real server-side field this module deliberately does
- * NOT model.** For a subscription whose `appId === "@w6w/webhook"`, the
- * server enriches the response with a `webhookUrl` field computed from a
- * config value genuinely distinct from studio's own `apiBaseUrl()`
- * (`internal-triggers.ts:123-127`, `config.ts:27,259`). Studio's current
- * `Subscription` type never modeled this and no in-boundary code reads it
- * (`SubscriptionsPage.tsx` computes its own webhook URL client-side
- * independently) — this is a deliberate, verified omission, not an
- * oversight: whatever extra field the server sends is silently ignored,
- * exactly as today.
+ * **`webhookUrl` is modeled.** For a subscription whose `appId ===
+ * "@w6w/webhook"`, the server enriches the response with a `webhookUrl`
+ * field — produced by `withUrl` in `server/packages/api/admin/triggers.ts:74`
+ * — computed from a config value genuinely distinct from studio's own
+ * `apiBaseUrl()` (`internal-triggers.ts:123-127`, `config.ts:27,259`).
+ * Present only for `appId === "@w6w/webhook"`; absent for every other
+ * subscription.
  *
  * Subscriptions are account-level, never scoped by `project` — so
  * `SubscriptionsHost` needs only the transport, mirroring `VarsHost`/
@@ -61,8 +58,8 @@ export interface SubscriptionsHost {
 /**
  * A (trigger → workflow) binding. Field-for-field per
  * `packages/studio/src/api/types.ts:72-83` — this module does not redesign
- * the shape, only gives it a second home. Deliberately does NOT carry
- * `webhookUrl` — see this module's header.
+ * the shape, only gives it a second home. Also carries `webhookUrl` — see
+ * this module's header.
  */
 export interface Subscription {
   id: string;
@@ -75,6 +72,8 @@ export interface Subscription {
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Present only for `appId === "@w6w/webhook"` — the server's own computed receive URL. */
+  webhookUrl?: string;
 }
 
 /**
@@ -142,9 +141,6 @@ export class SubscriptionsApi {
 
   /**
    * List the subscriptions bound to one workflow.
-   *
-   * **Dead code (HITL-4)** — zero call sites anywhere in studio or
-   * `@w6w/ui`. Built for SDK completeness only; see this module's header.
    *
    * @param workflowId - The `wf_…` id.
    * @returns The subscriptions, unwrapped from the `subscriptions` envelope.

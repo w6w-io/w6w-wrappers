@@ -162,3 +162,91 @@ test("invokeAction forwards the WHOLE opts object (connectionId, project, state)
     state: { trigger: { event: { x: 1 } } },
   });
 });
+
+test("listTriggerApps filters to apps whose triggerCount is truthy — absent and 0 both excluded", async () => {
+  const base = {
+    displayName: "d",
+    version: "1.0.0",
+    description: "",
+    categories: [],
+    sourceRef: "s",
+    importedAt: "t",
+  };
+  const appWithTwo = { ...base, id: "app_with_two", triggerCount: 2 };
+  const appWithZero = { ...base, id: "app_with_zero", triggerCount: 0 };
+  const appAbsent = { ...base, id: "app_absent" };
+  const fake = fakeFetch(() => json({ apps: [appWithTwo, appWithZero, appAbsent] }));
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const apps = await adapter.listTriggerApps();
+
+  assert.deepEqual(
+    apps.map((a) => a.id),
+    ["app_with_two"],
+  );
+});
+
+test("getAppTriggers reaches GET /apps/:id/triggers", async () => {
+  const trigger = { key: "new-message", title: "New message" };
+  const fake = fakeFetch((call) => {
+    assert.equal(call.url, "https://api.example.com/apps/app_x/triggers");
+    assert.equal(call.method, "GET");
+    return json({ triggers: [trigger] });
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const triggers = await adapter.getAppTriggers("app_x");
+
+  assert.deepEqual(triggers, [trigger]);
+});
+
+test("listSubscriptionsForWorkflow reaches GET /workflows/:id/subscriptions", async () => {
+  const fake = fakeFetch((call) => {
+    assert.equal(call.url, "https://api.example.com/workflows/wf_1/subscriptions");
+    assert.equal(call.method, "GET");
+    return json({ subscriptions: [] });
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const subs = await adapter.listSubscriptionsForWorkflow("wf_1");
+
+  assert.deepEqual(subs, []);
+});
+
+test("createSubscription forwards `input` verbatim to POST /apps/:id/triggers/:key/subscriptions", async () => {
+  const fake = fakeFetch((call) => {
+    assert.equal(call.url, "https://api.example.com/apps/app_x/triggers/new-message/subscriptions");
+    assert.equal(call.method, "POST");
+    assert.deepEqual(JSON.parse(call.body ?? "null"), {
+      workflowId: "wf_1",
+      connectionId: null,
+      params: { a: 1 },
+    });
+    return json(
+      {
+        subscription: {
+          id: "sub_1",
+          appId: "app_x",
+          triggerKey: "new-message",
+          connectionId: null,
+          workflowId: "wf_1",
+          params: { a: 1 },
+          state: {},
+          enabled: true,
+          createdAt: "t",
+          updatedAt: "t",
+        },
+      },
+      201,
+    );
+  });
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const sub = await adapter.createSubscription("app_x", "new-message", {
+    workflowId: "wf_1",
+    connectionId: null,
+    params: { a: 1 },
+  });
+
+  assert.equal(sub.id, "sub_1");
+});
