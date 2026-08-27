@@ -134,6 +134,12 @@ export interface AppSummary {
   /** How many triggers this app's latest version declares. 0 when it declares none. */
   triggerCount?: number;
   /**
+   * True when the CALLING tenant has zero-credential access flagged for this
+   * app — usable with no connection step at all (server-computed per caller,
+   * `packages/server/packages/api/wire-summary.ts`'s `WireAppSummary.zeroCredential`).
+   */
+  zeroCredential?: boolean;
+  /**
    * Ownership sentinels: neither set -> global · `tenant` set, `subject` empty
    * -> tenant-owned · both -> user-owned. Projected server-side by `wireOwner`
    * (`wire-summary.ts:70-72`), which is why both members are plain strings here
