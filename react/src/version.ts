@@ -15,4 +15,4 @@
  * every wrapper's version in lockstep, and that pattern depends on the literal
  * `: string` shape being present.
  */
-export const VERSION: string = "0.6.0";
+export const VERSION: string = "0.7.0";

@@ -489,12 +489,31 @@ Deno.test(
   async () => {
     const c = client(() => json(CREATE_ACCOUNT, 201));
 
-    const res = await c.client.console.auth.createAccount("Acme", "acme");
+    const res = await c.client.console.auth.createAccount({
+      companyName: "Acme",
+      role: "founder",
+      usage: "internal-tools",
+    });
 
     assertEquals(res, CREATE_ACCOUNT);
     assertEquals(c.calls[0].method, "POST");
     assertEquals(c.calls[0].url, "https://api.example.com/accounts");
-    assertEquals(JSON.parse(c.calls[0].body ?? "null"), { name: "Acme", slug: "acme" });
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
+      companyName: "Acme",
+      role: "founder",
+      usage: "internal-tools",
+    });
+  },
+);
+
+Deno.test(
+  "console.auth.createAccount omits role/usage from the body when not given, but keeps companyName",
+  async () => {
+    const c = client(() => json(CREATE_ACCOUNT, 201));
+
+    await c.client.console.auth.createAccount({ companyName: "Acme" });
+
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), { companyName: "Acme" });
   },
 );
 
@@ -518,7 +537,7 @@ Deno.test(
 Deno.test("createAccount DOES send the bearer — the opposite mutant", async () => {
   const c = client(() => json(CREATE_ACCOUNT, 201));
 
-  await c.client.console.auth.createAccount("Acme", "acme");
+  await c.client.console.auth.createAccount({ companyName: "Acme" });
 
   assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
 });
