@@ -106,18 +106,20 @@ const client = new W6WClient({ baseUrl: "https://api.example.com" }); // no toke
 const { token, user } = await client.console.auth.login("alice@example.com", "hunter2");
 ```
 
-Twelve methods. `login`, `signup`, `checkAccountSlug` and `createAccount` are relocated verbatim
-from the studio's own API client (`packages/studio/src/api/client.ts:249-291`), with the same
-field-for-field shapes it used (`packages/studio/src/api/types.ts:10-82`) — this module does not
-redesign them, only gives them a second home. `getMe` was added first (see below); `getProfile`
-through `setPassword` are T1.1.4's `/me/*` family, added by this task.
+Twelve methods. `login`, `signup` and `checkAccountSlug` are relocated verbatim from the studio's
+own API client (`packages/studio/src/api/client.ts:249-291`), with the same field-for-field shapes
+it used (`packages/studio/src/api/types.ts:10-82`) — this module does not redesign them, only gives
+them a second home. `createAccount` takes a `CreateAccountInput` options object instead —
+`{companyName, role?, usage?}`, no `name`/`slug` key; the server mints the slug from `companyName`.
+`getMe` was added first (see below); `getProfile` through `setPassword` are T1.1.4's `/me/*` family,
+added by this task.
 
 | Method                        | Route                                   | Public/authenticated                                                                               |
 | ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `login(identifier, password)` | `POST /auth/login`                      | **PUBLIC** — sends no bearer (`requireAuth: false`), even on a client already holding a token      |
 | `signup(input)`               | `POST /auth/signup`                     | **PUBLIC** — sends no bearer (`requireAuth: false`)                                                |
 | `checkAccountSlug(name)`      | `GET /auth/signup/slug-available?name=` | **PUBLIC** — sends no bearer (`requireAuth: false`)                                                |
-| `createAccount(name, slug)`   | `POST /accounts`                        | **AUTHENTICATED** — default `requireAuth`, re-issues the session with the new account's claim      |
+| `createAccount(input)`        | `POST /accounts`                        | **AUTHENTICATED** — default `requireAuth`, re-issues the session with the new account's claim      |
 | `getMe()`                     | `GET /auth/me`                          | **AUTHENTICATED** — default `requireAuth`; returns `ConsoleMe`, not the published `Me` — see below |
 | `getProfile()`                | `GET /me/profile`                       | **AUTHENTICATED** — the real `users` row, incl. `hasPassword` — see below                          |
 | `updateProfile(input)`        | `PATCH /me/profile`                     | **AUTHENTICATED** — `{displayName}`                                                                |
