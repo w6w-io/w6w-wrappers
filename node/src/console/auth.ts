@@ -144,6 +144,18 @@ export interface SlugAvailabilityResponse {
   suggestions: string[];
 }
 
+/** The body `createAccount` sends. An options object, matching `signup`'s
+ * `SignupInput` shape two methods below — `name`/`slug` are **not** sent, the
+ * server mints the slug from `companyName`. */
+export interface CreateAccountInput {
+  /** The company/workspace name. Required — the server mints the account slug from it. */
+  companyName: string;
+  /** The caller's role in the company, from the signup form's dropdown. Optional. */
+  role?: string;
+  /** What the caller intends to use w6w for, from the signup form's dropdown. Optional. */
+  usage?: string;
+}
+
 /** `POST /accounts` → 201 (`id/signup.ts:69-73`). The token re-issues the session
  * with the new account's claim on it. */
 export interface CreateAccountResponse {
@@ -428,16 +440,15 @@ export class AuthApi {
    * adopting it downgrades an operator; this method never writes the session
    * itself, the caller decides.
    *
-   * @param name - The account's display name.
-   * @param slug - The account's slug.
+   * @param input - The company name, plus the optional role/usage from the signup form.
    * @returns The created account, a re-issued token carrying its claim, and the token's lifetime.
    * @throws {ApiError} On any non-2xx, e.g. `409` when the slug is taken.
    */
-  async createAccount(name: string, slug: string): Promise<CreateAccountResponse> {
+  async createAccount(input: CreateAccountInput): Promise<CreateAccountResponse> {
     const res = await this.#host.request<CreateAccountResponse>({
       method: "POST",
       path: "/accounts",
-      body: { name, slug },
+      body: input,
     });
     return res.body;
   }
