@@ -297,7 +297,7 @@ export class WorkflowsApi {
    * raises only when the *request* failed — `404 unknown_workflow`, a rejected
    * token, a transport failure.
    *
-   * @param id - The `wf_…` id, percent-encoded into the path.
+   * @param id - The `wf_…` id, or the Workflow's `key`. Percent-encoded into the path.
    * @param options - `wait`, plus the `variables`, `trigger` and `input` that go in the body.
    * @returns The run handle, its status, and the result when the run has one.
    * @throws {ApiError} `404 unknown_workflow` when there is no such workflow.
