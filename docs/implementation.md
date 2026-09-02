@@ -527,7 +527,7 @@ every error message and every doc example wrong.
 | `Me` | `tenant: string`, `subject: string`, `account: string`, `role: string`, `versions?: Record<string, string>` |
 | `ConnectionSummary` | `id: string`, `appId: string`, `authKey: string`, `owner: string`, `displayName: string`, `state: ConnectionState`, `profile: Record<string, unknown>`, `lastTestOk: boolean \| null`, `lastTestedAt: string \| null`, `createdAt: string`, `updatedAt: string` |
 | `ConnectionState` | `"pending" \| "connected" \| "needs_refresh" \| "broken" \| "revoked"` |
-| `WorkflowSummary` | `id: string`, `name: string`, `displayName: string`, `description: string`, `status: WorkflowStatus`, `tags: string[]`, `runCount: number`, `updatedAt: string` |
+| `WorkflowSummary` | `id: string`, `key: string \| null`, `name: string`, `displayName: string`, `description: string`, `status: WorkflowStatus`, `tags: string[]`, `runCount: number`, `updatedAt: string` |
 | `WorkflowStatus` | `"draft" \| "active"` |
 | `RunStatus` | `"queued" \| "running" \| "succeeded" \| "failed" \| "canceled"` |
 | `RunResult` | `runId: string`, `status: RunStatus`, `output?: unknown`, `error?: unknown`, `steps: Record<string, unknown>`, `stepErrors?: StepError[]` |

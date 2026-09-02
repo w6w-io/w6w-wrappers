@@ -212,9 +212,19 @@ export class WorkflowsApi {
   async upsert(
     definition: unknown,
     options?: { project?: string; ifUnmodifiedSince?: string | null },
-  ): Promise<{ workflow: { id: string; name: string }; scheduled: boolean; updatedAt: string }> {
+  ): Promise<
+    {
+      workflow: { id: string; name: string; key: string | null };
+      scheduled: boolean;
+      updatedAt: string;
+    }
+  > {
     const res = await this.#host.request<
-      { workflow: { id: string; name: string }; scheduled: boolean; updatedAt: string }
+      {
+        workflow: { id: string; name: string; key: string | null };
+        scheduled: boolean;
+        updatedAt: string;
+      }
     >({
       method: "POST",
       path: "/workflows",

@@ -71,6 +71,7 @@ WORKFLOW_BODY = {
 
 WORKFLOW = WorkflowSummary(
     id="wf_1",
+    key=None,
     name="welcome-email",
     displayName="Welcome Email",
     description="Sends a welcome email on signup.",
