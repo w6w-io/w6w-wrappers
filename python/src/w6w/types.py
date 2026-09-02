@@ -648,6 +648,9 @@ class WorkflowSummary:
 
     #: Server-issued id, `wf_…`. The handle `workflows.run` takes.
     id: str
+    #: The callable key, or `None` when this workflow has none yet — the normal
+    #: state for every workflow that predates keys.
+    key: Optional[str]
     #: Machine name, unique per scope.
     name: str
     #: Human-facing label.
@@ -673,6 +676,7 @@ class WorkflowSummary:
         raw_status = body.get("status") if isinstance(body, dict) else None
         return cls(
             id=_text(body, "id"),
+            key=_nullable_text(body, "key"),
             name=_text(body, "name"),
             displayName=_text(body, "displayName"),
             description=_text(body, "description"),

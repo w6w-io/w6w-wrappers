@@ -198,12 +198,19 @@ Deno.test("console.workflows.upsert omits ?project= entirely when not supplied",
 
 Deno.test("console.workflows.upsert returns the response body's three top-level keys directly", async () => {
   const c = client(() =>
-    json({ workflow: { id: "wf_1", name: "wf_1" }, scheduled: true, updatedAt: "T3" }, 201)
+    json(
+      { workflow: { id: "wf_1", name: "wf_1", key: null }, scheduled: true, updatedAt: "T3" },
+      201,
+    )
   );
 
   const res = await c.client.console.workflows.upsert({ id: "wf_1" });
 
-  assertEquals(res, { workflow: { id: "wf_1", name: "wf_1" }, scheduled: true, updatedAt: "T3" });
+  assertEquals(res, {
+    workflow: { id: "wf_1", name: "wf_1", key: null },
+    scheduled: true,
+    updatedAt: "T3",
+  });
 });
 
 Deno.test("console.workflows.delete does NOT catch 409 workflow_not_archived — it propagates", async () => {

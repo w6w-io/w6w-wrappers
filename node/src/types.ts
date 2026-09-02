@@ -181,6 +181,8 @@ export type WorkflowStatus = "draft" | "active" | "archived";
 export interface WorkflowSummary {
   /** Server-issued id, `wf_…`. This is the handle a URN addresses. */
   id: string;
+  /** The callable key, or `null` when this workflow has none yet — the normal state for every workflow that predates keys. */
+  key: string | null;
   /** Stable slug, e.g. `"welcome-email"`. */
   name: string;
   /** Human-readable label. */
