@@ -88,6 +88,7 @@ const CONNECTION: ConnectionSummary = {
 
 const WORKFLOW: WorkflowSummary = {
   id: "wf_01HQ",
+  key: null,
   name: "welcome-email",
   displayName: "Welcome Email",
   description: "Sends a welcome email on signup.",

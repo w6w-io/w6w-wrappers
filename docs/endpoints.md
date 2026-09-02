@@ -253,6 +253,7 @@ one project; wrappers expose it as an optional argument.
   "workflows": [
     {
       "id": "wf_01H…",
+      "key": null,
       "name": "welcome-email",
       "displayName": "Welcome Email",
       "description": "Sends a welcome email on signup.",
