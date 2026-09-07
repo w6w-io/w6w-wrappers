@@ -28,6 +28,7 @@ import { ConnectionsApi } from "./connections.ts";
 import { DashboardApi } from "./dashboard.ts";
 import { EndpointsApi } from "./endpoints.ts";
 import { FunctionsApi } from "./functions.ts";
+import { OtpApi } from "./otp.ts";
 import { PasskeysApi } from "./passkeys.ts";
 import { ReliabilityApi } from "./reliability.ts";
 import { ProjectsApi } from "./projects.ts";
@@ -35,6 +36,7 @@ import { SavedTestsApi } from "./saved-tests.ts";
 import { SchedulesApi } from "./schedules.ts";
 import { StepTestsApi } from "./step-tests.ts";
 import { SubscriptionsApi } from "./subscriptions.ts";
+import { TenantLoginFlagsApi } from "./tenant-login-flags.ts";
 import { TenantOAuthAppsApi } from "./tenant-oauth-apps.ts";
 import { TokensApi } from "./tokens.ts";
 import { VaultApi } from "./vault.ts";
@@ -209,6 +211,14 @@ export type {
   TenantOAuthAppsResponse,
   TenantOAuthAppSummary,
 } from "./tenant-oauth-apps.ts";
+export { OtpApi } from "./otp.ts";
+export type { LoginProviders, OtpHost, OtpVerifyResponse } from "./otp.ts";
+export { TenantLoginFlagsApi } from "./tenant-login-flags.ts";
+export type {
+  SetTenantLoginFlagsInput,
+  TenantLoginFlags,
+  TenantLoginFlagsHost,
+} from "./tenant-login-flags.ts";
 
 /**
  * The slice of `W6WClient` the console namespace group needs: the transport,
@@ -271,6 +281,10 @@ export class ConsoleApi {
   readonly tenantOAuthApps: TenantOAuthAppsApi;
   /** `console.passkeys.*`. */
   readonly passkeys: PasskeysApi;
+  /** `console.otp.*` — email one-time-code sign-in, all three methods PUBLIC. */
+  readonly otp: OtpApi;
+  /** `console.tenantLoginFlags.*` — the caller's OWN tenant, never a tenant of its choosing. */
+  readonly tenantLoginFlags: TenantLoginFlagsApi;
 
   /**
    * @param host - The client this namespace group issues requests through.
@@ -296,5 +310,7 @@ export class ConsoleApi {
     this.apiCalls = new ApiCallsApi(host);
     this.tenantOAuthApps = new TenantOAuthAppsApi(host);
     this.passkeys = new PasskeysApi(host);
+    this.otp = new OtpApi(host);
+    this.tenantLoginFlags = new TenantLoginFlagsApi(host);
   }
 }

@@ -511,13 +511,35 @@ Deno.test(
 );
 
 Deno.test(
-  "console.auth.createAccount omits role/usage from the body when not given, but keeps companyName",
+  "console.auth.createAccount omits role/usage from the body when not given, and forwards companyName when given",
   async () => {
     const c = client(() => json(CREATE_ACCOUNT, 201));
 
     await c.client.console.auth.createAccount({ companyName: "Acme" });
 
     assertEquals(JSON.parse(c.calls[0].body ?? "null"), { companyName: "Acme" });
+  },
+);
+
+Deno.test(
+  "console.auth.createAccount({}) sends {} — companyName is optional, not defaulted or invented",
+  async () => {
+    const c = client(() => json(CREATE_ACCOUNT, 201));
+
+    await c.client.console.auth.createAccount({});
+
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
+  },
+);
+
+Deno.test(
+  "console.auth.createAccount({ role }) sends exactly { role } — no companyName key added",
+  async () => {
+    const c = client(() => json(CREATE_ACCOUNT, 201));
+
+    await c.client.console.auth.createAccount({ role: "Engineering" });
+
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), { role: "Engineering" });
   },
 );
 

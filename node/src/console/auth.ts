@@ -148,8 +148,8 @@ export interface SlugAvailabilityResponse {
  * `SignupInput` shape two methods below — `name`/`slug` are **not** sent, the
  * server mints the slug from `companyName`. */
 export interface CreateAccountInput {
-  /** The company/workspace name. Required — the server mints the account slug from it. */
-  companyName: string;
+  /** The company/workspace name. Optional — the server mints the account slug from it when present. */
+  companyName?: string;
   /** The caller's role in the company, from the signup form's dropdown. Optional. */
   role?: string;
   /** What the caller intends to use w6w for, from the signup form's dropdown. Optional. */
@@ -451,7 +451,7 @@ export class AuthApi {
    * adopting it downgrades an operator; this method never writes the session
    * itself, the caller decides.
    *
-   * @param input - The company name, plus the optional role/usage from the signup form.
+   * @param input - The optional company name, role and use-case from the signup form.
    * @returns The created account, a re-issued token carrying its claim, and the token's lifetime.
    * @throws {ApiError} On any non-2xx, e.g. `409` when the slug is taken.
    */
