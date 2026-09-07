@@ -835,6 +835,160 @@
       "notes": "Name-first, exactly like `functions.run`; wrappers expose the body field as `payload` though the wire spells it `input` (singular here, plural for a Function). UNLIKE `functions.run` this returns the kind-discriminated `RunEnvelope`, and the asymmetry is deliberate: an Endpoint dispatches to an app action, a Function or a Workflow, so only the response says which answered — the discriminant is information, not ceremony. The workflow arm returns 202, which is a NORMAL outcome and not an error. Wrappers must tolerate an unknown future `kind` rather than crashing, the same rule the unified `run` carries. The `{idOrKey}` path segment takes EITHER the resource's host-issued id or the key the user gave it, with no prefix, flag or tag to say which — the two shapes cannot collide, because an id carries a kind prefix and therefore an underscore while a key is a kebab-slug that forbids one. Resolution is id-first (a pure prefix test, no query), so this path cannot be used to probe whether a key exists by supplying something id-shaped. Two unknown KEYS answer identically and neither is echoed back — a key is short, human-chosen and guessable, so echoing it would make this an enumeration oracle; an unknown id may still be echoed, since nobody guesses a uuid. The key is unique per ACCOUNT, so within the scope a credential carries it names exactly one resource. INVOCATION FRAME (server, 2026-08-20): every arm of this envelope now also carries `invocationId` (an `inv_…` id for THIS attempt), `status`, `startedAt`, `finishedAt` and `durationMs`, and the two synchronous arms carry `output` — on the action arm alongside the existing `value`, which is now a DEPRECATED MIRROR of it and keeps the same meaning. Every one of those fields is ADDITIVE: no field was renamed, removed or re-typed, so an installed wrapper written against the three-arm shape keeps working unchanged. `status` is the PLATFORM's verdict on the attempt (`succeeded` | `failed` | `queued`) and must not be confused with a status the target itself reported inside `output`. `invocationId` and `runId` are DIFFERENT ids and neither replaces the other: `invocationId` names the attempt and resolves through `GET /invocations/{id}`; `runId` stays the queued workflow run on the workflow arm alone. A FAILED call's 4xx body carries the same frame fields beside its `error`, so the attempt is still lookup-able. New callers should read `output` on every arm."
     },
     {
+      "name": "team.members.list",
+      "summary": "List the caller's account team: every active member and their role.",
+      "method": "GET",
+      "path": "/me/account/members",
+      "status": "planned",
+      "serverImplemented": false,
+      "params": [],
+      "returns": "TeamMember[]",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.team.members()",
+        "python": "client.team.members()",
+        "cli": "w6w team members"
+      },
+      "notes": "Server wraps the body as `{ members: TeamMember[] }`; the wrapper unwraps and returns the array. Not project-scoped — team membership is an account-wide concept, and this route takes no `?project=`. Roster viewing is member-readable: any active member of the caller's account may list it, regardless of role — only the write operations below are gated by `canManageMembers`. `status: \"planned\"` records that the server route (T1.2.1) has not landed yet; this wrapper operation is implemented ahead of it (`docs/parity.md` §Conformance)."
+    },
+    {
+      "name": "team.invites.create",
+      "summary": "Invite someone to the caller's account, or mint an open, shareable invite link.",
+      "method": "POST",
+      "path": "/me/account/invites",
+      "status": "planned",
+      "serverImplemented": false,
+      "params": [
+        {
+          "name": "email",
+          "in": "body",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "role",
+          "in": "body",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "returns": "TeamInviteWithLink",
+      "successStatuses": [
+        201
+      ],
+      "naming": {
+        "ts": "client.team.invite(input)",
+        "python": "client.team.invite(email=None, role=None)",
+        "cli": "w6w team invite [--email <email>] [--role <role>]"
+      },
+      "notes": "`email` is optional: omitted, the server mints an OPEN invite — a shareable link with no target address, redeemable by whoever holds it. `role` defaults server-side to `\"member\"` when omitted, and `\"owner\"` is refused (`400 invalid_role`) — there is no self-service path to a second owner. Requires `canManageMembers` (`403 forbidden` otherwise). The response's `token` and `redemptionLink` are returned exactly once, at creation — they are never re-fetchable from `team.invites.list`, so a caller that drops this response has to revoke and re-invite. Server wraps the body as `{ invite: TeamInviteWithLink }`. `status: \"planned\"` — see `team.members.list`'s note."
+    },
+    {
+      "name": "team.invites.list",
+      "summary": "List the caller's account's open (pending, unrevoked, unexpired) invites.",
+      "method": "GET",
+      "path": "/me/account/invites",
+      "status": "planned",
+      "serverImplemented": false,
+      "params": [],
+      "returns": "TeamInvite[]",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.team.invites()",
+        "python": "client.team.invites()",
+        "cli": "w6w team invites"
+      },
+      "notes": "Server wraps the body as `{ invites: TeamInvite[] }`; the wrapper unwraps and returns the array, already filtered server-side to OPEN invites only (not used, not revoked, not expired) — this is one HTTP call, never a client-side list-then-filter over every invite the account has ever issued. Requires `canManageMembers` (`403 forbidden` otherwise); unlike the roster, pending invites are not plain-member-readable. `status: \"planned\"` — see `team.members.list`'s note."
+    },
+    {
+      "name": "team.invites.revoke",
+      "summary": "Revoke a pending invite before it is redeemed.",
+      "method": "DELETE",
+      "path": "/me/account/invites/{id}",
+      "status": "planned",
+      "serverImplemented": false,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "void",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.team.revokeInvite(id)",
+        "python": "client.team.revoke_invite(id)",
+        "cli": "w6w team revoke-invite <id>"
+      },
+      "notes": "The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. Requires `canManageMembers` (`403 forbidden` otherwise). `404 invite_not_found` for an unknown id; `409 invite_not_open` for one already used or already revoked — revoking is NOT idempotent and wrappers must not pretend otherwise. `status: \"planned\"` — see `team.members.list`'s note."
+    },
+    {
+      "name": "team.members.updateRole",
+      "summary": "Change a team member's role.",
+      "method": "PATCH",
+      "path": "/me/account/members/{userId}",
+      "status": "planned",
+      "serverImplemented": false,
+      "params": [
+        {
+          "name": "userId",
+          "in": "path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "role",
+          "in": "body",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "TeamMember",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.team.setRole(userId, role)",
+        "python": "client.team.set_role(user_id, role)",
+        "cli": "w6w team set-role <userId> --role <role>"
+      },
+      "notes": "Requires `canManageMembers` (`403 forbidden` otherwise). `role` of `\"owner\"` is refused (`403 cannot_change_owner_role`) and so is retargeting the account's current owner — there is no self-service ownership transfer. `400 invalid_role` for anything outside the account role set; `404 member_not_found` for an unknown `userId`. Server wraps the body as `{ member: TeamMember }`. `status: \"planned\"` — see `team.members.list`'s note."
+    },
+    {
+      "name": "team.members.remove",
+      "summary": "Remove a member from the caller's account.",
+      "method": "DELETE",
+      "path": "/me/account/members/{userId}",
+      "status": "planned",
+      "serverImplemented": false,
+      "params": [
+        {
+          "name": "userId",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "void",
+      "successStatuses": [
+        200
+      ],
+      "naming": {
+        "ts": "client.team.removeMember(userId)",
+        "python": "client.team.remove_member(user_id)",
+        "cli": "w6w team remove-member <userId>"
+      },
+      "notes": "The server returns `{ok: true}` and the wrapper unwraps it to NOTHING (`void` / `None` / exit code), same pin as `documents.delete`. This TOMBSTONES the membership rather than deleting the row (D-R3) — a removed member's `userId` may still appear in historical records — but that is a server-side implementation detail the wrapper contract does not surface. Requires `canManageMembers` (`403 forbidden` otherwise). The account's owner cannot be removed (`403 cannot_remove_owner`), and removing the account's last active member is refused (`409 last_member`) rather than leaving an ownerless, memberless account. `404 member_not_found` for an unknown `userId`. `status: \"planned\"` — see `team.members.list`'s note."
+    },
+    {
       "name": "run",
       "summary": "Run anything addressable by URN — a connection action, a function, an endpoint or a workflow.",
       "method": "POST",
