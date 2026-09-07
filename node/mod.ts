@@ -67,6 +67,14 @@ export type {
 } from "./src/functions.ts";
 export { EndpointsApi } from "./src/endpoints.ts";
 export type { EndpointRunOptions, EndpointsHost } from "./src/endpoints.ts";
+export { TeamApi } from "./src/team.ts";
+export type {
+  TeamHost,
+  TeamInvite,
+  TeamInviteInput,
+  TeamInviteWithLink,
+  TeamMember,
+} from "./src/team.ts";
 export type {
   WorkflowDefinition,
   WorkflowDetail,

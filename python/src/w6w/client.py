@@ -23,6 +23,7 @@ from .connections import ConnectionsApi
 from .documents import DocumentsApi
 from .me import fetch_me
 from .run import run_urn
+from .team import TeamApi
 from .types import Me, RunEnvelope
 from .endpoints import EndpointsApi
 from .functions import FunctionsApi
@@ -120,6 +121,13 @@ class Client:
         #: Returns the kind-discriminated envelope, since an Endpoint may
         #: dispatch to an action, a Function or a Workflow.
         self.endpoints: EndpointsApi = EndpointsApi(self)
+        #: The caller's account team: ``members``, ``invite``, ``invites``,
+        #: ``revoke_invite``, ``set_role``, ``remove_member``. Not
+        #: project-scoped — team membership is account-wide — but wired the
+        #: way ``documents`` is (the whole client, per its `TeamHost`
+        #: protocol), rather than the bare-callable shape ``vars``/
+        #: ``connections`` use, per this task's contract (A8).
+        self.team: TeamApi = TeamApi(self)
 
     def me(self) -> Me:
         """Fetch the caller's identity, plus the versions that answered.

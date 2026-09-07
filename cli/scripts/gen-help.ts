@@ -111,6 +111,7 @@ const GROUP_SUMMARIES: Record<string, string> = {
   endpoints: "Run endpoints by key or id",
   documents: "Create, read, update and delete documents",
   vars: "Create, read, update and delete variables",
+  team: "Invite, list and manage your account's team",
 };
 
 const GROUP_EXAMPLES: Record<string, string[]> = {
@@ -120,6 +121,7 @@ const GROUP_EXAMPLES: Record<string, string[]> = {
   workflows: ["w6w workflows list", "w6w workflows run wf_01HQ8N --wait"],
   documents: ["w6w documents list", "w6w documents get doc_01HQ8N"],
   vars: ["w6w vars list", "w6w vars create greeting --type string --value hello"],
+  team: ["w6w team members", "w6w team invite --email new@example.com --role admin"],
 };
 
 /** At least one runnable example per command — the part people actually copy. */
@@ -180,6 +182,15 @@ const COMMAND_EXAMPLES: Record<string, string[]> = {
   "vars.create": ["w6w vars create greeting --type string --value hello"],
   "vars.update": ["w6w vars update var_01HQ8N --value goodbye"],
   "vars.delete": ["w6w vars delete var_01HQ8N"],
+  "team.members.list": ["w6w team members"],
+  "team.invites.create": [
+    "w6w team invite --email new@example.com --role admin",
+    "w6w team invite",
+  ],
+  "team.invites.list": ["w6w team invites"],
+  "team.invites.revoke": ["w6w team revoke-invite inv_01HQ8N"],
+  "team.members.updateRole": ["w6w team set-role usr_01HQ8N --role admin"],
+  "team.members.remove": ["w6w team remove-member usr_01HQ8N"],
   "run": [
     `w6w run conn_01HQ8N --action send_email --payload '{"to":"a@b.com"}'`,
     `w6w run wf_01HQ8N --payload '{"email":"a@b.com"}'`,
@@ -268,6 +279,16 @@ const PARAM_HELP: Record<string, string> = {
     "conn_… | wf_… | fn_… | ep_… | an alias name (see: w6w connections list, w6w workflows list)",
   "run.action": "Action to invoke (connection URNs only)",
   "run.payload": "Input object, as a JSON string",
+
+  // Team management. `role` and `id`/`userId` are ambiguous across the group's
+  // own commands, so every one is keyed per-operation rather than falling back
+  // to a bare name.
+  "team.invites.create.email": "Address to invite (omit for an open, shareable invite link)",
+  "team.invites.create.role": "Role to grant on redemption (default: member)",
+  "team.invites.revoke.id": "Invite id (see: w6w team invites)",
+  "team.members.updateRole.userId": "Member's user id (see: w6w team members)",
+  "team.members.updateRole.role": "Role to set: member|admin (owner is not settable)",
+  "team.members.remove.userId": "Member's user id (see: w6w team members)",
 };
 
 /**

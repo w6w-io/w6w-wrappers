@@ -124,6 +124,10 @@ const ME: ConsoleMe = {
   role: "admin",
   invokeBaseUrl: "https://api.example.com",
   tenantAdmin: true,
+  // T2.1.1 (this task) added `canManageMembers` to `ConsoleMe` as a second
+  // required, fail-closed capability field alongside `tenantAdmin` — this
+  // fixture must carry both or every case in this file fails `deno check`.
+  canManageMembers: true,
   versions: { composition: "server@1a2b3c4" },
 };
 
