@@ -1026,15 +1026,17 @@ import "@w6w/sdk/console"; // pulls in client.console
 const client = new W6WClient();
 const plans = await client.console.commerce.plans();
 const { plan, status, canUpgrade } = await client.console.commerce.subscription();
+const invoices = await client.console.commerce.invoices();
 ```
 
-Two methods over the server's existing `commerce` edge — the checked-in plan catalog, and the
-caller's own resolved subscription.
+Three methods over the server's existing `commerce` edge — the checked-in plan catalog, the
+caller's own resolved subscription, and the caller's own invoice history.
 
 | Method            | Route                        | Public/authenticated                                        |
 | ----------------- | ----------------------------- | ------------------------------------------------------------ |
 | `plans()`         | `GET /commerce/plans`         | **PUBLIC** — sends no bearer (`requireAuth: false`)           |
 | `subscription()`  | `GET /commerce/subscription`  | **AUTHENTICATED** — default `requireAuth`                    |
+| `invoices()`      | `GET /commerce/invoices`      | **AUTHENTICATED** — default `requireAuth`                    |
 
 **The public/guarded split is per method, not per file, exactly like `console.auth`.** `plans()` is
 registered above the auth guard (`packages/server/packages/api/commerce/plans-route.ts`'s own doc
@@ -1044,11 +1046,13 @@ caller. `subscription()` derives the account from the JWT with zero DB lookups
 (`subscription-route.ts`'s own doc comment: "GUARDED") and uses the default, unconditional
 `requireAuth`.
 
-**Both responses carry an envelope key — unlike `console.dashboard`.** The server answers
-`c.json({ plans: catalog.map(toWirePlan) })` (`plans-route.ts`) and
-`c.json({ subscription: { plan, status, canUpgrade } })` (`subscription-route.ts`), so both methods
-here call this package's `unwrap()` helper: `plans()` returns `unwrap<Plan[]>(res, "plans")`,
-`subscription()` returns `unwrap<CommerceSubscription>(res, "subscription")`.
+**All three responses carry an envelope key — unlike `console.dashboard`.** The server answers
+`c.json({ plans: catalog.map(toWirePlan) })` (`plans-route.ts`),
+`c.json({ subscription: { plan, status, canUpgrade } })` (`subscription-route.ts`), and
+`c.json({ invoices: [...] })` (the server's invoices route), so all three methods here call this
+package's `unwrap()` helper: `plans()` returns `unwrap<Plan[]>(res, "plans")`, `subscription()`
+returns `unwrap<CommerceSubscription>(res, "subscription")`, `invoices()` returns
+`unwrap<Invoice[]>(res, "invoices")`.
 
 `Plan`'s wire shape is restated verbatim from the server's exported `WirePlan`/`PlanLimits` — the
 SDK cannot import `@w6w/server-plans` across the repo boundary — and is exactly the eight fields

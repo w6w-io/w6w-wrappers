@@ -169,6 +169,26 @@ export interface CommerceSubscription {
   readonly canUpgrade: boolean;
 }
 
+/**
+ * One entry in the caller's own invoice history, as `GET /commerce/invoices`
+ * returns it. `id` is OUR id (`commerce.invoice.id`), never a Stripe id;
+ * `status` is Stripe's own vocabulary, verbatim. Newest first, ordered
+ * server-side by `createdAt` — not `issuedAt`, which is nullable and
+ * therefore not a total order for a hand-entered SLA row.
+ */
+export interface Invoice {
+  readonly id: string;
+  readonly number: string | null;
+  readonly status: string;
+  readonly amountDueCents: number;
+  readonly amountPaidCents: number;
+  readonly currency: string;
+  readonly hostedInvoiceUrl: string | null;
+  readonly issuedAt: string | null;
+  readonly dueAt: string | null;
+  readonly createdAt: string;
+}
+
 /** Which cadence a checkout is for — mirrors `PlanPrice`'s own `BillingInterval`. */
 export type CheckoutInterval = "month" | "year";
 
@@ -293,6 +313,23 @@ export class CommerceApi {
       path: "/commerce/subscription",
     });
     return unwrap<CommerceSubscription>(res, "subscription");
+  }
+
+  /**
+   * Fetch the caller's own invoice history, newest first.
+   *
+   * AUTHENTICATED — the default `requireAuth` applies: the account is
+   * derived server-side from the principal.
+   *
+   * @returns The invoices, unwrapped from the `invoices` envelope.
+   * @throws {ApiError} On any non-2xx.
+   */
+  async invoices(): Promise<Invoice[]> {
+    const res = await this.#host.request<{ invoices: Invoice[] }>({
+      method: "GET",
+      path: "/commerce/invoices",
+    });
+    return unwrap<Invoice[]>(res, "invoices");
   }
 
   /**
