@@ -25,6 +25,7 @@ import { FUNCTION_COMMANDS } from "./functions.ts";
 import { NAMED_RUN_COMMANDS } from "./named-run.ts";
 import { WORKFLOW_COMMANDS } from "./workflows.ts";
 import { RUN_COMMANDS } from "./run.ts";
+import { TEAM_COMMANDS } from "./team.ts";
 
 export { DOCUMENT_COMMANDS } from "./documents.ts";
 export { VAR_COMMANDS } from "./vars.ts";
@@ -34,6 +35,7 @@ export { FUNCTION_COMMANDS } from "./functions.ts";
 export { NAMED_RUN_COMMANDS } from "./named-run.ts";
 export { WORKFLOW_COMMANDS } from "./workflows.ts";
 export { RUN_COMMANDS } from "./run.ts";
+export { TEAM_COMMANDS } from "./team.ts";
 
 /** Every wired command, keyed by canonical command path. */
 export const COMMANDS: CommandRegistry = {
@@ -45,4 +47,5 @@ export const COMMANDS: CommandRegistry = {
   ...FUNCTION_COMMANDS,
   ...NAMED_RUN_COMMANDS,
   ...RUN_COMMANDS,
+  ...TEAM_COMMANDS,
 };

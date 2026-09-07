@@ -37,6 +37,7 @@ from .documents import DocumentsApi, DocumentsHost
 from .errors import ApiError, ConfigError
 from .me import MeRequest, fetch_me
 from .run import RunRequest, run_urn
+from .team import TeamApi, TeamHost, TeamInvite, TeamInviteWithLink, TeamMember
 from .types import (
     UNSET,
     ConnectionState,
@@ -116,6 +117,14 @@ __all__ = [
     "RunStatus",
     "SaveResult",
     "StepError",
+    # The caller's account team (T2.1.1). Not project-scoped, and implemented
+    # ahead of the server (`endpoints.json`'s `status: "planned"` on all six —
+    # `docs/parity.md` §Conformance).
+    "TeamApi",
+    "TeamHost",
+    "TeamInvite",
+    "TeamInviteWithLink",
+    "TeamMember",
     "Transport",
     # The omit-vs-null sentinel and its type. Public because a caller assembling
     # a patch programmatically has to be able to say "not this field" — `None`

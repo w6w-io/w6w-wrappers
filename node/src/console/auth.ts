@@ -196,6 +196,17 @@ export interface ConsoleMe {
    * accidentally granted.
    */
   tenantAdmin: boolean;
+  /**
+   * Server-decided: may this caller manage its account's team (invite, change
+   * a role, remove a member)? Studio-internal; not on the published `Me`.
+   *
+   * **Required, not optional, on purpose.** A client forced to branch on
+   * `undefined` is a client that will branch wrong; an older server that omits
+   * the key yields `undefined` at runtime, which is falsy, so every
+   * `if (me.canManageMembers)` fails CLOSED — the capability is denied, never
+   * accidentally granted.
+   */
+  canManageMembers: boolean;
   /** Component versions, as the published `Me` documents them. Optional and open. */
   versions?: Record<string, string>;
 }
