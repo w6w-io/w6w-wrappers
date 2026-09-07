@@ -110,7 +110,8 @@ Twelve methods. `login`, `signup` and `checkAccountSlug` are relocated verbatim 
 own API client (`packages/studio/src/api/client.ts:249-291`), with the same field-for-field shapes
 it used (`packages/studio/src/api/types.ts:10-82`) — this module does not redesign them, only gives
 them a second home. `createAccount` takes a `CreateAccountInput` options object instead —
-`{companyName, role?, usage?}`, no `name`/`slug` key; the server mints the slug from `companyName`.
+`{companyName?, role?, usage?}`, no `name`/`slug` key; the server mints the slug from `companyName`
+when present.
 `getMe` was added first (see below); `getProfile` through `setPassword` are T1.1.4's `/me/*` family,
 added by this task.
 
