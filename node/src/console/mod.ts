@@ -85,6 +85,7 @@ export type {
   ConfirmCheckoutInput,
   ContactSalesInput,
   ContactSalesResult,
+  Invoice,
   MonitorLimit,
   SubscriptionChangePreview,
   SubscriptionChangeResult,
