@@ -1059,3 +1059,101 @@ status, and `CommerceSubscription.plan` is a catalog key, not a display name. Th
 `CommerceSubscription` rather than the bare `Subscription` because that name is already taken by
 `console/subscriptions.ts` (webhook-trigger subscriptions — an unrelated domain despite the shared
 word; do not confuse the two).
+
+## `console.otp.*`
+
+```ts
+import { W6WClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6WClient({ baseUrl: "https://api.example.com" }); // no token — see below
+const { otp } = await client.console.otp.loginProviders();
+if (otp) {
+  await client.console.otp.requestCode({ email: "alice@example.com" });
+  const { token } = await client.console.otp.verifyCode({
+    email: "alice@example.com",
+    code: "123456",
+  });
+}
+```
+
+Three methods, email one-time-code sign-in — a third standalone login option beside password and
+passkey (T2.1.3). Wire pins are T2.1.1's contract §Wire pins.
+
+| Method                  | Route                     | Public/authenticated                                                                        |
+| ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------- |
+| `loginProviders()`      | `GET /auth/login-providers` | **PUBLIC** — sends no bearer (`requireAuth: false`); `unwrap<LoginProviders>(res, "providers")` |
+| `requestCode(input)`    | `POST /auth/otp/request`  | **PUBLIC** — `{email}`; resolves `void`, discarding `202 {ok: true}`                          |
+| `verifyCode(input)`     | `POST /auth/otp/verify`   | **PUBLIC** — `{email, code}`; mints a session — see below                                     |
+
+**All three are PUBLIC, `requireAuth: false` — the login screen has no token.** Mirrors
+`console.passkeys`'s login pair exactly: without it, a tokenless client (the normal case at
+`/login`, before any session exists) would hit `requireToken`'s `ConfigError` before `fetch` is ever
+called.
+
+**`loginProviders()` is what `/login` reads to decide what to render** — `{password, passkey, otp}`,
+each a plain boolean naming whether that method is currently offered. It has **no refusal path** —
+T2.1.1's wire pin gives it none — so the ONLY way a caller learns "the server didn't answer" is the
+request itself throwing (network error, non-2xx). See
+`packages/studio/src/lib/login-providers.ts`'s `providerVisibility` for the one place that decides
+what to show when this call is still loading or has failed (fails OPEN for password/passkey, CLOSED
+for OTP — a network blip must never lock out a working deployment's password form).
+
+**`requestCode` answers `202 {ok: true}` ALWAYS, whether or not a user exists with that email**
+(T2.1.1's wire pin) — this is an anti-enumeration property of the ROUTE, not something this method
+adds; it simply discards the uninformative body and resolves `void`, the same convention as
+`console.projects.delete`/`console.schedules.delete`.
+
+**`verifyCode` mints a session, the same way `console.passkeys.authenticationVerify` does (HITL-5
+there): a standalone alternative to a password, not a second factor.** Its return type,
+`OtpVerifyResponse`, is a type ALIAS of `PasskeyAuthenticationVerifyResponse`
+(`import type { PasskeyAuthenticationVerifyResponse } from "./passkeys.ts"`), not a second
+declaration of the same four fields — the server's `POST /auth/otp/verify` answers a byte-identical
+body to `id/passkey-login.ts`'s own verify route (T2.1.1's wire pin), and the passkey names
+(`PasskeyUser`, `PasskeyAuthenticationVerifyResponse`) are published and cannot be renamed, so a
+third copy would be a third thing to drift. Every failure mode past a malformed body answers the
+same `401 otp_rejected` (T2.1.1's wire pin) — an unknown email, an expired code, a wrong code and a
+spent code are all indistinguishable to the caller, exactly like `console.passkeys`'s
+`401 passkey_rejected`.
+
+None of these three methods take a `project` scoping parameter — `OtpHost` needs only the transport,
+mirroring `PasskeysHost`'s own host shape.
+
+## `console.tenantLoginFlags.*`
+
+```ts
+import { W6WClient } from "@w6w/sdk";
+import "@w6w/sdk/console"; // pulls in client.console
+
+const client = new W6WClient();
+const flags = await client.console.tenantLoginFlags.get();
+await client.console.tenantLoginFlags.put({ otpEnabled: true });
+```
+
+Two methods: a tenant administrator's own password/OTP sign-in toggles (T2.1.3). The tenant is never
+a parameter — mirrors `console.tenantOAuthApps` exactly: both routes are scoped by the caller's own
+bearer (the tenant claim) plus a server-side `requireTenantAdmin` check (T2.1.1's wire pin).
+
+| Method       | Route                    | Notes                                                                                          |
+| ------------ | ------------------------ | ------------------------------------------------------------------------------------------------ |
+| `get()`      | `GET /tenant/login-flags`  | Reads `res.body.flags`; never calls `unwrap()`.                                                |
+| `put(input)` | `PUT /tenant/login-flags`  | **Body built by omission — see below.** Reads `res.body.flags`; never calls `unwrap()`.        |
+
+**`put` builds its request body by OMISSION, key by key — an omitted field never reaches the wire,**
+mirroring `console.tenantOAuthApps.put`'s discipline exactly. `SetTenantLoginFlagsInput` has two
+optional keys (`otpEnabled`, `passwordDisabled`); the server merges whichever ones are present over
+the stored row and leaves everything else untouched — T2.1.1's wire pin states it directly: "absent
+means preserve, `null` is refused." Unlike `SetTenantOAuthAppInput`, neither field here ever accepts
+`null` — both are plain optional booleans — so there is no "send `null` to clear it" case to
+support, but the same allowlist discipline applies: even a caller that defeats the type and passes a
+third key cannot get it onto the wire from here.
+
+**`409 no_fallback_login` is NOT caught here — it propagates as an ordinary `ApiError`,** exactly
+like every other write in this package. The server refuses a change that would leave the tenant with
+no way in at all (password disabled with OTP off, or the reverse) — this method does not enforce
+that invariant client-side or retry around it; the caller
+(`packages/studio/src/pages/TenantSettingsPage.tsx`) is what turns the code into a sentence, via a
+dedicated branch in that page's own `messageOf`.
+
+None of these two methods take a `project` scoping parameter — `TenantLoginFlagsHost` needs only the
+transport, mirroring `TenantOAuthAppsHost`'s own host shape.
