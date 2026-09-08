@@ -124,6 +124,10 @@ const ME: ConsoleMe = {
   role: "admin",
   invokeBaseUrl: "https://api.example.com",
   tenantAdmin: true,
+  // T2.1.1 (this task) added `canManageMembers` to `ConsoleMe` as a second
+  // required, fail-closed capability field alongside `tenantAdmin` — this
+  // fixture must carry both or every case in this file fails `deno check`.
+  canManageMembers: true,
   versions: { composition: "server@1a2b3c4" },
 };
 
@@ -507,13 +511,35 @@ Deno.test(
 );
 
 Deno.test(
-  "console.auth.createAccount omits role/usage from the body when not given, but keeps companyName",
+  "console.auth.createAccount omits role/usage from the body when not given, and forwards companyName when given",
   async () => {
     const c = client(() => json(CREATE_ACCOUNT, 201));
 
     await c.client.console.auth.createAccount({ companyName: "Acme" });
 
     assertEquals(JSON.parse(c.calls[0].body ?? "null"), { companyName: "Acme" });
+  },
+);
+
+Deno.test(
+  "console.auth.createAccount({}) sends {} — companyName is optional, not defaulted or invented",
+  async () => {
+    const c = client(() => json(CREATE_ACCOUNT, 201));
+
+    await c.client.console.auth.createAccount({});
+
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), {});
+  },
+);
+
+Deno.test(
+  "console.auth.createAccount({ role }) sends exactly { role } — no companyName key added",
+  async () => {
+    const c = client(() => json(CREATE_ACCOUNT, 201));
+
+    await c.client.console.auth.createAccount({ role: "Engineering" });
+
+    assertEquals(JSON.parse(c.calls[0].body ?? "null"), { role: "Engineering" });
   },
 );
 

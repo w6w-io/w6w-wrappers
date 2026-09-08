@@ -14,7 +14,29 @@
 import { assertEquals } from "@std/assert";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
-import type { CommerceSubscription, Plan } from "../../src/console/commerce.ts";
+import type { CommerceSubscription, Invoice, Plan } from "../../src/console/commerce.ts";
+
+/**
+ * Compile-time-only: the exported `Invoice` type must carry EXACTLY the ten
+ * pinned wire keys, no eleventh (in particular, never `raw`). A runtime test
+ * cannot see an interface field — a `raw` field added to `Invoice` makes this
+ * object literal fail `deno task check` with an excess-property error, since
+ * `Record<keyof Invoice, true>` would then require (and this literal would
+ * then over-supply) an eleventh key.
+ */
+const _INVOICE_KEYS: Record<keyof Invoice, true> = {
+  id: true,
+  number: true,
+  status: true,
+  amountDueCents: true,
+  amountPaidCents: true,
+  currency: true,
+  hostedInvoiceUrl: true,
+  issuedAt: true,
+  dueAt: true,
+  createdAt: true,
+};
+void _INVOICE_KEYS;
 
 /** One recorded call to the fake transport. */
 interface Call {
@@ -80,6 +102,20 @@ const PLAN: Plan = {
 
 const SUBSCRIPTION: CommerceSubscription = { plan: "team", status: "active", canUpgrade: true };
 
+/** A realistic invoice, matching every one of `Invoice`'s ten pinned fields. */
+const INVOICE: Invoice = {
+  id: "inv_5f3c",
+  number: "A1B2C3-0001",
+  status: "paid",
+  amountDueCents: 4900,
+  amountPaidCents: 4900,
+  currency: "usd",
+  hostedInvoiceUrl: "https://invoice.stripe.com/abc",
+  issuedAt: "2026-09-01T00:00:00.000Z",
+  dueAt: "2026-10-01T00:00:00.000Z",
+  createdAt: "2026-09-01T00:00:00.000Z",
+};
+
 /** A client wired to a fake transport, WITH a token — the interesting case for `requireAuth`. */
 function client(respond: (call: Call) => Response): { client: W6WClient; calls: Call[] } {
   const fake = fakeFetch(respond);
@@ -142,10 +178,53 @@ Deno.test(
   },
 );
 
-Deno.test("console.commerce: plans and subscription are functions on a constructed client", () => {
+Deno.test(
+  "console.commerce.invoices() hits GET /commerce/invoices (exact path) and unwraps the invoices envelope",
+  async () => {
+    const c = client(() => json({ invoices: [INVOICE] }));
+
+    const result = await c.client.console.commerce.invoices();
+
+    // Asserted against literals written independently of the method's own
+    // return value — a `return res.body` implementation (no envelope peel)
+    // or a wrong envelope key (`unwrap(res, "data")`) both fail here, either
+    // by shape (not an array) or by throwing `ApiError` (missing key).
+    assertEquals(Array.isArray(result), true);
+    assertEquals(result.length, 1);
+    assertEquals(result[0].id, "inv_5f3c");
+    assertEquals(result[0].number, "A1B2C3-0001");
+    assertEquals(result[0].status, "paid");
+    assertEquals(result[0].amountDueCents, 4900);
+    assertEquals(result[0].amountPaidCents, 4900);
+    assertEquals(result[0].currency, "usd");
+    assertEquals(result[0].hostedInvoiceUrl, "https://invoice.stripe.com/abc");
+    assertEquals(result[0].issuedAt, "2026-09-01T00:00:00.000Z");
+    assertEquals(result[0].dueAt, "2026-10-01T00:00:00.000Z");
+    assertEquals(result[0].createdAt, "2026-09-01T00:00:00.000Z");
+    assertEquals(c.calls[0].method, "GET");
+    // Exact path, not a substring — `/commerce/invoice` (singular) must fail.
+    assertEquals(c.calls[0].url, "https://api.example.com/commerce/invoices");
+  },
+);
+
+Deno.test(
+  "console.commerce.invoices() DOES send the bearer — default requireAuth, never public",
+  async () => {
+    const c = client(() => json({ invoices: [INVOICE] }));
+
+    await c.client.console.commerce.invoices();
+
+    // A `requireAuth: false` implementation (copying `plans()` instead of
+    // `subscription()`) dies precisely here.
+    assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
+  },
+);
+
+Deno.test("console.commerce: plans, subscription and invoices are functions on a constructed client", () => {
   // Runtime, not type-level: a namespace that silently lost a method would
   // still typecheck everywhere else in this suite.
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
   assertEquals(typeof c.console.commerce.plans, "function");
   assertEquals(typeof c.console.commerce.subscription, "function");
+  assertEquals(typeof c.console.commerce.invoices, "function");
 });

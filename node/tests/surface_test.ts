@@ -29,6 +29,13 @@
 
 import { assertEquals } from "@std/assert";
 import * as barrel from "../mod.ts";
+// `ConsoleMe` is deliberately NOT part of the root barrel (`console.*` is a
+// separate, unstable entry point — see `mod.ts`'s header and
+// `src/console/mod.ts`), so this one type pin reaches past `../mod.ts` to its
+// actual home. Every other pin in this file stays on the published barrel;
+// this is the sole, deliberate exception, and it exists only to carry the
+// `canManageMembers` mutation guard this task's contract requires here.
+import type { ConsoleMe } from "../src/console/mod.ts";
 import {
   type ActionRunEnvelope,
   type ConnectionState,
@@ -79,6 +86,8 @@ const PUBLIC_SURFACE: Record<string, "function" | "string"> = {
   // `endpoints.run(name, {payload})`, the sibling shape of `workflows.run`.
   FunctionsApi: "function",
   EndpointsApi: "function",
+  // T2.1.1 (this task) — the caller's account team.
+  TeamApi: "function",
   // T2.1.5 — execution.
   runUrn: "function",
   isActionRun: "function",
@@ -113,6 +122,15 @@ Deno.test("the barrel's classes and guards are reachable and usable, not just pr
   assertEquals(typeof client.workflows.run, "function");
   assertEquals(typeof client.me, "function");
   assertEquals(typeof client.run, "function");
+  // The six `team.*` operations, named individually: G2 (this task's contract)
+  // requires that deleting any one of them fails a NAMED assertion here or in
+  // `team_test.ts` — a bare `typeof client.team` check would not do that.
+  assertEquals(typeof client.team.members, "function");
+  assertEquals(typeof client.team.invite, "function");
+  assertEquals(typeof client.team.invites, "function");
+  assertEquals(typeof client.team.revokeInvite, "function");
+  assertEquals(typeof client.team.setRole, "function");
+  assertEquals(typeof client.team.removeMember, "function");
   assertEquals(barrel.joinBaseUrl("https://x.example.com"), "https://x.example.com");
   assertEquals(barrel.path`/documents/${"a/b"}`, "/documents/a%2Fb");
   assertEquals(new barrel.ApiError(404, "unknown_document", "No such.").status, 404);
@@ -249,3 +267,27 @@ const _knownTriggers: WorkflowRunOptions[] = [
  */
 const _unknownArm: RunEnvelope = { kind: "quantum", note: "a kind from a newer server" };
 const _unknownArmTyped: UnknownRunEnvelope = { kind: "quantum", note: "…" };
+
+/**
+ * `canManageMembers` is REQUIRED on {@linkcode ConsoleMe} (this task, T2.1.1),
+ * the same fail-closed pin `tenantAdmin` already carries
+ * (`tests/console/auth_test.ts`'s own `_meWithoutCapability`). That existing
+ * pin does not discriminate THIS field on its own — an object still missing
+ * `tenantAdmin` fails to compile whether or not `canManageMembers` stayed
+ * required — so this object supplies every OTHER required field and omits
+ * only `canManageMembers`, making the mutation this task's contract calls out
+ * ("make `canManageMembers` optional") the ONE thing that turns this line
+ * green.
+ */
+// @ts-expect-error — `canManageMembers` is required; making it optional unpins this rule.
+const _meWithoutManageMembers: ConsoleMe = {
+  tenant: "t",
+  subject: "s",
+  account: "a",
+  role: "r",
+  tenantAdmin: true,
+};
+
+Deno.test("ConsoleMe requires canManageMembers — the type-level guard above is live", () => {
+  assertEquals(typeof _meWithoutManageMembers, "object");
+});

@@ -28,6 +28,7 @@ import { ConfigError } from "./errors.ts";
 import { type HttpResponse, request, type RequestOptions } from "./http.ts";
 import { fetchMe } from "./me.ts";
 import { type RunInput, runUrn } from "./run.ts";
+import { TeamApi } from "./team.ts";
 import type { Me, RunEnvelope } from "./types.ts";
 import { VarsApi } from "./vars.ts";
 import { EndpointsApi } from "./endpoints.ts";
@@ -144,6 +145,14 @@ export class W6WClient {
    */
   readonly console: ConsoleApi;
 
+  /**
+   * The caller's account team: `members`, `invite`, `invites`, `revokeInvite`,
+   * `setRole`, `removeMember`. Not project-scoped — team membership is
+   * account-wide — and constructed with the transport only, exactly like
+   * `vars` and `connections`.
+   */
+  readonly team: TeamApi;
+
   readonly #fetch: FetchLike;
 
   /**
@@ -179,6 +188,7 @@ export class W6WClient {
     this.functions = new FunctionsApi(this);
     this.endpoints = new EndpointsApi(this);
     this.console = new ConsoleApi(this);
+    this.team = new TeamApi(this);
   }
 
   /**

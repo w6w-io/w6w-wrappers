@@ -1437,6 +1437,244 @@ export const HELP_TREE: HelpTree = {
         "w6w endpoints run send-email",
       ],
     },
+    {
+      "name": "team",
+      "summary": "Invite, list and manage your account's team",
+      "headline": "invite, list and manage your account's team",
+      "usage": "w6w team <command> [options]",
+      "commands": [
+        {
+          "operation": "team.members.list",
+          "path": [
+            "team",
+            "members",
+          ],
+          "name": "members",
+          "aliases": [],
+          "summary": "List the caller's account team: every active member and their role.",
+          "short": "List the caller's account team: every active member and their role",
+          "headline": "list the caller's account team: every active member and their role",
+          "usage": "w6w team members [options]",
+          "naming": "w6w team members",
+          "status": "planned",
+          "params": [
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w team members",
+          ],
+          "notes": [
+            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
+          ],
+        },
+        {
+          "operation": "team.invites.create",
+          "path": [
+            "team",
+            "invite",
+          ],
+          "name": "invite",
+          "aliases": [],
+          "summary":
+            "Invite someone to the caller's account, or mint an open, shareable invite link.",
+          "short": "Invite someone to the caller's account, or mint an open, shareable invite link",
+          "headline":
+            "invite someone to the caller's account, or mint an open, shareable invite link",
+          "usage": "w6w team invite [options]",
+          "naming": "w6w team invite [--email <email>] [--role <role>]",
+          "status": "planned",
+          "params": [
+            {
+              "name": "email",
+              "kind": "flag",
+              "display": "--email <email>",
+              "description": "Address to invite (omit for an open, shareable invite link)",
+              "required": false,
+            },
+            {
+              "name": "role",
+              "kind": "flag",
+              "display": "--role <role>",
+              "description": "Role to grant on redemption (default: member)",
+              "required": false,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w team invite --email new@example.com --role admin",
+            "w6w team invite",
+          ],
+          "notes": [
+            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
+          ],
+        },
+        {
+          "operation": "team.invites.list",
+          "path": [
+            "team",
+            "invites",
+          ],
+          "name": "invites",
+          "aliases": [],
+          "summary": "List the caller's account's open (pending, unrevoked, unexpired) invites.",
+          "short": "List the caller's account's open (pending, unrevoked, unexpired) invites",
+          "headline": "list the caller's account's open (pending, unrevoked, unexpired) invites",
+          "usage": "w6w team invites [options]",
+          "naming": "w6w team invites",
+          "status": "planned",
+          "params": [
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w team invites",
+          ],
+          "notes": [
+            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
+          ],
+        },
+        {
+          "operation": "team.invites.revoke",
+          "path": [
+            "team",
+            "revoke-invite",
+          ],
+          "name": "revoke-invite",
+          "aliases": [],
+          "summary": "Revoke a pending invite before it is redeemed.",
+          "short": "Revoke a pending invite before it is redeemed",
+          "headline": "revoke a pending invite before it is redeemed",
+          "usage": "w6w team revoke-invite <id> [options]",
+          "naming": "w6w team revoke-invite <id>",
+          "status": "planned",
+          "params": [
+            {
+              "name": "id",
+              "kind": "argument",
+              "display": "<id>",
+              "description": "Invite id (see: w6w team invites)",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w team revoke-invite inv_01HQ8N",
+          ],
+          "notes": [
+            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
+          ],
+        },
+        {
+          "operation": "team.members.updateRole",
+          "path": [
+            "team",
+            "set-role",
+          ],
+          "name": "set-role",
+          "aliases": [],
+          "summary": "Change a team member's role.",
+          "short": "Change a team member's role",
+          "headline": "change a team member's role",
+          "usage": "w6w team set-role <userId> --role <role> [options]",
+          "naming": "w6w team set-role <userId> --role <role>",
+          "status": "planned",
+          "params": [
+            {
+              "name": "userId",
+              "kind": "argument",
+              "display": "<userId>",
+              "description": "Member's user id (see: w6w team members)",
+              "required": true,
+            },
+            {
+              "name": "role",
+              "kind": "flag",
+              "display": "--role <role>",
+              "description": "Role to set: member|admin (owner is not settable)",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w team set-role usr_01HQ8N --role admin",
+          ],
+          "notes": [
+            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
+          ],
+        },
+        {
+          "operation": "team.members.remove",
+          "path": [
+            "team",
+            "remove-member",
+          ],
+          "name": "remove-member",
+          "aliases": [],
+          "summary": "Remove a member from the caller's account.",
+          "short": "Remove a member from the caller's account",
+          "headline": "remove a member from the caller's account",
+          "usage": "w6w team remove-member <userId> [options]",
+          "naming": "w6w team remove-member <userId>",
+          "status": "planned",
+          "params": [
+            {
+              "name": "userId",
+              "kind": "argument",
+              "display": "<userId>",
+              "description": "Member's user id (see: w6w team members)",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w team remove-member usr_01HQ8N",
+          ],
+          "notes": [
+            'This operation is "planned": it is implemented here, but the server route is not live yet, so calling it against a server today returns 404.',
+          ],
+        },
+      ],
+      "options": [],
+      "examples": [
+        "w6w team members",
+        "w6w team invite --email new@example.com --role admin",
+      ],
+    },
   ],
   "globalFlags": [
     {
@@ -1616,6 +1854,30 @@ export const COMMAND_PATHS: string[][] = [
   [
     "endpoints",
     "run",
+  ],
+  [
+    "team",
+    "members",
+  ],
+  [
+    "team",
+    "invite",
+  ],
+  [
+    "team",
+    "invites",
+  ],
+  [
+    "team",
+    "revoke-invite",
+  ],
+  [
+    "team",
+    "set-role",
+  ],
+  [
+    "team",
+    "remove-member",
   ],
 ];
 
