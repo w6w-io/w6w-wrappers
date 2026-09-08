@@ -92,6 +92,27 @@ export interface InvokeStartState {
   trigger?: { event?: unknown };
 }
 
+/**
+ * A caller-supplied override merged into an app action's outbound request at
+ * the wire — the escape hatch for a vendor field the Action's own `params`
+ * don't declare (`.claude/docs/overrides.md`). Declared locally rather than
+ * imported from `@w6w/types`'s `RequestOverrides`: the SDK has zero runtime
+ * dependencies and declares its own types (see {@link InvokeStartState}
+ * above), so this mirrors that shape structurally instead.
+ */
+export interface RequestOverrides {
+  /** Merged over the request body — deep-merges objects, index-merges arrays. */
+  body?: Record<string, unknown>;
+  /** Merged into the URL's query string; `null` removes a key the action set. */
+  query?: Record<string, string | number | boolean | null>;
+  /** Added to the request headers; applied before the auth `sign` hook, so it can't hijack it. */
+  headers?: Record<string, string>;
+  /** Which outbound request receives the overrides. Defaults to `"first"`. */
+  target?: "first" | "first-write" | "all";
+  /** Restrict the merge to requests whose URL contains this substring. */
+  match?: string;
+}
+
 /** Options for {@link AppsNamespace.invoke}. */
 export interface InvokeOptions {
   /** Run the action with this connection; omitted, the server picks one. */
@@ -100,6 +121,8 @@ export interface InvokeOptions {
   project?: string;
   /** Upstream state to resolve `steps.<id>.output` / `trigger.event` against. */
   state?: InvokeStartState;
+  /** Escape hatch for a vendor field the Action's declared params don't cover. */
+  overrides?: RequestOverrides;
 }
 
 export interface AppSummary {
@@ -788,7 +811,9 @@ export class AppsApi {
    * @param params - The action's parameters, forwarded verbatim.
    * @param opts - `connectionId` to run with (omitted, the server picks);
    *   `project` to scope vars/documents to; `state` to resolve upstream
-   *   references against.
+   *   references against; `overrides` to reach a vendor field the action's
+   *   own params don't declare — merged onto the invocation envelope, never
+   *   into `params`.
    * @returns The whole response body — no envelope key to peel.
    * @throws {ApiError} On any non-2xx, including an action's own failure (`424`).
    */
