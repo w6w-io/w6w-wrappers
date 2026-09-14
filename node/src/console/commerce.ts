@@ -69,10 +69,10 @@ export interface RetentionLimit {
 
 /** Every countable resource a plan bounds. */
 export interface PlanQuotas {
-  readonly connections: Quota;
   readonly runs: Quota;
+  /** Concurrent runs — the server's own `parallelExecutions` dimension. */
+  readonly parallelExecutions: Quota;
   readonly monitors: MonitorLimit;
-  readonly checkRuns: Quota;
   readonly retention: RetentionLimit;
   readonly projects: Quota;
   readonly seats: Quota;

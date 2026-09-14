@@ -78,10 +78,9 @@ const PLAN: Plan = {
   features: ["catalog"],
   limits: {
     quotas: {
-      connections: { kind: "capped", included: 3 },
       runs: { kind: "metered", included: 1000, per: 1000, unitAmount: 5 },
+      parallelExecutions: { kind: "capped", included: 1 },
       monitors: { quota: { kind: "capped", included: 5 }, minCadenceMinutes: 15 },
-      checkRuns: { kind: "unlimited" },
       retention: { bodiesDays: 7, metadataDays: 30 },
       projects: { kind: "capped", included: 1 },
       seats: { kind: "capped", included: 1 },
