@@ -113,6 +113,12 @@ export interface ReliabilityVendorStatus {
 export interface ReliabilityService {
   appId: string;
   displayName: string;
+  /** Inlined catalog icon for this requested service, when it declares one. */
+  iconSrc?: string;
+  /** Optional dark-mode icon variant. */
+  iconSrcDark?: string;
+  /** Brand-colour fallback when the app has no icon. */
+  brandColor?: string;
   state: ReliabilityState;
   hasDeclaredHealth: boolean;
   calls: number;
