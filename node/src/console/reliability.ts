@@ -1,5 +1,5 @@
 /**
- * `client.console.reliability.*` — the account-scoped reliability board,
+ * `client.console.reliability.*` — the project-scoped reliability board,
  * relocated from the studio's own API client.
  *
  * **Studio-internal, not the published partner contract.** This namespace
@@ -194,12 +194,21 @@ export interface ReliabilityServices {
   services: ReliabilityService[];
 }
 
+/** Identifier-only project membership discovery; it performs no status probes. */
+export interface ReliabilityServiceMembers {
+  account: string;
+  window: { from: string; to: string; days: number };
+  uptimeMeans: string;
+  definition: { id: string; version: string; source: string };
+  appIds: string[];
+}
+
 /**
  * The `console.reliability` namespace on a `W6WClient`.
  *
  * @example
  * ```ts
- * const board = await client.console.reliability.list(30, 5);
+ * const board = await client.console.reliability.list("prj_123", ["io.w6w.stripe"], 30);
  * ```
  */
 export class ReliabilityApi {
@@ -213,18 +222,35 @@ export class ReliabilityApi {
   }
 
   /**
-   * Fetch the account-scoped reliability board.
+   * Fetch one project's reliability board.
    *
+   * @param project - The project whose services and calls are reported.
+   * @param appIds - Explicit service filter. The server accepts at most ten ids.
    * @param days - The window size in days. Omitted, the server applies its own default.
    * @param limit - Cap on the number of services returned, most-recently-called first. Omitted, no cap.
    * @returns The board, exactly as the server sent it — no envelope key to peel.
    * @throws {ApiError} On any non-2xx.
    */
-  async list(days?: number, limit?: number): Promise<ReliabilityServices> {
+  async list(
+    project: string,
+    appIds: readonly string[],
+    days?: number,
+    limit?: number,
+  ): Promise<ReliabilityServices> {
     const res = await this.#host.request<ReliabilityServices>({
       method: "GET",
       path: "/reliability/services",
-      query: { days, limit },
+      query: { project, apps: appIds.join(","), days, limit },
+    });
+    return res.body;
+  }
+
+  /** Discover project members before issuing bounded status batches. */
+  async listMembers(project: string, days?: number): Promise<ReliabilityServiceMembers> {
+    const res = await this.#host.request<ReliabilityServiceMembers>({
+      method: "GET",
+      path: "/reliability/services/members",
+      query: { project, days },
     });
     return res.body;
   }

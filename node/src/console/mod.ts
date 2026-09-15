@@ -237,7 +237,7 @@ export interface ConsoleHost {
  *
  * @example
  * ```ts
- * const board = await client.console.reliability.list(30, 5);
+ * const board = await client.console.reliability.list("prj_123", 30, 5);
  * ```
  */
 export class ConsoleApi {

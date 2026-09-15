@@ -20,9 +20,9 @@
  * result type) and `console/mod.ts` already re-exports it — this module
  * imports it as a type and uses it verbatim as `list`'s return element type.
  *
- * `api-calls` is scoped to the caller by the server's own repo, not by a
- * `project` query param — so `ApiCallsHost` needs only the transport,
- * mirroring `VarsHost`/`ProjectsHost`, not `DocumentsHost`.
+ * `api-calls` is scoped to the caller and can be narrowed to one project. The
+ * reliability detail page always supplies that project so its drill-down rows
+ * are the same rows that produced the reliability numbers.
  *
  * @module
  */
@@ -54,6 +54,7 @@ export interface ApiCallsHost {
  * values.
  */
 export interface ApiCallsFilter {
+  project?: string;
   appId?: string;
   actionKey?: string;
   connectionId?: string;
@@ -94,6 +95,7 @@ export class ApiCallsApi {
       path: "/api-calls",
       query: {
         appId: filter?.appId,
+        project: filter?.project,
         actionKey: filter?.actionKey,
         connectionId: filter?.connectionId,
         sessionId: filter?.sessionId,

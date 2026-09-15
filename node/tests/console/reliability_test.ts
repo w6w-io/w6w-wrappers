@@ -78,7 +78,7 @@ Deno.test(
   async () => {
     const c = client(() => json(BOARD));
 
-    const board = await c.client.console.reliability.list(30, 5);
+    const board = await c.client.console.reliability.list("prj_1", ["app_a"], 30, 5);
 
     // Deep-equals the mocked payload exactly: a tree that wrongly called
     // unwrap(res, "reliability") would reject instead of resolving here, since
@@ -88,7 +88,7 @@ Deno.test(
     assertEquals(c.calls.length, 1);
     assertMatch(
       c.calls[0].url,
-      /^https:\/\/api\.example\.com\/reliability\/services\?days=30&limit=5$/,
+      /^https:\/\/api\.example\.com\/reliability\/services\?project=prj_1&apps=app_a&days=30&limit=5$/,
     );
   },
 );
@@ -96,24 +96,30 @@ Deno.test(
 Deno.test("console.reliability.list omits `limit` entirely when not given", async () => {
   const c = client(() => json(BOARD));
 
-  await c.client.console.reliability.list(30);
+  await c.client.console.reliability.list("prj_1", ["app_a"], 30);
 
-  assertEquals(c.calls[0].url, "https://api.example.com/reliability/services?days=30");
+  assertEquals(
+    c.calls[0].url,
+    "https://api.example.com/reliability/services?project=prj_1&apps=app_a&days=30",
+  );
   assertEquals(c.calls[0].url.includes("limit"), false);
 });
 
-Deno.test("console.reliability.list with no arguments sends no query string", async () => {
+Deno.test("console.reliability.list always sends its required project", async () => {
   const c = client(() => json(BOARD));
 
-  await c.client.console.reliability.list();
+  await c.client.console.reliability.list("prj_1", ["app_a"]);
 
-  assertEquals(c.calls[0].url, "https://api.example.com/reliability/services");
+  assertEquals(
+    c.calls[0].url,
+    "https://api.example.com/reliability/services?project=prj_1&apps=app_a",
+  );
 });
 
 Deno.test("console.reliability.list sends the bearer like any other request", async () => {
   const c = client(() => json(BOARD));
 
-  await c.client.console.reliability.list();
+  await c.client.console.reliability.list("prj_1", ["app_a"]);
 
   assertEquals(c.calls[0].method, "GET");
   assertEquals(c.calls[0].headers.get("authorization"), "Bearer tok_1");
