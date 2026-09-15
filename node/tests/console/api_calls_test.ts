@@ -92,10 +92,11 @@ Deno.test(
   async () => {
     const c = client(() => json({ apiCalls: [] }));
 
-    await c.client.console.apiCalls.list({ appId: "app_x", limit: 50 });
+    await c.client.console.apiCalls.list({ project: "prj_1", appId: "app_x", limit: 50 });
 
     const url = new URL(c.calls[0].url);
     assertEquals(url.searchParams.get("appId"), "app_x");
+    assertEquals(url.searchParams.get("project"), "prj_1");
     assertEquals(url.searchParams.get("limit"), "50");
     assertEquals(url.searchParams.has("actionKey"), false);
     assertEquals(url.searchParams.has("connectionId"), false);
@@ -116,6 +117,7 @@ Deno.test("console.apiCalls.list forwards every defined filter field", async () 
 
   await c.client.console.apiCalls.list({
     appId: "app_x",
+    project: "prj_1",
     actionKey: "send",
     connectionId: "conn_1",
     sessionId: "sess_1",
@@ -124,6 +126,7 @@ Deno.test("console.apiCalls.list forwards every defined filter field", async () 
 
   const url = new URL(c.calls[0].url);
   assertEquals(url.searchParams.get("appId"), "app_x");
+  assertEquals(url.searchParams.get("project"), "prj_1");
   assertEquals(url.searchParams.get("actionKey"), "send");
   assertEquals(url.searchParams.get("connectionId"), "conn_1");
   assertEquals(url.searchParams.get("sessionId"), "sess_1");
