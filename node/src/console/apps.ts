@@ -12,7 +12,9 @@
  * this class holds no state of its own beyond the injected host, so two
  * clients in one process never share a credential.
  *
- * **The largest single domain in this project** — 16 methods, relocated from
+ * **The largest single domain in this project** — 17 methods (`listPage` is
+ * new, additive to `list`, and reuses the same `AppsHost.request` call
+ * `list`'s cursor loop makes), relocated from
  * `packages/studio/src/api/client.ts`'s single `// Apps` comment block
  * (`client.ts:235-393` on the studio base tree). Method names below are
  * SHORTENED (dropping the `App`/`Apps` prefix `client.ts`'s flat method names
@@ -471,10 +473,45 @@ export interface UpsertOAuthConfigInput {
   extra?: Record<string, unknown>;
 }
 
-/** One page of `GET /apps`, as `list`'s pagination loop reads it. */
-interface AppsPage {
+/** One page of `GET /apps`, as {@link AppsApi.listPage} and `list`'s pagination loop both read it. */
+export interface AppsPage {
   apps: AppSummary[];
   nextCursor?: string;
+}
+
+/** {@link ListAppsOptions.sort}'s allowed wire values. */
+export type ListAppsSort = "name" | "-name" | "recent" | "-recent";
+
+/**
+ * Options for {@link AppsApi.listPage}. Every member is optional and, when
+ * present, is forwarded to `GET /apps` under the SAME wire name — this is a
+ * thin pass-through, not a client-side re-shaping. An omitted member is never
+ * sent; an explicitly supplied `false` (`managed`/`compact`) IS sent, which is
+ * why `undefined` and `false` are kept distinct all the way to the query
+ * string (see {@link QueryParams} in `../http.ts`).
+ */
+export interface ListAppsOptions {
+  /** Full-text search. */
+  q?: string;
+  category?: string;
+  maturity?: string;
+  /** One visibility tier — not a CSV list. */
+  visibility?: string;
+  sort?: ListAppsSort;
+  /** Page size. The server clamps to its own bounds; this wrapper does not. */
+  limit?: number;
+  /** Opaque pagination cursor from a prior page's `nextCursor`. */
+  cursor?: string;
+  /** Restrict to the caller's account-managed apps (T3.1.2's distinct query). */
+  managed?: boolean;
+  /** Ask the server for a bounded picker-summary projection (T3.1.1 owns the projection itself). */
+  compact?: boolean;
+  /**
+   * Abort this request. Local request control only — reaches the injected
+   * `fetch` through `RequestOptions.signal` and is NEVER serialized into the
+   * URL or body.
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -505,7 +542,9 @@ export class AppsApi {
    * returns the server's default page and would silently hide anything past
    * it. Capped at 20 pages (~4000 apps at the 200-per-page size) as a runaway
    * backstop, not an expected limit; relocated verbatim from
-   * `client.ts:244-256`.
+   * `client.ts:244-256`. Implemented on top of {@link listPage} (same
+   * `AppsHost.request` call, same cursor field) rather than a parallel fetch,
+   * so there is exactly one place that builds a `GET /apps` request.
    *
    * @returns Every app summary across all pages, in the order the server sent them.
    * @throws {ApiError} On any non-2xx.
@@ -514,16 +553,52 @@ export class AppsApi {
     const apps: AppSummary[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < 20; page++) {
-      const res = await this.#host.request<AppsPage>({
-        method: "GET",
-        path: "/apps",
-        query: { limit: 200, cursor },
-      });
-      apps.push(...res.body.apps);
-      if (!res.body.nextCursor) break;
-      cursor = res.body.nextCursor;
+      const res = await this.listPage({ limit: 200, cursor });
+      apps.push(...res.apps);
+      if (!res.nextCursor) break;
+      cursor = res.nextCursor;
     }
     return apps;
+  }
+
+  /**
+   * Fetch exactly ONE page of `GET /apps` — the bounded seam behind every
+   * picker/selector UI (Apps/AI/Triggers tabs, search, "load more"), and the
+   * one {@link list} itself now loops on. Every {@link ListAppsOptions} member
+   * that is present is forwarded to the server under its own wire name; an
+   * absent member is dropped from the query string entirely, while an
+   * explicitly supplied `false` (`managed`/`compact`) is sent as `false`, not
+   * dropped — `QueryParams` in `../http.ts` only drops `undefined`.
+   * `options.signal` reaches the injected `fetch` through
+   * `RequestOptions.signal` and is never part of the URL or body.
+   *
+   * @param options - See {@link ListAppsOptions}. Omitted entirely, this is
+   * one unfiltered, unsorted default-page-size request.
+   * @returns One page: `{apps, nextCursor}}`. `nextCursor` is absent on the
+   * last page.
+   * @throws {ApiError} On any non-2xx, and (distinguishably, `code:
+   * "cancelled"`) when `options.signal` was aborted before the response came
+   * back.
+   */
+  async listPage(options: ListAppsOptions = {}): Promise<AppsPage> {
+    const { signal, ...rest } = options;
+    const res = await this.#host.request<AppsPage>({
+      method: "GET",
+      path: "/apps",
+      query: {
+        q: rest.q,
+        category: rest.category,
+        maturity: rest.maturity,
+        visibility: rest.visibility,
+        sort: rest.sort,
+        limit: rest.limit,
+        cursor: rest.cursor,
+        managed: rest.managed,
+        compact: rest.compact,
+      },
+      signal,
+    });
+    return res.body;
   }
 
   /**

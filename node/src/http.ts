@@ -72,6 +72,15 @@ export interface RequestOptions {
    * in the first place.
    */
   requireAuth?: boolean;
+  /**
+   * Abort this specific request. Local request control only — it is never
+   * serialized into the URL or the body, and the server never sees it. Wired
+   * straight through to the injected `fetch`'s own `RequestInit.signal`, so
+   * cancellation semantics are whatever the runtime's `fetch` already gives an
+   * aborted request; this transport adds no polling, retry or timeout policy
+   * on top of it (see this module's header).
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -207,8 +216,25 @@ export async function request<T>(
       method: options.method,
       headers,
       body: hasBody ? JSON.stringify(options.body) : undefined,
+      signal: options.signal,
     });
   } catch (err) {
+    // An aborted request is a distinct, recognizable outcome from an actual
+    // network failure — a caller that cancelled a stale search/tab-switch
+    // request must be able to tell "I cancelled this" from "the server is
+    // unreachable" without inspecting `err.message` text. `signal.aborted` is
+    // checked rather than matching only on `err.name === "AbortError"`
+    // because it is the runtime-agnostic source of truth (the DOM/undici
+    // `fetch` both set it synchronously before the promise rejects).
+    const cancelled = options.signal?.aborted === true ||
+      (err instanceof Error && err.name === "AbortError");
+    if (cancelled) {
+      throw new ApiError(
+        0,
+        "cancelled",
+        `Request cancelled (${options.method} ${url}).`,
+      );
+    }
     throw new ApiError(
       0,
       "network_error",

@@ -78,6 +78,7 @@ export { DashboardApi } from "./dashboard.ts";
 export type { DashboardHost, DashboardStats, DashboardStatsParams } from "./dashboard.ts";
 export { CommerceApi } from "./commerce.ts";
 export type {
+  BillingInterval,
   ChangeSubscriptionInput,
   CheckoutInput,
   CheckoutInterval,
@@ -89,18 +90,17 @@ export type {
   ContactSalesResult,
   Invoice,
   MonitorLimit,
-  SubscriptionChangePreview,
-  SubscriptionChangeResult,
   Plan,
   PlanCapabilities,
   PlanLimits,
-  BillingInterval,
   PlanPrice,
   PlanPricePoint,
   PlanQuotas,
   Quota,
   RetentionLimit,
   SelfHostLicence,
+  SubscriptionChangePreview,
+  SubscriptionChangeResult,
   SupportLevel,
 } from "./commerce.ts";
 export { ReliabilityApi } from "./reliability.ts";
@@ -127,6 +127,7 @@ export type {
   AppDetail,
   AppHealthStatus,
   AppsHost,
+  AppsPage,
   AppSummary,
   AuthDef,
   AuthField,
@@ -142,6 +143,8 @@ export type {
   ImportResponse,
   InvokeOptions,
   InvokeStartState,
+  ListAppsOptions,
+  ListAppsSort,
   OAuthConfigSummary,
   PackEntryPreview,
   PackPreviewInfo,
