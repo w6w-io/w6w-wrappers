@@ -1,10 +1,20 @@
 /**
  * `client.workflows.*` — discovery, the typed run, and the definition lifecycle.
  *
- * Seven operations: `list` (T2.1.4) and `run` (T2.1.5), plus `get`, `create`,
- * `update`, `archive` and `delete`. `list` earns its place in a minimal surface
- * for the same reason `connections.list` does (D4): it is how a caller
- * discovers a `wf_…` id to pass to `run`.
+ * Eight operations: `list` (T2.1.4) and `run` (T2.1.5), `cancel` (T1.1.4), plus
+ * `get`, `create`, `update`, `archive` and `delete`. `list` earns its place in a
+ * minimal surface for the same reason `connections.list` does (D4): it is how a
+ * caller discovers a `wf_…` id to pass to `run`.
+ *
+ * ── `cancel`, and the one thing addressed differently from its siblings ──
+ * Every other method in this class is `/workflows/…`-rooted; `cancel` alone
+ * hits `/runs/{runId}/cancel`, because it names one RUN, not the workflow that
+ * spawned it — a workflow can have many runs, and only the run id picks one
+ * out. Its `202` means the cancellation was **requested**, not that the run
+ * has stopped: the server does not wait for the transition, so the returned
+ * `status` is the run's status as it is right now (still `queued` or
+ * `running`), never `"canceled"`. Repeating the call on a run that is already
+ * marked but not yet terminal answers `202` again.
  *
  * ── The write path, and the two things the server does NOT do ──
  * 1. **It does not mint ids.** `POST /workflows` requires `id` in the body, so
@@ -196,6 +206,26 @@ export interface WorkflowDetail {
   updatedAt: string;
 }
 
+/**
+ * What `workflows.cancel` returns: the run, as the server's `run` envelope
+ * carries it right after the cancel request lands.
+ *
+ * **`status` is the run's status AS IT IS NOW, not the terminal outcome of the
+ * cancellation.** The server does not wait for the transition, so this is
+ * still `"queued"` or `"running"` — never `"canceled"` — and a caller that
+ * needs to know when the run actually stopped has to re-fetch it elsewhere;
+ * this operation does not poll on the caller's behalf, for the same reason
+ * {@linkcode WorkflowsApi.run}'s own `?wait=` polling stays server-side only.
+ */
+export interface WorkflowCancelResult {
+  /** The run's `run_…` id — the same id passed in. */
+  id: string;
+  /** The run's status as of this request; still in-flight, not yet `"canceled"`. */
+  status: RunStatus;
+  /** ISO-8601. When the server recorded this cancellation request. */
+  cancelRequestedAt: string;
+}
+
 /** What both `workflows.create` and `workflows.update` return. */
 export interface WorkflowSaveResult {
   /** The saved workflow's id and display name. */
@@ -359,6 +389,34 @@ export class WorkflowsApi {
       terminal: isTerminalRunStatus(status),
       httpStatus: res.status,
     };
+  }
+
+  /**
+   * Cancel a queued or running workflow run.
+   *
+   * **Addressed by the RUN id, not the workflow id** — the path root is
+   * `/runs/…`, the one deliberate exception to this class's otherwise
+   * `/workflows/…`-rooted paths, because a workflow can have many runs and
+   * only the run id picks one out.
+   *
+   * **A `202` means the cancellation was requested, not that the run has
+   * stopped.** The server does not wait for the transition, so the returned
+   * {@linkcode WorkflowCancelResult.status} is the run's status as it is
+   * right now — still `queued` or `running` — and this method never reports
+   * it as `"canceled"`. Idempotent: cancelling a run that is already marked
+   * but not yet terminal answers `202` again rather than erroring.
+   *
+   * @param runId - The `run_…` id, percent-encoded into the path.
+   * @returns The run's id, its status as of this request, and when the cancellation was requested.
+   * @throws {ApiError} `404 unknown_run` — no such run, or it is not this caller's (indistinguishable on purpose).
+   * @throws {ApiError} `409 run_not_cancelable` — the run has already reached a terminal state.
+   */
+  async cancel(runId: string): Promise<WorkflowCancelResult> {
+    const res = await this.#host.request<unknown>({
+      method: "POST",
+      path: path`/runs/${runId}/cancel`,
+    });
+    return unwrap<WorkflowCancelResult>(res, "run");
   }
 
   /**

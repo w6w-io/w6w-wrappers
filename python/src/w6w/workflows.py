@@ -1,9 +1,19 @@
 """`client.workflows.*` — discovery, the typed run, and the definition lifecycle.
 
-Seven operations: `list` and `run`, plus `get`, `create`, `update`, `archive` and
-`delete`. `list` earns its place in a minimal surface for the same reason
-`connections.list` does (D4): it is how a caller discovers a `wf_…` id to pass to
-`run`.
+Eight operations: `list` and `run`, `cancel`, plus `get`, `create`, `update`,
+`archive` and `delete`. `list` earns its place in a minimal surface for the same
+reason `connections.list` does (D4): it is how a caller discovers a `wf_…` id to
+pass to `run`.
+
+── `cancel`, and the one thing addressed differently from its siblings ──
+Every other method here is `/workflows/…`-rooted; `cancel` alone hits
+`/runs/{id}/cancel`, because it names one RUN, not the workflow that spawned it
+— a workflow can have many runs, and only the run id picks one out. Its `202`
+means the cancellation was **requested**, not that the run has stopped: the
+server does not wait for the transition, so the returned `status` is the run's
+status as it is right now (still `queued` or `running`), never `"canceled"`.
+Repeating the call on a run that is already marked but not yet terminal answers
+`202` again.
 
 ── The write path, and the two things the server does NOT do ──
 1. **It does not mint ids.** `POST /workflows` requires `id` in the body, so
@@ -283,6 +293,38 @@ class WorkflowsApi:
                 body,
             )
         return WorkflowRunResult.from_wire(body, response.status)
+
+    def cancel(self, id: str) -> Dict[str, Any]:
+        """Cancel a queued or running workflow run.
+
+        **Addressed by the RUN id, not the workflow id** — the path root is
+        `/runs/…`, the one deliberate exception to this class's otherwise
+        `/workflows/…`-rooted paths, because a workflow can have many runs and
+        only the run id picks one out.
+
+        **A `202` means the cancellation was requested, not that the run has
+        stopped.** The server does not wait for the transition, so the
+        returned `status` is the run's status as it is right now — still
+        `queued` or `running` — and this method never reports it as
+        `"canceled"`. Idempotent: cancelling a run that is already marked but
+        not yet terminal answers `202` again rather than erroring.
+
+        Same shape as :meth:`archive`: one argument, no body, the response
+        unwrapped from its envelope — `"run"` here rather than `"workflow"`.
+
+        :param id: The `run_…` id, percent-encoded into the path by
+            :func:`w6w.path`.
+        :returns: The run's `id`, its `status` as of this request, and
+            `cancelRequestedAt` — a plain dict, unwrapped from the `run`
+            envelope.
+        :raises ConfigError: When no token is configured.
+        :raises ApiError: `404 unknown_run` — no such run, or it is not this
+            caller's (indistinguishable on purpose).
+        :raises ApiError: `409 run_not_cancelable` — the run has already
+            reached a terminal state.
+        """
+        response = self._host.request("POST", path("/runs/{id}/cancel", id=id))
+        return unwrap_object(response, "run")
 
     def get(self, id: str) -> WorkflowDetail:
         """Fetch one workflow's stored definition.
