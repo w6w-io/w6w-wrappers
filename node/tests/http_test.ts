@@ -192,6 +192,74 @@ Deno.test("a thrown fetch is network_error with status 0, naming the method and 
   assertEquals(err.raw, null);
 });
 
+Deno.test("options.signal reaches fetch's RequestInit.signal, and never the URL or body", async () => {
+  const controller = new AbortController();
+  let seenSignal: AbortSignal | null | undefined;
+  const fetchImpl: FetchLike = (_url, init) => {
+    seenSignal = init?.signal;
+    return Promise.resolve(json({ ok: true }));
+  };
+
+  await request(CONFIG, fetchImpl, {
+    method: "GET",
+    path: "/apps",
+    query: { q: "x" },
+    signal: controller.signal,
+  });
+
+  assertEquals(seenSignal, controller.signal);
+});
+
+Deno.test(
+  "an already-aborted signal raises ApiError code 'cancelled', status 0 — not network_error",
+  async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchImpl: FetchLike = () =>
+      Promise.reject(new DOMException("The operation was aborted.", "AbortError"));
+
+    const err = await assertRejects(
+      () => request(CONFIG, fetchImpl, { method: "GET", path: "/apps", signal: controller.signal }),
+      ApiError,
+    );
+
+    assertEquals(err.status, 0);
+    assertEquals(err.code, "cancelled");
+    assertStringIncludes(err.message, "GET https://api.example.com/apps");
+  },
+);
+
+Deno.test(
+  "a transport failure with a signal that was never aborted stays network_error, unchanged",
+  async () => {
+    const controller = new AbortController();
+    const fake = fakeFetch(() => {
+      throw new TypeError("Connection refused");
+    });
+
+    const err = await assertRejects(
+      () =>
+        request(CONFIG, fake.fetch, { method: "GET", path: "/apps", signal: controller.signal }),
+      ApiError,
+    );
+
+    assertEquals(err.code, "network_error");
+  },
+);
+
+Deno.test("a request with no signal at all keeps its normal network_error behavior, unchanged", async () => {
+  const fake = fakeFetch(() => {
+    throw new TypeError("Connection refused");
+  });
+
+  const err = await assertRejects(
+    () => request(CONFIG, fake.fetch, { method: "GET", path: "/vars" }),
+    ApiError,
+  );
+
+  assertEquals(err.code, "network_error");
+});
+
 Deno.test("a 424 is an ApiError, never a transport error and never a 5xx", async () => {
   // 424 = the target app or its upstream vendor failed during execute. It is a
   // 4xx on purpose: Cloudflare replaces an origin 5xx with a CORS-less HTML

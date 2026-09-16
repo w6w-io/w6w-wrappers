@@ -14,9 +14,10 @@
  * for code with zero call sites anywhere in studio or `@w6w/ui`.
  */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { W6WClient } from "../../src/client.ts";
 import type { FetchLike } from "../../src/config.ts";
+import { ApiError } from "../../src/errors.ts";
 import type {
   ActionDef,
   AppDetail,
@@ -37,6 +38,7 @@ interface Call {
   method: string | undefined;
   headers: Headers;
   body: string | null;
+  signal: AbortSignal | null | undefined;
 }
 
 /** A `fetch`-shaped fake; `respond` produces the `Response` to hand back. */
@@ -48,8 +50,31 @@ function fakeFetch(respond: (call: Call) => Response): { fetch: FetchLike; calls
       method: init?.method,
       headers: new Headers(init?.headers),
       body: typeof init?.body === "string" ? init.body : null,
+      signal: init?.signal,
     });
     return Promise.resolve(respond(calls[calls.length - 1]));
+  };
+  return { fetch, calls };
+}
+
+/** A `fetch`-shaped fake that honours abort: rejects with an AbortError the moment `init.signal` is already (or becomes) aborted, otherwise defers to `respond`. */
+function abortableFetch(
+  respond: (call: Call) => Response,
+): { fetch: FetchLike; calls: Call[] } {
+  const calls: Call[] = [];
+  const fetch: FetchLike = (input, init) => {
+    const call: Call = {
+      url: input,
+      method: init?.method,
+      headers: new Headers(init?.headers),
+      body: typeof init?.body === "string" ? init.body : null,
+      signal: init?.signal,
+    };
+    calls.push(call);
+    if (init?.signal?.aborted) {
+      return Promise.reject(new DOMException("The operation was aborted.", "AbortError"));
+    }
+    return Promise.resolve(respond(call));
   };
   return { fetch, calls };
 }
@@ -64,6 +89,21 @@ function json(body: unknown, status = 200): Response {
 /** A client wired to a fake transport. */
 function client(respond: (call: Call) => Response): { client: W6WClient; calls: Call[] } {
   const fake = fakeFetch(respond);
+  return {
+    client: new W6WClient({
+      baseUrl: "https://api.example.com",
+      token: "tok_1",
+      fetch: fake.fetch,
+    }),
+    calls: fake.calls,
+  };
+}
+
+/** A client wired to {@link abortableFetch}, for cancellation cases. */
+function abortableClient(
+  respond: (call: Call) => Response,
+): { client: W6WClient; calls: Call[] } {
+  const fake = abortableFetch(respond);
   return {
     client: new W6WClient({
       baseUrl: "https://api.example.com",
@@ -128,6 +168,7 @@ Deno.test("console.apps: all 16 methods are functions on a freshly constructed c
   const c = new W6WClient({ baseUrl: "https://api.example.com", token: "t" });
   const methods = [
     "list",
+    "listPage",
     "get",
     "getAuth",
     "getActions",
@@ -232,6 +273,161 @@ Deno.test("AppSummary's two new fields are OPTIONAL — an older host still sati
   assertEquals(_older.supportsOAuth, undefined);
   assertEquals(_older.owner, undefined);
 });
+
+// --- listPage(): one bounded request, wire-field forwarding ----------------
+
+Deno.test("console.apps.listPage sends exactly ONE request and resolves the page verbatim", async () => {
+  const c = client(() => json({ apps: [APP_A], nextCursor: "c2" }));
+
+  const res = await c.client.console.apps.listPage();
+
+  assertEquals(res, { apps: [APP_A], nextCursor: "c2" });
+  assertEquals(c.calls.length, 1);
+  assertEquals(c.calls[0].method, "GET");
+});
+
+Deno.test("console.apps.listPage forwards every supplied option under its own wire name", async () => {
+  const c = client(() => json({ apps: [] }));
+
+  await c.client.console.apps.listPage({
+    q: "sendgrid",
+    category: "email",
+    maturity: "stable",
+    visibility: "public",
+    sort: "-recent",
+    limit: 60,
+    cursor: "c1",
+    managed: true,
+    compact: true,
+  });
+
+  const url = new URL(c.calls[0].url);
+  assertEquals(url.pathname, "/apps");
+  assertEquals(url.searchParams.get("q"), "sendgrid");
+  assertEquals(url.searchParams.get("category"), "email");
+  assertEquals(url.searchParams.get("maturity"), "stable");
+  assertEquals(url.searchParams.get("visibility"), "public");
+  assertEquals(url.searchParams.get("sort"), "-recent");
+  assertEquals(url.searchParams.get("limit"), "60");
+  assertEquals(url.searchParams.get("cursor"), "c1");
+  assertEquals(url.searchParams.get("managed"), "true");
+  assertEquals(url.searchParams.get("compact"), "true");
+});
+
+Deno.test("console.apps.listPage drops OMITTED options from the query string entirely", async () => {
+  const c = client(() => json({ apps: [] }));
+
+  await c.client.console.apps.listPage({ q: "x" });
+
+  const url = new URL(c.calls[0].url);
+  assertEquals(url.searchParams.has("category"), false);
+  assertEquals(url.searchParams.has("managed"), false);
+  assertEquals(url.searchParams.has("compact"), false);
+  assertEquals(url.searchParams.has("cursor"), false);
+  // A reserved character in `q` still round-trips through URLSearchParams encoding.
+  assertEquals(url.searchParams.get("q"), "x");
+});
+
+Deno.test(
+  "console.apps.listPage sends an EXPLICIT false for managed/compact, never dropping it like undefined",
+  async () => {
+    const c = client(() => json({ apps: [] }));
+
+    await c.client.console.apps.listPage({ managed: false, compact: false });
+
+    const url = new URL(c.calls[0].url);
+    assertEquals(url.searchParams.get("managed"), "false");
+    assertEquals(url.searchParams.get("compact"), "false");
+  },
+);
+
+Deno.test("console.apps.listPage with no options sends zero query params", async () => {
+  const c = client(() => json({ apps: [] }));
+
+  await c.client.console.apps.listPage();
+
+  assertEquals(c.calls[0].url, "https://api.example.com/apps");
+});
+
+Deno.test("console.apps.listPage encodes a reserved character in q the same way path/query encoding always has", async () => {
+  const c = client(() => json({ apps: [] }));
+
+  await c.client.console.apps.listPage({ q: "a b&c" });
+
+  const url = new URL(c.calls[0].url);
+  assertEquals(url.searchParams.get("q"), "a b&c");
+});
+
+Deno.test("console.apps.list still traverses cursors exactly as before, now implemented on listPage", async () => {
+  const c = client((call) => {
+    const cursor = new URL(call.url).searchParams.get("cursor");
+    if (cursor === "c2") return json({ apps: [APP_B] });
+    return json({ apps: [APP_A], nextCursor: "c2" });
+  });
+
+  const res = await c.client.console.apps.list();
+
+  assertEquals(res, [APP_A, APP_B]);
+  assertEquals(c.calls.length, 2);
+  // list()'s own page-size default (200) is preserved through the delegation.
+  assertEquals(new URL(c.calls[0].url).searchParams.get("limit"), "200");
+  assertEquals(c.calls[1].url.includes("cursor=c2"), true);
+});
+
+Deno.test(
+  "console.apps.listPage's signal reaches fetch's RequestInit but NEVER appears in the URL or body",
+  async () => {
+    const controller = new AbortController();
+    const c = client(() => json({ apps: [] }));
+
+    await c.client.console.apps.listPage({ q: "x", signal: controller.signal });
+
+    assertEquals(c.calls[0].signal, controller.signal);
+    const url = new URL(c.calls[0].url);
+    assertEquals(url.searchParams.has("signal"), false);
+    assertEquals(c.calls[0].body, null);
+  },
+);
+
+Deno.test(
+  "console.apps.listPage: an aborted signal rejects with ApiError code 'cancelled', not network_error",
+  async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const c = abortableClient(() => json({ apps: [] }));
+
+    const err = await assertRejects(
+      () => c.client.console.apps.listPage({ signal: controller.signal }),
+      ApiError,
+    );
+
+    assertEquals(err.status, 0);
+    assertEquals(err.code, "cancelled");
+  },
+);
+
+Deno.test(
+  "console.apps.listPage: a normal transport failure with an UNaborted signal is still network_error",
+  async () => {
+    const controller = new AbortController();
+    const fake: { fetch: FetchLike; calls: Call[] } = {
+      fetch: () => Promise.reject(new TypeError("Connection refused")),
+      calls: [],
+    };
+    const c = new W6WClient({
+      baseUrl: "https://api.example.com",
+      token: "tok_1",
+      fetch: fake.fetch,
+    });
+
+    const err = await assertRejects(
+      () => c.console.apps.listPage({ signal: controller.signal }),
+      ApiError,
+    );
+
+    assertEquals(err.code, "network_error");
+  },
+);
 
 // --- get / getActions / getHealth: three reads of one GET /apps/:id --------
 

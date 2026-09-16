@@ -307,14 +307,15 @@ const detail = await client.console.apps.get(apps[0].id);
 const result = await client.console.apps.invoke(detail.app.id as string, "send", { to: "a@b.com" });
 ```
 
-The largest console domain — 16 methods, relocated from `packages/studio/src/api/client.ts:235-393`.
+The largest console domain — 17 methods, relocated from `packages/studio/src/api/client.ts:235-393`.
 Method names are SHORTENED versus `client.ts`'s flat names (`listApps` → `list`, `getAppAuth` →
 `getAuth`, …), matching `console.projects`'s/`console.schedules`'s own short-verb convention; every
 wire call (method/path/body/query) is unchanged from `client.ts`.
 
 | Method                                    | Route                                                | Notes                                                                                                                                                                                                                                         |
 | ----------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list()`                                  | `GET /apps` (paginated)                              | Custom loop, no `unwrap()` — accumulates `apps` across pages, forwarding `nextCursor` as the next page's `cursor`; capped at 20 pages.                                                                                                        |
+| `list()`                                  | `GET /apps` (paginated)                              | Loops on `listPage({limit: 200, cursor})`, accumulating `apps` across pages and forwarding `nextCursor` as the next page's `cursor`; capped at 20 pages. No shape change — still resolves the full `AppSummary[]`.                            |
+| `listPage(options?)`                      | `GET /apps` (one page)                               | **Additive, T2.1.1.** One request; see the dedicated paragraph below the table.                                                                                                                                                               |
 | `get(id)`                                 | `GET /apps/:id`                                      | Whole body IS `AppDetail` — no envelope.                                                                                                                                                                                                      |
 | `getAuth(id)`                             | `GET /apps/:id/auths`                                | `unwrap<AuthDef[]>(res, "auths")`.                                                                                                                                                                                                            |
 | `getActions(id)`                          | `GET /apps/:id` (own call)                           | Reads `(body as AppDetail).actions ?? []` — a separate call from `get`, not a refactor onto it.                                                                                                                                               |
@@ -344,6 +345,27 @@ means global, `tenant` set with an empty `subject` means tenant-owned, both set 
 projected server-side by `wireOwner`, `wire-summary.ts:70-72`). `owner` is optional on this type
 even though the server always sends it, so the type is also satisfied by a caller-written literal
 and by an older host.
+
+**`listPage(options?)` is the additive, T2.1.1 seam every picker/selector UI is meant to call instead
+of `list()`.** It sends exactly one `GET /apps` and resolves the page verbatim —
+`{apps: AppSummary[], nextCursor?: string}` — with no accumulation loop of its own; `list()` above is
+now implemented ON TOP of it (same `AppsHost.request` call), not a parallel fetch. Every
+`ListAppsOptions` member (`q`, `category`, `maturity`, `visibility`, `sort`, `limit`, `cursor`,
+`managed`, `compact`) is forwarded under its own wire name only when present — an **omitted** member
+is dropped from the query string, while an **explicitly supplied `false`** (`managed: false` /
+`compact: false`) is still sent, because `QueryParams` (`../http.ts`) only drops `undefined`.
+`options.signal` is the one member that is never sent at all: it rides the existing
+`RequestOptions.signal` seam straight to the injected `fetch`'s own `AbortSignal`, and an aborted
+request surfaces as `ApiError` with `code: "cancelled"`, `status: 0` — distinguishable from
+`network_error` by code, not by message text. `managed: true` is `console.apps.listPage`'s single
+shared entry point for T3.1.2's account-scoped management query (a distinct, account-keyed cache
+there — this method itself has no opinion on caching); ordinary picker calls never set it.
+`compact: true` asks the server for a bounded picker-summary projection (heavy fields like inline
+icon SVGs trimmed) — the projection itself is T3.1.1's, not implemented by this method, and until
+that server support ships a host that ignores the flag simply returns full summaries, which callers
+must already tolerate. Passing an app-catalog id lookup through `listPage({q: <id>})` is a bounded
+best-effort match, not an indexed exact-id endpoint — no such endpoint exists server-side, so an
+ambiguous or unmatched result falls back to `get(id)`, never to a full unbounded `list()`.
 
 **`listApiCalls` is deliberately NOT covered here** — it lives under the same `client.ts` comment
 block but has no named apps-domain consumer (its only caller is reliability's drill-down page); it
