@@ -1,13 +1,15 @@
 /**
- * `w6w workflows …` — list definitions, start runs (D4), and edit the
- * definitions themselves.
+ * `w6w workflows …` — list definitions, start runs (D4), cancel them, and
+ * edit the definitions themselves.
  *
- * Seven commands. `list` exists so a caller can find a `wf_…` id to pass to
+ * Eight commands. `list` exists so a caller can find a `wf_…` id to pass to
  * `w6w run` or to this group's own `run`; `run` is the typed path with
  * `--wait` and `--input`, kept alongside the unified `w6w run` because
  * `?wait=`, `variables`, `trigger` and `input` have no slot in that
- * operation's three-field shape. `get`, `create`, `update`, `archive` and
- * `delete` are the definition lifecycle.
+ * operation's three-field shape. `cancel` is addressed by the RUN id `run`
+ * hands back, not by the workflow id every other command here takes.
+ * `get`, `create`, `update`, `archive` and `delete` are the definition
+ * lifecycle.
  *
  * **A definition arrives as `--definition <json>`, not `--file <path>`.** This
  * lane reads no files: `--payload`, `--input` and `--content` are all
@@ -167,6 +169,25 @@ const run: CommandHandler = async (context) => {
   return exitCodeFor(result);
 };
 
+/**
+ * `w6w workflows cancel <id>` — request cancellation of a queued or running
+ * run, addressed by the RUN id (see: `w6w workflows run`), not the workflow
+ * id every other command in this group takes.
+ *
+ * **A `202` means requested, not stopped.** The server does not wait for the
+ * transition, so the printed status is the run's status as it is right now —
+ * still `queued` or `running` — never `"canceled"`.
+ */
+const cancel: CommandHandler = async (context) => {
+  const id = argument(context, 0, "a run id (see: w6w workflows run)");
+  noExtraArguments(context, 1);
+  const result = await context.client().workflows.cancel(id);
+  context.out.emit(
+    result,
+    (styles) => styles.dim(`Cancellation requested for ${result.id} (status: ${result.status}).`),
+  );
+};
+
 const get: CommandHandler = async (context) => {
   const id = argument(context, 0, "a workflow id (see: `w6w workflows list`)");
   noExtraArguments(context, 1);
@@ -228,6 +249,7 @@ const remove: CommandHandler = async (context) => {
 export const WORKFLOW_COMMANDS: CommandRegistry = {
   "workflows list": list,
   "workflows run": run,
+  "workflows cancel": cancel,
   "workflows get": get,
   "workflows create": create,
   "workflows update": update,
