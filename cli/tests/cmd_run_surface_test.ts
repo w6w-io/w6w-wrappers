@@ -287,6 +287,37 @@ Deno.test(
 );
 
 // ---------------------------------------------------------------------------
+// `w6w workflows cancel` (T1.1.4) — addressed by the RUN id, not the workflow
+// id every other command in this group takes.
+// ---------------------------------------------------------------------------
+
+Deno.test("workflows cancel: posts to /runs/<id>/cancel and reports the run's current status", async () => {
+  const result = await w6w(["workflows", "cancel", "run_01HQ8N"], (call) => {
+    assertEquals(call.method, "POST");
+    assertEquals(call.url, `${BASE}/runs/run_01HQ8N/cancel`);
+    assertEquals(call.body, undefined, "no request body");
+    return json(202, {
+      run: { id: "run_01HQ8N", status: "running", cancelRequestedAt: "2026-09-16T00:00:00.000Z" },
+    });
+  });
+  assertEquals(result.code, 0, result.stderr);
+  assertStringIncludes(result.stdout, "run_01HQ8N");
+  // The status is the run's CURRENT one — never "canceled", since the server
+  // does not wait for the transition.
+  assertStringIncludes(result.stdout, "running");
+});
+
+Deno.test("workflows cancel: a 409 run_not_cancelable is an API error, exit 2", async () => {
+  const result = await w6w(
+    ["workflows", "cancel", "run_01HQ8N"],
+    () =>
+      json(409, { error: { code: "run_not_cancelable", message: "Run has already finished." } }),
+  );
+  assertEquals(result.code, 2, result.stdout);
+  assertStringIncludes(result.stderr, "Run has already finished.");
+});
+
+// ---------------------------------------------------------------------------
 // `w6w run <urn>` — the unified dispatcher.
 // ---------------------------------------------------------------------------
 
@@ -459,9 +490,10 @@ Deno.test("every `w6w connections` / `w6w workflows` / `w6w functions` command i
     }
   }
   assertEquals(Object.keys(CONNECTION_COMMANDS).length, 1);
-  // Seven and five: the two run commands (`workflows run`, `functions run`)
-  // plus the definition lifecycle each domain now carries. `functions` counts
-  // five here because its `run` is registered elsewhere — see above.
-  assertEquals(Object.keys(WORKFLOW_COMMANDS).length, 7);
+  // Eight and five: the two run commands (`workflows run`, `functions run`),
+  // `workflows cancel` (T1.1.4, addressed by the run id `workflows run` hands
+  // back), plus the definition lifecycle each domain now carries. `functions`
+  // counts five here because its `run` is registered elsewhere — see above.
+  assertEquals(Object.keys(WORKFLOW_COMMANDS).length, 8);
   assertEquals(Object.keys(FUNCTION_COMMANDS).length, 5);
 });

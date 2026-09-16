@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable surface contract for all w6w wrappers. Source of truth for conformance tests. Keep in sync with docs/endpoints.md.",
-  "contractVersion": "0.5.0",
+  "contractVersion": "0.6.0",
   "$basePathComment": "Empty since 0.2.0: the server serves its routes at the ROOT of its own host (https://api.w6w.io/vars, not .../api/vars). Clients append nothing to the configured origin.",
   "basePath": "",
   "auth": "bearer",
@@ -126,6 +126,32 @@
         "cli": "w6w workflows run <id> [--wait] [--input <json>]"
       },
       "notes": "202 is a normal outcome, not an error: the run is still queued/running. A failed run returns 200 with status 'failed' and must NOT raise. `trigger` is a STRING, not an object: the server reads it as a `RunTrigger` (`\"manual\" | \"schedule\" | \"webhook\" | \"event\" | \"replay\"` today), and it defaults to 'manual' server-side when omitted. The five values are recorded in `knownValues` as documentation only — every wrapper types the param as an open string (`trigger?: string` / `trigger: str | None`) and passes it through unvalidated, so a sixth server value needs no wrapper release. `variables` and `input` are NOT interchangeable: `variables` seeds the run's variable scope, read downstream as `vars.*`; `input` is delivered to the entry trigger node's own recorded output, read downstream as `steps.<triggerId>.output.<key>` — the shape a trigger's declared fields actually arrive in. D4 — kept alongside the unified `run`, which is deliberately narrower: `?wait=`, `variables`, `trigger` and `input` have no slot in the three-field `{urn, action, payload}` shape. Verified live."
+    },
+    {
+      "name": "workflows.cancel",
+      "summary": "Cancel a queued or running workflow run.",
+      "method": "POST",
+      "path": "/runs/{id}/cancel",
+      "status": "required",
+      "serverImplemented": true,
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "returns": "WorkflowCancelResult",
+      "successStatuses": [
+        202
+      ],
+      "naming": {
+        "ts": "client.workflows.cancel(runId)",
+        "python": "client.workflows.cancel(id)",
+        "cli": "w6w workflows cancel <id>"
+      },
+      "notes": "Addressed by the RUN id, not the workflow id — the path root is `/runs/…`, a deliberate exception to this class's otherwise `/workflows/…`-rooted paths, because a workflow can have many runs and only the run id picks one out. `202` means the cancellation was REQUESTED, not that the run has stopped: the server does not wait for the transition, so the returned `status` is the run's status AS IT IS NOW — still `queued` or `running` — and a wrapper must never report it as `\"canceled\"`. Idempotent: repeating the cancel on a run that is already marked but not yet terminal is still `202`. `404 unknown_run` covers both \"no such run\" and \"not your workflow\", indistinguishable on purpose. `409 run_not_cancelable` when the run has already reached a terminal state."
     },
     {
       "name": "workflows.get",

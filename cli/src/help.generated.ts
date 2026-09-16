@@ -99,7 +99,7 @@ export interface HelpExitCode {
 /** The command tree, generated from the shared wrapper surface contract. */
 export const HELP_TREE: HelpTree = {
   "binary": "w6w",
-  "contractVersion": "0.5.0",
+  "contractVersion": "0.6.0",
   "tagline": "command-line client for the w6w workflow platform",
   "usage": "w6w <command> [options]",
   "docsUrl": "https://w6w.dev/docs/cli",
@@ -344,6 +344,41 @@ export const HELP_TREE: HelpTree = {
             'Without --wait the run is queued and the command returns immediately with a run id and status "queued". With --wait the CLI returns when the run finishes or the server\'s wait window expires — a run still in progress is reported as "running", which is not an error.',
             'A run that finished with status "failed" exits 3, so --wait is usable in CI without parsing stdout.',
           ],
+        },
+        {
+          "operation": "workflows.cancel",
+          "path": [
+            "workflows",
+            "cancel",
+          ],
+          "name": "cancel",
+          "aliases": [],
+          "summary": "Cancel a queued or running workflow run.",
+          "short": "Cancel a queued or running workflow run",
+          "headline": "cancel a queued or running workflow run",
+          "usage": "w6w workflows cancel <id> [options]",
+          "naming": "w6w workflows cancel <id>",
+          "status": "required",
+          "params": [
+            {
+              "name": "id",
+              "kind": "argument",
+              "display": "<id>",
+              "description": "Run id (see: w6w workflows run)",
+              "required": true,
+            },
+            {
+              "name": "json",
+              "kind": "flag",
+              "display": "--json",
+              "description": "Output raw JSON instead of a table",
+              "required": false,
+            },
+          ],
+          "examples": [
+            "w6w workflows cancel run_01HQ8N",
+          ],
+          "notes": [],
         },
         {
           "operation": "workflows.get",
@@ -1758,6 +1793,10 @@ export const COMMAND_PATHS: string[][] = [
   [
     "workflows",
     "run",
+  ],
+  [
+    "workflows",
+    "cancel",
   ],
   [
     "workflows",
