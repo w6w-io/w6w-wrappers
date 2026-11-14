@@ -147,6 +147,11 @@ export interface Me {
  * A closed union because it is the server's own enum and a caller switches on
  * it; unknown *fields* are tolerated everywhere in this file, but a new state
  * would be a server change that the wrapper version-bumps with.
+ *
+ * `broken` means the connection has to be reconnected before it works again:
+ * the server sets it at once when a credential refresh is refused in a way that
+ * needs a new sign-in, and after background refreshes have kept failing for
+ * days (see {@link ConnectionSummary.refreshFailingSince}).
  */
 export type ConnectionState = "pending" | "connected" | "needs_refresh" | "broken" | "revoked";
 
@@ -164,11 +169,13 @@ export interface ConnectionAppMeta {
 /**
  * A connection, as the list route projects it.
  *
- * **Two fields the stored record has are deliberately absent here**: the secret
- * material and its last-refresh timestamp are redacted server-side and never
- * reach a client. Declaring them would promise a caller a field that can never
- * arrive — and would invite exactly the code path (`if (c.…)`) that this
- * omission makes impossible to write (`docs/endpoints.md` §2).
+ * **The secret material is deliberately absent here**: it is redacted
+ * server-side and never reaches a client. Declaring it would promise a caller a
+ * field that can never arrive — and would invite exactly the code path
+ * (`if (c.…)`) that this omission makes impossible to write
+ * (`docs/endpoints.md` §2). The keep-alive timestamps (`lastRefreshedAt`,
+ * `refreshFailingSince`) are not secret and are declared below (contract
+ * `0.19.0`).
  *
  * Timestamps are ISO-8601 strings, exactly as they arrive; `lastTestOk` and
  * `lastTestedAt` are `null` until the connection has been tested once.
@@ -200,6 +207,25 @@ export interface ConnectionSummary {
   lastTestOk: boolean | null;
   /** ISO-8601 timestamp of the last test, or `null`. */
   lastTestedAt: string | null;
+  /**
+   * Background keep-alive refresh is on for this connection (the owner's
+   * opt-out; the server defaults it to `true`). It only matters where the
+   * auth method is `refreshable`. Absent on an older server and on the
+   * synthetic `builtIn` row.
+   */
+  autoRefresh?: boolean;
+  /**
+   * ISO-8601 timestamp of the last successful credential refresh, or of the
+   * original grant; `null` when unknown. Not secret. Absent on an older server
+   * and on the synthetic `builtIn` row.
+   */
+  lastRefreshedAt?: string | null;
+  /**
+   * ISO-8601 timestamp of the first failure in the current streak of failing
+   * background refreshes; `null` when refresh is not failing. Absent on an
+   * older server and on the synthetic `builtIn` row.
+   */
+  refreshFailingSince?: string | null;
   /** ISO-8601 timestamp. */
   createdAt: string;
   /** ISO-8601 timestamp. */

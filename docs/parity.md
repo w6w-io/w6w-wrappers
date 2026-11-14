@@ -281,6 +281,18 @@ reuses node's type) and python, with the contract at `0.13.0`. react's `W6WApi` 
 eight optional credential members over the console namespace; they are not in
 `adapter-conformance.test.ts`'s table, which must equal the pinned `@w6w/ui` member list.
 
+## Connection keep-alive
+
+Contract `0.19.0` is read-only and additive, like `0.13.0`: `ConnectionSummary` gains the optional
+`autoRefresh`, `lastRefreshedAt` and `refreshFailingSince` in node, cli (which reuses node's type
+and prints them with `connections get`) and python (`None` against an older server). No operation is
+added; the count stays 122. The write side is console-only, for the same D-E2 reason: node's
+`console.connections.create` / `update` and `console.apps.startOAuthFlow` take `autoRefresh`,
+`AuthDef` gains `refreshable` and the manifest's token TTLs, and react's adapter passes
+`autoRefresh` through `createConnection` and `startAppOAuthFlow`. The `422 credential_invalid`
+sign-in refusal carries `error.hookCode`, read from `ApiError.raw` in every lane; no lane adds an
+error field.
+
 ## Data stores
 
 Contract `0.15.0` adds the 14 `dataStores.*` operations, taking the contract from 107 to 121

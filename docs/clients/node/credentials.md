@@ -71,6 +71,39 @@ Pass `accessScope: "user"` to `create` (or to `console.connections.create`) to k
 
 Two more console namespaces cover the personal side. `client.console.aiKeys` has `defaults()`, `setDefault(providerAppId, connectionId)` and `clearDefault(providerAppId)`: the caller's own default key per provider, with no user or account parameter. `client.console.aiCredentialPolicy` has `get()` and `put({ mode })` for the tenant's policy on which key kinds AI calls may use (`both`, `account_only`, `user_only`); `put` needs a tenant admin.
 
+## Keeping a connection signed in
+
+The server refreshes a connection's credential in the background so that an unused refresh token
+does not expire. It is on by default. Pass `autoRefresh: false` to `console.connections.create`,
+`console.connections.update` or `console.apps.startOAuthFlow` to turn it off, and `true` to turn it
+back on. `console.apps.getAuth(appId)` marks each auth method `refreshable` when the server can keep
+its connections signed in.
+
+Every connection read then carries `autoRefresh`, `lastRefreshedAt` (the last successful refresh,
+or when the connection was made) and `refreshFailingSince` (`null` unless background refreshes are
+currently failing). None of them is secret, and an older server sends none of them. A connection
+whose refresh needs a new sign-in moves to `state: "broken"`; reconnect it.
+
+If an auth method signs in at connect time and the sign-in is refused, `create` (or an `update`
+with a new `credential`) fails with an `ApiError` whose `status` is `422` and `code` is
+`credential_invalid`. The app's own short code, when it gave one, is on the raw body:
+
+```ts
+import { ApiError } from "@w6w/sdk";
+
+try {
+  await client.console.connections.create("my-app", {
+    authKey: "login",
+    credential: { email, password },
+  });
+} catch (err) {
+  if (err instanceof ApiError && err.code === "credential_invalid") {
+    const raw = err.raw as { error: { hookCode?: string } };
+    console.log(raw.error.hookCode); // e.g. "invalid_credentials"
+  }
+}
+```
+
 ## Listing credential types
 
 ```ts

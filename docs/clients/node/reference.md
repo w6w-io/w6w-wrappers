@@ -69,11 +69,11 @@ when the server records them. A `kind` the SDK doesn't recognise is returned unc
 
 | Method | Returns | Notes |
 | --- | --- | --- |
-| `list({ signal? })` | `ConnectionSummary[]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, `tenant`, `subject`, `credentialId` (the stored credential it uses; `null` = none), and `app` (inline app name, icons and brand colours; `null` or absent when unknown) | |
+| `list({ signal? })` | `ConnectionSummary[]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, `tenant`, `subject`, `credentialId` (the stored credential it uses; `null` = none), `autoRefresh`, `lastRefreshedAt` and `refreshFailingSince` (keep-alive state; absent on an older server), and `app` (inline app name, icons and brand colours; `null` or absent when unknown) | |
 | `get(id, { signal? })` | `ConnectionSummary` | `404 unknown_connection` for an unknown or another account's id, and for a built-in `zerocred:` row |
 | `delete(id, { signal? })` | nothing | Account-owned; also tears down the connection's trigger subscriptions. Same `404` rules. |
 
-`state` is `pending`, `connected`, `needs_refresh`, `broken` or `revoked`. `builtIn` is `true` only on
+`state` is `pending`, `connected`, `needs_refresh`, `broken` or `revoked`; `broken` means reconnect it. `builtIn` is `true` only on
 the synthetic zero-credential row in a list (optional; absent on older servers).
 
 ## `client.apps`, `client.dashboard`, `client.projects`, `client.reliability`

@@ -1120,3 +1120,41 @@ for (
     assertEquals(c.calls.length, 2);
   });
 }
+
+// --- keep-alive (contract 0.19.0) --------------------------------------------
+
+Deno.test("console.apps.getAuth carries refreshable and the declared TTLs; an older server omits them", async () => {
+  const current: AuthDef = {
+    ...AUTH_A,
+    refreshable: true,
+    accessTokenTtlSeconds: 3600,
+    refreshTokenTtlSeconds: 2592000,
+  };
+  const c = client(() => json({ auths: [current] }));
+  const [def] = await c.client.console.apps.getAuth("app_1");
+  assertEquals(def.refreshable, true);
+  assertEquals(def.accessTokenTtlSeconds, 3600);
+  assertEquals(def.refreshTokenTtlSeconds, 2592000);
+
+  const old = client(() => json({ auths: [AUTH_A] }));
+  const [legacy] = await old.client.console.apps.getAuth("app_1");
+  assertEquals(legacy.refreshable, undefined);
+  assertEquals(legacy.accessTokenTtlSeconds, undefined);
+  assertEquals(legacy.refreshTokenTtlSeconds, undefined);
+});
+
+Deno.test("console.apps.startOAuthFlow sends autoRefresh only when given", async () => {
+  const body = {
+    authorizationUrl: "https://provider.example.com/authorize",
+    state: "s",
+    expiresIn: 1,
+  };
+  const c = client(() => json(body));
+  await c.client.console.apps.startOAuthFlow("app_1", "oauth2", {
+    displayName: "Work",
+    autoRefresh: false,
+  });
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), { displayName: "Work", autoRefresh: false });
+  await c.client.console.apps.startOAuthFlow("app_1", "oauth2", { displayName: "Work" });
+  assertEquals(JSON.parse(c.calls[1].body ?? "null"), { displayName: "Work" });
+});

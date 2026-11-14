@@ -232,12 +232,13 @@ export interface W6WApi {
    * Start an OAuth 2.0 flow. Server builds the provider's authorize URL and
    * returns it; the caller opens it in a popup and awaits the server's
    * callback message — that popup/message flow is `@w6w/ui`'s concern
-   * (`oauth-popup.ts`), unchanged by this bridge.
+   * (`oauth-popup.ts`), unchanged by this bridge. `autoRefresh: false` turns
+   * background keep-alive off for the connection the callback creates.
    */
   startAppOAuthFlow(
     appId: string,
     authKey: string,
-    body: { displayName?: string },
+    body: { displayName?: string; autoRefresh?: boolean },
   ): Promise<{ authorizationUrl: string }>;
 
   /** List the actions an app exposes, to pick from in the step builder. */

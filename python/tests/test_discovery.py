@@ -228,15 +228,16 @@ class ConnectionsListTest(unittest.TestCase):
 
             self.assertIsNone(instance.connections.list()[0].app)
 
-    def test_the_redacted_fields_are_not_modelled(self) -> None:
+    def test_the_redacted_field_is_not_modelled(self) -> None:
         # Declaring a field the server strips would invite a caller to look for
-        # something no response will ever carry.
+        # something no response will ever carry. `lastRefreshedAt` used to be
+        # listed here too; since contract 0.19.0 it is sent and is not secret.
         instance, _calls = client(responding({"connections": [CONNECTION_BODY]}))
 
         connection = instance.connections.list()[0]
 
         self.assertFalse(hasattr(connection, "credential"))
-        self.assertFalse(hasattr(connection, "lastRefreshedAt"))
+        self.assertIsNone(connection.lastRefreshedAt)
 
     def test_a_never_tested_connection_keeps_null_apart_from_false(self) -> None:
         # `lastTestOk: null` means NEVER TESTED, which is not the same statement

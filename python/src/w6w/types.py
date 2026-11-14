@@ -558,7 +558,9 @@ class Me:
 #: `pending` is the state a connection is in before an auth flow completes;
 #: `needs_refresh`, `broken` and `revoked` are the three ways a live one stops
 #: working, and they are kept apart because a caller triaging them acts
-#: differently on each.
+#: differently on each. `broken` (reconnect needed) is set at once when a
+#: credential refresh is refused in a way that needs a new sign-in, and after
+#: background refreshes have failed for days.
 ConnectionState = Literal["pending", "connected", "needs_refresh", "broken", "revoked"]
 
 
@@ -607,10 +609,12 @@ class ConnectionSummary:
     """One connection, as the list route projects it.
 
     This is the server's **redacted projection**: the stored connection minus
-    the two secret-bearing fields it strips on the way out (named, with the
-    reason, in `connections.py`). Those two are deliberately absent from this
-    class rather than typed as optional — declaring a field that never arrives
-    invites a caller to look for it, and no response will ever carry it.
+    the secret it strips on the way out (named, with the reason, in
+    `connections.py`). That field is deliberately absent from this class rather
+    than typed as optional — declaring a field that never arrives invites a
+    caller to look for it, and no response will ever carry it. The keep-alive
+    state (`autoRefresh`, `lastRefreshedAt`, `refreshFailingSince`, contract
+    0.19.0) is not secret and is modelled.
 
     Unknown keys are dropped here, never fatal: a reader that refused a key it
     does not model would raise on **every real response** the day the server
@@ -661,6 +665,18 @@ class ConnectionSummary:
     #: Who may use the connection: `"account"` or `"user"` (only its creator).
     #: `None` when the wire value is absent (an older server) or anything else.
     accessScope: Optional[str] = None
+    #: Background keep-alive refresh is on (`True`) or off (`False`); the server
+    #: defaults it on. `None` when the wire value is absent (an older server, or
+    #: the synthetic built-in row) or not a boolean.
+    autoRefresh: Optional[bool] = None
+    #: ISO-8601 timestamp of the last successful credential refresh, or of the
+    #: original grant. Not secret. `None` when the wire value is `null`
+    #: (unknown) or absent (an older server, or the built-in row).
+    lastRefreshedAt: Optional[str] = None
+    #: ISO-8601 timestamp of the first failure in the current streak of failing
+    #: background refreshes. `None` when refresh is not failing (`null`) or the
+    #: key is absent (an older server, or the built-in row).
+    refreshFailingSince: Optional[str] = None
 
     @classmethod
     def from_wire(cls, body: Any) -> "ConnectionSummary":
@@ -699,6 +715,10 @@ class ConnectionSummary:
                 if isinstance(body, dict) and body.get("accessScope") in ("account", "user")
                 else None
             ),
+            # Keep-alive state (contract 0.19.0), read explicitly for the same reason.
+            autoRefresh=_nullable_flag(body, "autoRefresh"),
+            lastRefreshedAt=_nullable_text(body, "lastRefreshedAt"),
+            refreshFailingSince=_nullable_text(body, "refreshFailingSince"),
         )
 
 

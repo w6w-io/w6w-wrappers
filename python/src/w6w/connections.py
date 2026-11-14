@@ -8,10 +8,12 @@ that grew half of one would be a worse version of the thing that already exists.
 
 ── What the server does not send ──
 The list route returns a **redacted projection**. `credential` (the encrypted
-secret) and `lastRefreshedAt` are stripped server-side and never appear on the
-wire, so :class:`w6w.ConnectionSummary` does not declare them. That is not
-caution about leaking a secret this client never receives; it is about not
-promising a field that will never arrive.
+secret) is stripped server-side and never appears on the wire, so
+:class:`w6w.ConnectionSummary` does not declare it. That is not caution about
+leaking a secret this client never receives; it is about not promising a field
+that will never arrive. The keep-alive state (`autoRefresh`, `lastRefreshedAt`,
+`refreshFailingSince`) is not secret: since contract 0.19.0 the server sends it
+and the summary models it (`None` against an older server).
 
 ── Unknown keys ──
 The summary models `tenant`, `subject` and the inlined `app`. A key it does not

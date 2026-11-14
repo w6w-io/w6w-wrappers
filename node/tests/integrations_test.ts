@@ -257,3 +257,30 @@ Deno.test("connections.delete: 409 connection_in_use carries dependents on the A
     dependents,
   );
 });
+
+Deno.test("connections.list/get: keep-alive fields pass through; an older server's rows lack them", async () => {
+  const keepAlive = {
+    autoRefresh: false,
+    lastRefreshedAt: "2026-11-01T10:00:00.000Z",
+    refreshFailingSince: "2026-11-02T10:00:00.000Z",
+  };
+  const c = client(() => json({ connections: [{ ...CONN, ...keepAlive, state: "broken" }, CONN] }));
+  const [current, older] = await c.client.connections.list();
+  assertEquals(current.autoRefresh, false);
+  assertEquals(current.lastRefreshedAt, "2026-11-01T10:00:00.000Z");
+  assertEquals(current.refreshFailingSince, "2026-11-02T10:00:00.000Z");
+  assertEquals(current.state, "broken");
+  assertEquals(older.autoRefresh, undefined);
+  assertEquals(older.lastRefreshedAt, undefined);
+  assertEquals(older.refreshFailingSince, undefined);
+
+  const g = client(() =>
+    json({
+      connection: { ...CONN, autoRefresh: true, lastRefreshedAt: null, refreshFailingSince: null },
+    })
+  );
+  const one = await g.client.connections.get("conn_1");
+  assertEquals(one.autoRefresh, true);
+  assertEquals(one.lastRefreshedAt, null);
+  assertEquals(one.refreshFailingSince, null);
+});

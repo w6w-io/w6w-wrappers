@@ -332,6 +332,27 @@ export interface AuthDef {
    * types that source everything from end-user input.
    */
   requiresHostConfig?: string[];
+  /**
+   * The host can keep a connection made with this method signed in by
+   * refreshing its credential in the background (an oauth2 built-in refresh
+   * grant, or the app's own `refresh` hook). Derived server-side, never read
+   * from the manifest; the connect UI offers the keep-alive toggle only where it
+   * is `true`. Absent on an older server.
+   */
+  refreshable?: boolean;
+  /**
+   * The app's declared access-token lifetime in seconds, assumed when a new
+   * credential states no expiry (an OAuth2 token response without
+   * `expires_in`, say). Passed through from the manifest; absent when it
+   * declares none.
+   */
+  accessTokenTtlSeconds?: number;
+  /**
+   * The app's declared refresh-token lifetime in seconds, which sets the
+   * keep-alive cadence when the vendor sends none. Passed through from the
+   * manifest; absent when it declares none.
+   */
+  refreshTokenTtlSeconds?: number;
 }
 
 /**
@@ -918,14 +939,17 @@ export class AppsApi {
    *
    * @param appId - The app id.
    * @param authKey - The oauth2 auth method's key, as declared by the app's manifest.
-   * @param body - Optional display name for the resulting connection; omitted fields are left to the server.
+   * @param body - Optional display name for the resulting connection, and `autoRefresh`
+   * (`false` = no background keep-alive for the connection the callback creates; the
+   * choice rides the signed state). Omitted fields are left to the server.
    * @returns The whole response body — no envelope key to peel.
-   * @throws {ApiError} `404 unknown_app`/`unknown_auth`; `400 invalid_auth_type`; `409 oauth_not_configured`.
+   * @throws {ApiError} `404 unknown_app`/`unknown_auth`; `400 invalid_auth_type`/`invalid_body`
+   * (a non-boolean `autoRefresh`); `409 oauth_not_configured`.
    */
   async startOAuthFlow(
     appId: string,
     authKey: string,
-    body: { displayName?: string } = {},
+    body: { displayName?: string; autoRefresh?: boolean } = {},
   ): Promise<{ authorizationUrl: string; state: string; expiresIn: number }> {
     const res = await this.#host.request<
       { authorizationUrl: string; state: string; expiresIn: number }

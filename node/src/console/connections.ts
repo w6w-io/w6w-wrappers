@@ -82,6 +82,11 @@ export type ConnectionCreateInput =
     credentialId?: never;
     binding?: never;
     accessScope?: "account" | "user";
+    /**
+     * Background keep-alive refresh for the new connection. The server
+     * defaults it to `true`; send `false` to opt out. Omitted = not sent.
+     */
+    autoRefresh?: boolean;
   }
   | {
     authKey: string;
@@ -91,6 +96,8 @@ export type ConnectionCreateInput =
     credential?: never;
     profile?: never;
     accessScope?: "account" | "user";
+    /** Background keep-alive refresh; see the inline-credential arm. */
+    autoRefresh?: boolean;
   };
 
 /** A callable (Function/Endpoint) bound to a connection. */
@@ -216,8 +223,13 @@ export class ConnectionsApi {
    * @param body - `authKey` selects the app's auth method. Either `credential`
    * (the inline secret payload) **or** `credentialId` (attach a stored
    * credential, with an optional `binding`) — never both. `displayName` is optional.
+   * `autoRefresh: false` turns background keep-alive off (the server's default is on);
+   * a non-boolean is the server's `400 invalid_body`.
    * @returns The created connection, unwrapped from the `connection` envelope (the server answers `201`).
-   * @throws {ApiError} `400 invalid_auth_key`/`invalid_credential`/`invalid_credential_source`; `404 unknown_app`.
+   * @throws {ApiError} `400 invalid_auth_key`/`invalid_credential`/`invalid_credential_source`/`invalid_body`;
+   * `404 unknown_app`; `422 credential_invalid` when an auth method's sign-in (`exchange`
+   * hook) refused the credential — the app's own short code, when it gave one, is
+   * `raw.error.hookCode`.
    */
   async create(
     appId: string,
@@ -241,9 +253,12 @@ export class ConnectionsApi {
    * validates "nothing to update" and answers `400 invalid_body` itself.
    *
    * @param id - The `conn_…` id.
-   * @param body - `displayName`, `binding`, `credentialId` (re-attach) and/or `credential`, forwarded verbatim.
+   * @param body - `displayName`, `binding`, `credentialId` (re-attach), `credential` and/or
+   * `autoRefresh` (turn background keep-alive on or off), forwarded verbatim.
    * @returns The updated connection, unwrapped from the `connection` envelope.
-   * @throws {ApiError} `400 invalid_body` ("Nothing to update"); `404 unknown_connection`.
+   * @throws {ApiError} `400 invalid_body` ("Nothing to update", or a non-boolean `autoRefresh`);
+   * `404 unknown_connection`; `422 credential_invalid` (with `raw.error.hookCode`) when a new
+   * credential fails the auth method's sign-in.
    */
   async update(
     id: string,
@@ -254,6 +269,8 @@ export class ConnectionsApi {
       binding?: ConnectionBinding;
       credentialId?: string;
       credential?: Record<string, unknown>;
+      /** Turn background keep-alive refresh on (`true`) or off (`false`). */
+      autoRefresh?: boolean;
     },
   ): Promise<ConnectionSummary> {
     const res = await this.#host.request<unknown>({

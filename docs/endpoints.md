@@ -260,6 +260,17 @@ the array. Since `0.18.0` each row may carry `accessScope: "account" | "user"` (
 means an older server; `subject` stays creator attribution). The server-side
 `?accessScope=` filter exists but is not a param of this op in `0.18.0`.
 
+Since `0.19.0` each row may also carry its keep-alive state, none of it secret:
+`autoRefresh: boolean` (background credential refresh on or off; the server
+defaults it to `true`), `lastRefreshedAt: string | null` (ISO; the last successful
+refresh, or when the connection was made; `null` when unknown) and
+`refreshFailingSince: string | null` (ISO; when the current streak of failing
+background refreshes began; `null` when refresh is not failing). All three are
+absent from an older server and from the synthetic `builtIn` row, so the wrappers
+type them optional. `state` is unchanged as a union, but `broken` is now also set
+at once when a refresh is refused in a way that needs a new sign-in, and after
+background refreshes have failed for 3 days.
+
 ```json
 {
   "connections": [
@@ -274,6 +285,9 @@ means an older server; `subject` stays creator attribution). The server-side
       "profile": {},
       "lastTestOk": true,
       "lastTestedAt": "2026-07-20T09:14:00.000Z",
+      "autoRefresh": true,
+      "lastRefreshedAt": "2026-07-19T03:00:00.000Z",
+      "refreshFailingSince": null,
       "createdAt": "2026-07-01T12:00:00.000Z",
       "updatedAt": "2026-07-20T09:14:00.000Z",
       "credentialId": "cred_01H…",
@@ -304,9 +318,11 @@ gains no credential operation.
 
 Shape is `ConnectionSummary` (fields pinned in
 [implementation.md §5](./implementation.md#5-wire-types)) — the stored
-connection minus `credential` and `lastRefreshedAt`, both redacted server-side.
-Wrappers must not define a type that includes `credential` on a list result — do
-not invite callers to look for a field that will never arrive.
+connection minus `credential`, which is redacted server-side. Wrappers must not
+define a type that includes `credential` on a list result — do not invite
+callers to look for a field that will never arrive. (`lastRefreshedAt` was listed
+as redacted here before contract `0.19.0`; it is a non-secret timestamp and the
+server now sends it.)
 
 Kept in v0.1.0 (D4) because without it a user has no way to discover a `conn_…`
 URN to pass to [`run`](#17-run--run-anything-addressable-by-urn).
@@ -1696,7 +1712,9 @@ GET /connections/:id
 **Response `200`** — envelope key `connection`; the wrapper unwraps and returns
 one `ConnectionSummary` (the same redacted projection as §2, including the
 optional `app` and `builtIn`, and the nullable `credentialId`). Since `0.18.0` the row
-may carry `accessScope: "account" | "user"` (absent means an older server).
+may carry `accessScope: "account" | "user"` (absent means an older server). Since
+`0.19.0` it may carry `autoRefresh`, `lastRefreshedAt` and `refreshFailingSince`,
+as in §2.
 
 **Account-owned.** Another account's id answers the same `404 unknown_connection`
 as an id that does not exist. The built-in zero-credential row that §2 can include
@@ -2830,6 +2848,15 @@ unstable `console.endpoints` namespace.
 > `user_context_required`. The operation count stays 122. Credential management itself stays
 > console-only; the personal-defaults, tenant-policy and route-readiness clients are node
 > `console` additions, not in this contract.
+
+> **At contract `0.19.0` connection keep-alive fields were added, no operation.**
+> `connections.list` / `connections.get` rows gain `autoRefresh`, `lastRefreshedAt` and
+> `refreshFailingSince` (§2), all optional; `lastRefreshedAt` is no longer described as
+> redacted. `state: "broken"` is also set at once when a refresh needs a new sign-in. The
+> operation count stays 122. The write side — `autoRefresh` on connection create / update and
+> on the OAuth start, `refreshable` on an app's auth methods, and the `422 credential_invalid`
+> sign-in refusal with `error.hookCode` — is node `console` only, since connection create /
+> update / OAuth stay out of this contract.
 
 ---
 

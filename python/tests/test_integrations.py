@@ -167,6 +167,38 @@ class ConnectionsTest(unittest.TestCase):
         for bad in ("team", "", None, 1, ["user"]):
             self.assertIsNone(ConnectionSummary.from_wire({**CONN, "accessScope": bad}).accessScope)
 
+    def test_keep_alive_fields_parse(self) -> None:
+        body = {
+            **CONN,
+            "state": "broken",
+            "autoRefresh": False,
+            "lastRefreshedAt": "2026-11-01T10:00:00.000Z",
+            "refreshFailingSince": "2026-11-02T10:00:00.000Z",
+        }
+        c, _ = client((200, {"connections": [body]}))
+        row = c.connections.list()[0]
+        self.assertIs(row.autoRefresh, False)
+        self.assertEqual(row.lastRefreshedAt, "2026-11-01T10:00:00.000Z")
+        self.assertEqual(row.refreshFailingSince, "2026-11-02T10:00:00.000Z")
+        self.assertEqual(row.state, "broken")
+
+        current = {**CONN, "autoRefresh": True, "lastRefreshedAt": None, "refreshFailingSince": None}
+        c, _ = client((200, {"connection": current}))
+        one = c.connections.get("conn_1")
+        self.assertIs(one.autoRefresh, True)
+        self.assertIsNone(one.lastRefreshedAt)
+        self.assertIsNone(one.refreshFailingSince)
+
+    def test_keep_alive_fields_absent_on_an_older_server_read_none(self) -> None:
+        row = ConnectionSummary.from_wire(CONN)
+        self.assertIsNone(row.autoRefresh)
+        self.assertIsNone(row.lastRefreshedAt)
+        self.assertIsNone(row.refreshFailingSince)
+        # A malformed value never becomes a wrong answer.
+        bad = ConnectionSummary.from_wire({**CONN, "autoRefresh": "yes", "lastRefreshedAt": 1})
+        self.assertIsNone(bad.autoRefresh)
+        self.assertIsNone(bad.lastRefreshedAt)
+
     def test_built_in_rides_through_list(self) -> None:
         c, _ = client((200, {"connections": [{**CONN, "id": "zerocred:x", "builtIn": True}, CONN]}))
         rows = c.connections.list()

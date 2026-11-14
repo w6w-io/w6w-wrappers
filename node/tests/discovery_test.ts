@@ -67,10 +67,11 @@ function client(
 }
 
 /**
- * A connection exactly as the list route projects it. Typed as
- * `ConnectionSummary` on purpose: the stored record's secret and its
- * last-refresh timestamp are redacted server-side, so if the type ever grew
- * either field this literal would stop compiling for want of it.
+ * A connection exactly as an older server's list route projects it (no
+ * keep-alive fields). Typed as `ConnectionSummary` on purpose: the stored
+ * record's secret is redacted server-side, so if the type ever grew it as a
+ * required field this literal would stop compiling for want of it — and so
+ * would a keep-alive field made required, which an older server never sends.
  */
 const CONNECTION: ConnectionSummary = {
   id: "conn_01HQ",

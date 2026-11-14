@@ -760,3 +760,30 @@ test("createConnection forwards an attach-by-id body verbatim", async () => {
   assert.equal(fake.calls[0].url, "https://api.example.com/apps/gmail/connections");
   assert.equal(fake.calls[0].body, JSON.stringify(body));
 });
+
+test("createConnection and startAppOAuthFlow forward autoRefresh verbatim", async () => {
+  const fake = fakeFetch((call) =>
+    call.url.endsWith("/authorize-url")
+      ? json({ authorizationUrl: "https://w6w.example/oauth/start", state: "s", expiresIn: 300 })
+      : json({ connection: { id: "conn_1", autoRefresh: false } }, 201),
+  );
+  const adapter = createW6WUiAdapter(testClient(fake.fetch));
+
+  const created = await adapter.createConnection("gmail", {
+    authKey: "apiKey",
+    credential: { key: "k" },
+    autoRefresh: false,
+  });
+  await adapter.startAppOAuthFlow("gmail", "oauth2", { displayName: "Work", autoRefresh: false });
+
+  assert.equal(
+    fake.calls[0].body,
+    JSON.stringify({ authKey: "apiKey", credential: { key: "k" }, autoRefresh: false }),
+  );
+  assert.equal(created.autoRefresh, false);
+  assert.equal(
+    fake.calls[1].url,
+    "https://api.example.com/apps/gmail/oauth-config/oauth2/authorize-url",
+  );
+  assert.equal(fake.calls[1].body, JSON.stringify({ displayName: "Work", autoRefresh: false }));
+});

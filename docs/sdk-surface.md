@@ -189,7 +189,10 @@ no client-side paging loop.
 returns one `ConnectionSummary`, `delete` returns nothing, and both answer a
 uniform `404` for another account's id or a built-in `zerocred:` row. `delete(id, { force })` / `delete(id, force=False)` takes an optional `force`, sent as `?force=true` only when true: without it, a connection still used by live callables is refused with `409 connection_in_use` (the error carries `dependents`); with it, the dependents are disabled and the delete proceeds. The list can
 include that built-in row, flagged `builtIn: true` (optional — an older server
-omits it); it is never fetchable or deletable.
+omits it); it is never fetchable or deletable. Since contract `0.19.0` a row may
+carry its keep-alive state — `autoRefresh`, `lastRefreshedAt` and
+`refreshFailingSince` — optional in TS and `None` in Python against an older
+server.
 
 ### Integration reads
 

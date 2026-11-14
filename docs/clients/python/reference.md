@@ -62,7 +62,7 @@ server records them. Read them with `.get()`.
 
 | Method | Returns |
 | --- | --- |
-| `list()` | `list[ConnectionSummary]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, `tenant`, `subject`, `credentialId` (`None` = no stored credential), `app` (inline app name, icons and brand colours; `null` or absent when unknown), and `built_in` |
+| `list()` | `list[ConnectionSummary]`: `id`, `appId`, `displayName`, `state`, `lastTestOk`, `lastTestedAt`, `tenant`, `subject`, `credentialId` (`None` = no stored credential), `autoRefresh`, `lastRefreshedAt` and `refreshFailingSince` (keep-alive state; `None` against an older server), `app` (inline app name, icons and brand colours; `null` or absent when unknown), and `built_in` |
 | `get(id)` | `ConnectionSummary`. `404 unknown_connection` for another account's id and for a `zerocred:` built-in row. |
 | `delete(id)` | `None`. Same ownership rule (another account's id is `404`); not idempotent. The server removes the connection's trigger subscriptions first. |
 

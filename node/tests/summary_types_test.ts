@@ -77,3 +77,9 @@ Deno.test("summary types carry the list fields the server sends", () => {
 // Ownership fields are optional (absent = older server) and closed to the two scopes.
 pin<Equal<ConnectionSummary["accessScope"], "account" | "user" | undefined>>();
 pin<Equal<NonNullable<Me["capabilities"]>["userScopedCredentials"], boolean | undefined>>();
+
+// Keep-alive fields (contract 0.19.0) are optional (absent = older server or the built-in row);
+// the timestamps are nullable (`null` = unknown / not failing).
+pin<Equal<ConnectionSummary["autoRefresh"], boolean | undefined>>();
+pin<Equal<ConnectionSummary["lastRefreshedAt"], string | null | undefined>>();
+pin<Equal<ConnectionSummary["refreshFailingSince"], string | null | undefined>>();

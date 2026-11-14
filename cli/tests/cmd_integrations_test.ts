@@ -58,6 +58,28 @@ Deno.test("connections get: GET /connections/<id>, unwrapped under --json", asyn
   assertEquals(JSON.parse(r.stdout), conn);
 });
 
+Deno.test("connections get: keep-alive fields reach --json and the human view", async () => {
+  const conn = {
+    id: "conn_1",
+    appId: "sendgrid",
+    displayName: "Mail",
+    state: "broken",
+    autoRefresh: true,
+    lastRefreshedAt: "2026-11-01T10:00:00.000Z",
+    refreshFailingSince: "2026-11-02T10:00:00.000Z",
+  };
+  const asJson = await w6w(
+    ["connections", "get", "conn_1", "--json"],
+    () => json(200, { connection: conn }),
+  );
+  assertEquals(asJson.code, 0, asJson.stderr);
+  assertEquals(JSON.parse(asJson.stdout), conn);
+  const human = await w6w(["connections", "get", "conn_1"], () => json(200, { connection: conn }));
+  assertEquals(human.code, 0, human.stderr);
+  assertStringIncludes(human.stdout, '"refreshFailingSince": "2026-11-02T10:00:00.000Z"');
+  assertStringIncludes(human.stdout, '"autoRefresh": true');
+});
+
 Deno.test("connections delete: DELETE /connections/<id>; --json is null", async () => {
   const r = await w6w(["connections", "delete", "conn_1", "--json"], (call) => {
     assertEquals(call.method, "DELETE");

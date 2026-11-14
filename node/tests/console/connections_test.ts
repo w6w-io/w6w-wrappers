@@ -370,3 +370,71 @@ Deno.test("console.connections.create forwards accessScope only when defined", a
   });
   assertEquals(c.calls[1].body, JSON.stringify({ authKey: "apiKey", credentialId: "cred_1" }));
 });
+
+Deno.test("console.connections.create sends autoRefresh on both arms only when given", async () => {
+  const c = client(() => json({ connection: { ...CONN_A, autoRefresh: false } }, 201));
+  const created = await c.client.console.connections.create("sendgrid", {
+    authKey: "apiKey",
+    credential: { key: "k" },
+    autoRefresh: false,
+  });
+  assertEquals(JSON.parse(c.calls[0].body ?? "null"), {
+    authKey: "apiKey",
+    credential: { key: "k" },
+    autoRefresh: false,
+  });
+  assertEquals(created.autoRefresh, false);
+  await c.client.console.connections.create("sendgrid", {
+    authKey: "apiKey",
+    credentialId: "cred_1",
+    autoRefresh: true,
+  });
+  assertEquals(JSON.parse(c.calls[1].body ?? "null"), {
+    authKey: "apiKey",
+    credentialId: "cred_1",
+    autoRefresh: true,
+  });
+  await c.client.console.connections.create("sendgrid", {
+    authKey: "apiKey",
+    credentialId: "cred_1",
+  });
+  assertEquals(c.calls[2].body, JSON.stringify({ authKey: "apiKey", credentialId: "cred_1" }));
+});
+
+Deno.test("console.connections.update sends autoRefresh alone and returns the keep-alive fields", async () => {
+  const updated = {
+    ...CONN_A,
+    autoRefresh: false,
+    lastRefreshedAt: "2026-11-01T10:00:00.000Z",
+    refreshFailingSince: null,
+  };
+  const c = client(() => json({ connection: updated }));
+  const res = await c.client.console.connections.update("conn_1", { autoRefresh: false });
+  assertEquals(c.calls[0].method, "PATCH");
+  assertEquals(c.calls[0].body, JSON.stringify({ autoRefresh: false }));
+  assertEquals(res.autoRefresh, false);
+  assertEquals(res.lastRefreshedAt, "2026-11-01T10:00:00.000Z");
+  assertEquals(res.refreshFailingSince, null);
+});
+
+Deno.test("console.connections.create: a refused sign-in is a 422 with hookCode on raw", async () => {
+  const body = {
+    error: {
+      code: "credential_invalid",
+      message: "Sign-in failed.",
+      hookCode: "invalid_credentials",
+    },
+  };
+  const c = client(() => json(body, 422));
+  const err = await assertRejects(
+    () =>
+      c.client.console.connections.create("app_1", {
+        authKey: "login",
+        credential: { email: "a@example.com", password: "p" },
+      }),
+    ApiError,
+  );
+  assertEquals(err.status, 422);
+  assertEquals(err.code, "credential_invalid");
+  assertEquals((err.raw as typeof body).error.hookCode, "invalid_credentials");
+});

@@ -13,8 +13,10 @@
  * and behind the React adapter.
  *
  * The rows the server returns are a **redacted projection** — the stored secret
- * and its refresh timestamp never leave the host — so
- * {@linkcode ConnectionSummary} does not declare them.
+ * never leaves the host — so {@linkcode ConnectionSummary} does not declare it.
+ * Its keep-alive state (`autoRefresh`, `lastRefreshedAt`,
+ * `refreshFailingSince`) is not secret and is on the row since contract
+ * `0.19.0`.
  *
  * @module
  */
