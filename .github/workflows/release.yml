@@ -17,14 +17,21 @@ name: Release
 #   The `pypi` GitHub environment must exist (Settings → Environments) and its
 #   name must match the publisher registration exactly.
 #
-# Release flow: bump VERSION + every manifest, commit, then publish a GitHub
-# Release tagged `vX.Y.Z`. `workflow_dispatch` runs the gates WITHOUT
+# Release flow (continuous delivery): bump VERSION + every manifest and merge to
+# main. Every push to main that changes VERSION runs the gates, then publishes each
+# package whose registry does not have VERSION yet (npm: sdk, cli, react; PyPI: w6w).
+# No tag or GitHub Release to remember. `workflow_dispatch` runs the gates WITHOUT
 # publishing — use it as a dry run.
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+    paths: ["VERSION", ".github/workflows/release.yml"]
   workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 # Required for OIDC. This is what replaces stored tokens.
 permissions:
@@ -47,8 +54,31 @@ jobs:
     # doing nothing. Mirrors `w6w-io/w6w`'s deploy workflows, which have carried this since day one.
     if: github.repository == 'w6w-io/w6w-wrappers'
     runs-on: ubuntu-latest
+    outputs:
+      sdk: ${{ steps.plan.outputs.sdk }}
+      cli: ${{ steps.plan.outputs.cli }}
+      react: ${{ steps.plan.outputs.react }}
+      pypi: ${{ steps.plan.outputs.pypi }}
     steps:
       - uses: actions/checkout@v6
+      - name: Which registries do not have VERSION yet
+        id: plan
+        run: |
+          V="$(tr -d '[:space:]' < VERSION)"
+          for p in sdk cli react; do
+            if npm view "@w6w/$p@$V" version >/dev/null 2>&1; then
+              echo "::notice::@w6w/$p@$V is already on npm"; echo "$p=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "$p=true" >> "$GITHUB_OUTPUT"
+            fi
+          done
+          PYV="$(echo "$V" | sed -E 's/-rc\.?/rc/')"  # PyPI's normalized prerelease form
+          code="$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/w6w/$PYV/json")"
+          if [ "$code" = 200 ]; then
+            echo "::notice::w6w==$PYV is already on PyPI"; echo "pypi=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pypi=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: VERSION, the release tag and every manifest must agree
         env:
           TAG: ${{ github.event.release.tag_name }}
@@ -189,7 +219,7 @@ jobs:
   pypi:
     needs: [verify, test]
     # Never on a dry run: workflow_dispatch stops after the gates above.
-    if: github.event_name == 'release'
+    if: github.event_name == 'push' && needs.verify.outputs.pypi == 'true'
     runs-on: ubuntu-latest
     # MUST match the environment named in the PyPI publisher registration —
     # it travels in the OIDC claim, and a mismatch is rejected at upload.
@@ -225,7 +255,7 @@ jobs:
   # FOLLOWUPS.md (G-8) and docs/release.md's --provenance paragraph.
   npm-sdk:
     needs: [verify, test]
-    if: github.event_name == 'release'
+    if: github.event_name == 'push' && needs.verify.outputs.sdk == 'true'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -251,7 +281,8 @@ jobs:
     # links it to ../node (built below), but the published package must not precede
     # the SDK version it names.
     needs: [verify, test, npm-sdk]
-    if: github.event_name == 'release'
+    # npm-sdk is skipped when the sdk is already on npm; that must not skip this job too.
+    if: ${{ !failure() && !cancelled() && github.event_name == 'push' && needs.verify.outputs.cli == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -292,7 +323,8 @@ jobs:
     # `@w6w/sdk` to ../node, which this job builds first (`npm ci`), so the build
     # measures the SDK source of this very release commit, the same one npm-sdk
     # has already uploaded.
-    if: github.event_name == 'release'
+    # npm-sdk is skipped when the sdk is already on npm; that must not skip this job too.
+    if: ${{ !failure() && !cancelled() && github.event_name == 'push' && needs.verify.outputs.react == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write

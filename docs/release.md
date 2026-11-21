@@ -17,13 +17,16 @@ this repo.
 
 | Owner                                 | Does                                                                                                                                                                 | Does not                           |
 | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| **this repo** (`w6w-io/w6w-wrappers`) | owns [`../VERSION`](../VERSION); verifies every manifest agrees with it; runs conformance across every lane; tags; builds and publishes all four artifacts over OIDC | hold any registry credential       |
+| **this repo** (`w6w-io/w6w-wrappers`) | owns [`../VERSION`](../VERSION); verifies every manifest agrees with it; runs conformance across every lane; builds and publishes all four artifacts over OIDC | hold any registry credential       |
 | **the monorepo** (`segevsh/w6w`)      | consumes this repo as a submodule at `packages/wrappers` and bumps its pointer after a release                                                                       | decide, gate, or trigger a release |
 
 One workflow file, `.github/workflows/release.yml`, does the whole thing. It
-triggers on **a published GitHub Release** (`release: types: [published]`)
-and on `workflow_dispatch` (for a dry run). **Merging a version bump, pushing a
-`v*` tag, or manually dispatching the workflow does not publish packages.**
+is **continuous delivery**: it triggers on every push to `main` that changes
+`VERSION`, and publishes each package whose registry does not have that version
+yet. **Merging a version bump is the release** — there is no tag or GitHub
+Release to cut. `workflow_dispatch` runs the gates only (a dry run). Re-running a
+release run is safe: the `verify` job asks each registry first and skips what is
+already there.
 
 **PR CI.** A second workflow, `.github/workflows/ci.yml`, runs on every pull
 request and every push to `main`: one job, `verify`, that runs
@@ -34,26 +37,18 @@ never only to `ci.yml`. It holds `contents: read` only — no secret, no
 `id-token`, no publish step — so it is safe on forks. Publishing stays in
 `release.yml`.
 
-The source version can therefore be ahead of the registries: `0.9.8` was on
-`main` while the last GitHub Release and all registries were still at `0.6.0`.
+Before 2026-11-21 publishing needed a hand-cut GitHub Release, so the source
+version could fall behind the registries: `0.9.8` was on `main` while all
+registries were still at `0.6.0`. Publishing on merge closes that gap.
 The `v0.6.0` run's red status was an obsolete `jsr-cli` job; its npm, JSR SDK,
 and PyPI uploads all succeeded. That CLI job has since been removed.
 
 ### Release commands
 
-Run these from an authenticated checkout after merging the release commit into
-`w6w-io/w6w-wrappers`'s `main`:
+There is nothing to run: merge the version-bump PR into `w6w-io/w6w-wrappers`'s
+`main`. To watch it and confirm what landed:
 
 ```sh
-# First run the gates, including every package build, without uploading.
-gh workflow run release.yml --repo w6w-io/w6w-wrappers --ref main
-gh run list --repo w6w-io/w6w-wrappers --workflow release.yml --limit 5
-gh run watch <dry-run-id> --repo w6w-io/w6w-wrappers --exit-status
-
-# Publish a GitHub Release at the exact commit that passed the dry run.
-gh release create v0.9.9 --repo w6w-io/w6w-wrappers \
-  --target <validated-commit-sha> --title v0.9.9 --generate-notes
-
 gh run list --repo w6w-io/w6w-wrappers --workflow release.yml --limit 5
 gh run watch <release-run-id> --repo w6w-io/w6w-wrappers --exit-status
 npm view @w6w/sdk version
@@ -61,9 +56,10 @@ npm view @w6w/cli version
 npm view @w6w/react version
 ```
 
-Use the current `VERSION` in the release tag and title. Match each run to its
-event and commit before watching it. No registry token is required locally:
-GitHub Actions performs the uploads through its registered trusted publishers.
+To rehearse before merging, dispatch `release.yml` on the branch
+(`gh workflow run release.yml --repo w6w-io/w6w-wrappers --ref <branch>`); a
+dispatch never uploads. No registry token is required anywhere: GitHub Actions
+performs the uploads through its registered trusted publishers.
 
 ## Why this is the simple version
 
@@ -178,11 +174,11 @@ human again, and is not optional.
    `@w6w/sdk` to `../node/mod.ts`. `"nodeModulesDir": "manual"` prevents Deno
    from eagerly installing the npm dependency. With Deno 2.9.7, `"auto"` tries
    to fetch that range even with `"links": ["../node"]`, blocking a fresh release.
-4. **Publish a GitHub Release** tagged `v<VERSION>` at the validated commit.
-   A tag alone does not trigger this workflow. For a dry run, invoke
-   `release.yml` via `workflow_dispatch` on the intended ref; it has no inputs
-   and reads `VERSION` from that checkout.
-5. **`verify`** reads `VERSION` and compares it against the tag and the nine
+4. **Merge the version bump to `main`.** That push triggers `release.yml`. For a
+   dry run, invoke `release.yml` via `workflow_dispatch` on the intended ref; it
+   has no inputs and reads `VERSION` from that checkout.
+5. **`verify`** asks npm and PyPI which packages lack `VERSION` (those jobs run,
+   the rest are skipped), then compares `VERSION` against the nine
    version literals step 3 lists — two for `node` (one manifest and a source
    constant), three for `cli`, `pyproject.toml` and `_version.py` for python,
    and two for `react` (one manifest and one source constant) — echoing every value _before_ deciding, so a failing log
